@@ -166,7 +166,11 @@ CC		?=	c89
 CFLAGS		?=	-O
 .else
 CC		?=	cc
+.if ${MACHINE_CPUARCH} == "mips"
+CFLAGS		?=	-O -pipe
+.else
 CFLAGS		?=	-O2 -pipe
+.endif
 .if defined(NO_STRICT_ALIASING)
 CFLAGS		+=	-fno-strict-aliasing
 .endif
