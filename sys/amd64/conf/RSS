@@ -1,0 +1,10 @@
+include GENERIC
+ident RSS
+
+options RSS
+options PCBGROUP
+
+options KTR
+options ALQ
+options KTR_ALQ
+options KTR_ENTRIES=65536
