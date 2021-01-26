@@ -37,6 +37,8 @@
 #ifndef _DEV_ATH_ATHIOCTL_H
 #define _DEV_ATH_ATHIOCTL_H
 
+#define ATH_IOCTL_STATS_NUM_TX_ANTENNA 8
+
 struct ath_tx_aggr_stats {
 	u_int32_t	aggr_pkts[64];
 	u_int32_t	aggr_single_pkt;
@@ -177,6 +179,7 @@ struct ath_stats {
 	u_int32_t	ast_tx_nodeq_overflow;	/* node sw queue overflow */
 	u_int32_t	ast_tx_ldpc;		/* TX LDPC frame */
 	u_int32_t	ast_tx_stbc;		/* TX STBC frame */
+	u_int32_t	ast_tsfoor;		/* TSFOOR interrupts */
 	u_int32_t	ast_pad[10];
 };
 
