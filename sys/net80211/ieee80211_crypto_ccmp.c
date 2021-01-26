@@ -238,13 +238,17 @@ ccmp_decap(struct ieee80211_key *k, struct mbuf *m, int hdrlen)
 	struct ccmp_ctx *ctx = k->wk_private;
 	struct ieee80211vap *vap = ctx->cc_vap;
 	struct ieee80211_frame *wh;
-	uint8_t *ivp, tid;
-	uint64_t pn;
+	uint8_t *ivp, tid = 0;
+	uint64_t pn = 0;
+	int do_update = 1;
+	int do_replay = 0;
 
 	rxs = ieee80211_get_rx_params_ptr(m);
 
-	if ((rxs != NULL) && (rxs->c_pktflags & IEEE80211_RX_F_IV_STRIP))
+	if ((rxs != NULL) && (rxs->c_pktflags & IEEE80211_RX_F_IV_STRIP)) {
+		do_update = 0;
 		goto finish;
+	}
 
 	/*
 	 * Header should have extended IV and sequence number;
@@ -263,10 +267,32 @@ ccmp_decap(struct ieee80211_key *k, struct mbuf *m, int hdrlen)
 	}
 	tid = ieee80211_gettid(wh);
 	pn = READ_6(ivp[0], ivp[1], ivp[4], ivp[5], ivp[6], ivp[7]);
-	if (pn <= k->wk_keyrsc[tid] &&
+
+	/*
+	 * Check whether the PN is suspect or a replay.
+	 *
+	 * This will do the vendor workaround if required or just the
+	 * normal check if not required.
+	 */
+	if (ieee80211_crypto_pn_suspect_check(vap, k, wh, tid, pn,
+	    &do_update, &do_replay) != 0) {
+		IEEE80211_NOTE_MAC(vap, IEEE80211_MSG_CRYPTO, wh->i_addr2,
+		    "%s", "Failed suspect PN check");
+		/* XXX statistics */
+		return 0;
+	}
+
+	/*
+	 * Check for a replay violation.
+	 */
+	if ((do_replay == 1) &&
 	    (k->wk_flags & IEEE80211_KEY_NOREPLAY) == 0) {
 		/*
 		 * Replay violation.
+		 *
+		 * Yes, this also will ignore suspect PNs if we see
+		 * them being invalid as whomever asked for
+		 * IEEE80211_KEY_NOREPLAY asked for everything..
 		 */
 		ieee80211_notify_replay_failure(vap, wh, k, pn, tid);
 		vap->iv_stats.is_rx_ccmpreplay++;
@@ -303,8 +329,13 @@ finish:
 	/*
 	 * Ok to update rsc now.
 	 */
-	if (! ((rxs != NULL) && (rxs->c_pktflags & IEEE80211_RX_F_IV_STRIP))) {
+	if ((do_update == 1) &&
+	    (! ((rxs != NULL) && (rxs->c_pktflags & IEEE80211_RX_F_IV_STRIP)))) {
+		/*
+		 * Update rsc and override suspect rsc tracking.
+		 */
 		k->wk_keyrsc[tid] = pn;
+		k->wk_suspect_keyrsc[tid] = 0;
 	}
 
 	return 1;
