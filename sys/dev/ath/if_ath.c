@@ -165,6 +165,7 @@ static void	ath_parent(struct ieee80211com *);
 static void	ath_fatal_proc(void *, int);
 static void	ath_bmiss_vap(struct ieee80211vap *);
 static void	ath_bmiss_proc(void *, int);
+static void	ath_tsfoor_proc(void *, int);
 static void	ath_key_update_begin(struct ieee80211vap *);
 static void	ath_key_update_end(struct ieee80211vap *);
 static void	ath_update_mcast_hw(struct ath_softc *);
@@ -761,6 +762,7 @@ ath_attach(u_int16_t devid, struct ath_softc *sc)
 
 	TASK_INIT(&sc->sc_rxtask, 0, sc->sc_rx.recv_tasklet, sc);
 	TASK_INIT(&sc->sc_bmisstask, 0, ath_bmiss_proc, sc);
+	TASK_INIT(&sc->sc_tsfoortask, 0, ath_tsfoor_proc, sc);
 	TASK_INIT(&sc->sc_bstucktask,0, ath_bstuck_proc, sc);
 	TASK_INIT(&sc->sc_resettask,0, ath_reset_proc, sc);
 	TASK_INIT(&sc->sc_txqtask, 0, ath_txq_sched_tasklet, sc);
@@ -922,7 +924,8 @@ ath_attach(u_int16_t devid, struct ath_softc *sc)
 		| IEEE80211_C_DFS		/* Enable radar detection */
 #endif
 		| IEEE80211_C_PMGT		/* Station side power mgmt */
-		| IEEE80211_C_SWSLEEP
+		| IEEE80211_C_SWSLEEP		/* net80211 STA sleep mgmt */
+		| IEEE80211_C_SWAMSDUTX		/* Can send AMSDU */
 		;
 	/*
 	 * Query the hal to figure out h/w crypto support.
@@ -1150,7 +1153,10 @@ ath_attach(u_int16_t devid, struct ath_softc *sc)
 			    | IEEE80211_HTC_AMSDU	/* A-MSDU tx/rx */
 			    | IEEE80211_HTCAP_MAXAMSDU_3839
 			    				/* max A-MSDU length */
-			    | IEEE80211_HTCAP_SMPS_OFF;	/* SM power save off */
+			    | IEEE80211_HTCAP_SMPS_OFF	/* SM power save off */
+			    | IEEE80211_HTC_TX_AMSDU_AMPDU
+			    | IEEE80211_HTC_RX_AMSDU_AMPDU
+			;
 
 		/*
 		 * Enable short-GI for HT20 only if the hardware
@@ -1258,6 +1264,12 @@ ath_attach(u_int16_t devid, struct ath_softc *sc)
 	 * 32-bit boundary for 4-address and QoS frames.
 	 */
 	ic->ic_flags |= IEEE80211_F_DATAPAD;
+
+	/*
+	 * Indiciate that we need the PN workaround for
+	 * hardware corruption.
+	 */
+	ic->ic_flags_ext |= IEEE80211_FEXT_CRYPTO_PN_SUSPECT;
 
 	/*
 	 * Query the hal about antenna support.
@@ -2333,13 +2345,18 @@ ath_intr(void *arg)
 			sc->sc_stats.ast_rxorn++;
 		}
 		if (status & HAL_INT_TSFOOR) {
-			/* out of range beacon - wake the chip up,
-			 * but don't modify self-gen frame config */
-			device_printf(sc->sc_dev, "%s: TSFOOR\n", __func__);
-			sc->sc_syncbeacon = 1;
+			/*
+			 * out of range beacon - wake the chip up,
+			 * but don't modify self-gen frame config.
+			 * Do a full reset to clear any potential stuck
+			 * PHY/MAC that generated this condition.
+			 */
+			sc->sc_stats.ast_tsfoor++;
 			ATH_LOCK(sc);
 			ath_power_setpower(sc, HAL_PM_AWAKE, 0);
 			ATH_UNLOCK(sc);
+			taskqueue_enqueue(sc->sc_tq, &sc->sc_tsfoortask);
+			device_printf(sc->sc_dev, "%s: TSFOOR\n", __func__);
 		}
 		if (status & HAL_INT_MCI) {
 			ath_btcoex_mci_intr(sc);
@@ -2483,7 +2500,7 @@ ath_bmiss_proc(void *arg, int pending)
 	ath_beacon_miss(sc);
 
 	/*
-	 * Do a reset upon any becaon miss event.
+	 * Do a reset upon any beacon miss event.
 	 *
 	 * It may be a non-recognised RX clear hang which needs a reset
 	 * to clear.
@@ -2496,6 +2513,39 @@ ath_bmiss_proc(void *arg, int pending)
 		ath_reset(sc, ATH_RESET_NOLOSS, HAL_RESET_FORCE_COLD);
 		ieee80211_beacon_miss(&sc->sc_ic);
 	}
+
+	/* Force a beacon resync, in case they've drifted */
+	sc->sc_syncbeacon = 1;
+
+	ATH_LOCK(sc);
+	ath_power_restore_power_state(sc);
+	ATH_UNLOCK(sc);
+}
+
+/*
+ * Handle a TSF out of range interrupt in STA mode.
+ *
+ * This may be due to a partially deaf looking radio, so
+ * do a full reset just in case it is indeed deaf and
+ * resync the beacon.
+ */
+static void
+ath_tsfoor_proc(void *arg, int pending)
+{
+	struct ath_softc *sc = arg;
+
+	DPRINTF(sc, ATH_DEBUG_ANY, "%s: pending %u\n", __func__, pending);
+
+	ATH_LOCK(sc);
+	ath_power_set_power_state(sc, HAL_PM_AWAKE);
+	ATH_UNLOCK(sc);
+
+	/*
+	 * Do a full reset after any TSFOOR.  It's possible that
+	 * we've gone deaf or partially deaf (eg due to calibration
+	 * failures) and this should clean things up a bit.
+	 */
+	ath_reset(sc, ATH_RESET_NOLOSS, HAL_RESET_FORCE_COLD);
 
 	/* Force a beacon resync, in case they've drifted */
 	sc->sc_syncbeacon = 1;
