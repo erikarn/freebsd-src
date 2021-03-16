@@ -3981,6 +3981,19 @@ if_printf(struct ifnet *ifp, const char *fmt, ...)
 	return (0);
 }
 
+int
+if_log(struct ifnet *ifp, int pri, const char *fmt, ...)
+{
+	char if_fmt[256];
+	va_list ap;
+
+	snprintf(if_fmt, sizeof(if_fmt), "%s: %s", ifp->if_xname, fmt);
+	va_start(ap, fmt);
+	vlog(pri, if_fmt, ap);
+	va_end(ap);
+	return (0);
+}
+
 void
 if_start(struct ifnet *ifp)
 {
