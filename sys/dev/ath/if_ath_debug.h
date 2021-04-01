@@ -35,6 +35,8 @@
 
 #ifdef	ATH_DEBUG
 
+#include <sys/syslog.h>
+
 enum { 
 	ATH_DEBUG_XMIT		= 0x000000001ULL,	/* basic xmit operation */
 	ATH_DEBUG_XMIT_DESC	= 0x000000002ULL,	/* xmit descriptors */
@@ -98,7 +100,7 @@ extern uint64_t ath_debug;
 #define	IFF_DUMPPKTS(sc, m)	(sc->sc_debug & (m))
 #define	DPRINTF(sc, m, ...) do {				\
 	if (sc->sc_debug & (m))					\
-		device_printf(sc->sc_dev, __VA_ARGS__);		\
+		device_log(sc->sc_dev, LOG_DEBUG,, __VA_ARGS__);	\
 } while (0)
 #define	KEYPRINTF(sc, ix, hk, mac) do {				\
 	if (sc->sc_debug & ATH_DEBUG_KEYCACHE)			\
