@@ -925,7 +925,9 @@ ath_attach(u_int16_t devid, struct ath_softc *sc)
 #endif
 		| IEEE80211_C_PMGT		/* Station side power mgmt */
 		| IEEE80211_C_SWSLEEP		/* net80211 STA sleep mgmt */
+#if 0
 		| IEEE80211_C_SWAMSDUTX		/* Can send AMSDU */
+#endif
 		;
 	/*
 	 * Query the hal to figure out h/w crypto support.
@@ -1154,8 +1156,10 @@ ath_attach(u_int16_t devid, struct ath_softc *sc)
 			    | IEEE80211_HTCAP_MAXAMSDU_3839
 			    				/* max A-MSDU length */
 			    | IEEE80211_HTCAP_SMPS_OFF	/* SM power save off */
+#if 0
 			    | IEEE80211_HTC_TX_AMSDU_AMPDU
 			    | IEEE80211_HTC_RX_AMSDU_AMPDU
+#endif
 			;
 
 		/*
