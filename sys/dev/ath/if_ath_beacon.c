@@ -1196,8 +1196,8 @@ ath_beacon_config(struct ath_softc *sc, struct ieee80211vap *vap)
 		 * nexttbtt and intval is TU/8.
 		 */
 		if (sc->sc_isedma) {
-			nexttbtt_u8 = (nexttbtt << 3);
-			intval_u8 = (intval << 3);
+			nexttbtt_u8 = (nexttbtt << 3) & HAL_BEACON_PERIOD_TU8;
+			intval_u8 = (intval << 3) & HAL_BEACON_PERIOD_TU8;
 			if (intval & HAL_BEACON_ENA)
 				intval_u8 |= HAL_BEACON_ENA;
 			if (intval & HAL_BEACON_RESET_TSF)
