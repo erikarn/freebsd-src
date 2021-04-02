@@ -947,15 +947,31 @@ ath_beacon_config(struct ath_softc *sc, struct ieee80211vap *vap)
 	u_int32_t nexttbtt_u8, intval_u8;
 	u_int64_t tsf, tsf_beacon;
 
-	if (vap == NULL)
-		vap = TAILQ_FIRST(&ic->ic_vaps);	/* XXX */
 	/*
-	 * Just ensure that we aren't being called when the last
-	 * VAP is destroyed.
+	 * Find the first VAP that we /can/ use a beacon configuration for.
+	 * If it's a STA VAP then if it has SWBMISS set we should ignore it.
+	 *
+	 * Yes, ideally we'd not have a STA without SWBMISS followed by an
+	 * AP STA, and yes this isn't ready for P2P/TSF2 logic on AR9300 and
+	 * later chips.
 	 */
 	if (vap == NULL) {
-		device_printf(sc->sc_dev, "%s: called with no VAPs\n",
-		    __func__);
+		IEEE80211_LOCK(ic);
+		TAILQ_FOREACH(vap, &ic->ic_vaps, iv_next) {
+			if ((vap->iv_flags_ext & IEEE80211_FEXT_SWBMISS) == 0)
+				continue;
+			break;
+		}
+		IEEE80211_UNLOCK(ic);
+	}
+
+	if (vap == NULL) {
+		device_printf(sc->sc_dev, "called with no valid vaps?\n");
+		return;
+	}
+
+	if ((vap->iv_flags_ext & IEEE80211_FEXT_SWBMISS) != 0) {
+		device_printf(sc->sc_dev, "called on VAP with SWBMISS set?\n");
 		return;
 	}
 
