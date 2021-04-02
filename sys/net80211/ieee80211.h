@@ -811,9 +811,23 @@ struct ieee80211_ie_vht_operation {
 #define	IEEE80211_VHTCAP_SUPP_CHAN_WIDTH_MASK	0x0000000C
 #define	IEEE80211_VHTCAP_SUPP_CHAN_WIDTH_MASK_S	2
 #define	IEEE80211_VHTCAP_SUPP_CHAN_WIDTH_NONE		0
+/*
+ * These were from the earlier draft 802.11ac specification
+ * which ended up changing because of initial inter-op
+ * issues between vendors.  Thus, they're no longer used.
+ *
+ * XXX TODO: go look at the draft spec and the latest
+ * spec, see when they changed and document it here.
+ */
+#if 0
 #define	IEEE80211_VHTCAP_SUPP_CHAN_WIDTH_160MHZ		1
 #define	IEEE80211_VHTCAP_SUPP_CHAN_WIDTH_160_80P80MHZ	2
 #define	IEEE80211_VHTCAP_SUPP_CHAN_WIDTH_RESERVED	3
+#endif
+#define	IEEE80211_VHTCAP_SUPP_CHAN_WIDTH_160MHZ		4
+#define	IEEE80211_VHTCAP_SUPP_CHAN_WIDTH_160_80P80MHZ	8
+#define	IEEE80211_VHTCAP_SUPP_CHAN_WIDTH_RESERVED	16
+
 
 #define	IEEE80211_VHTCAP_SUPP_CHAN_WIDTH_IS_160MHZ(_vhtcaps)		\
     (_IEEE80211_MASKSHIFT(_vhtcaps, IEEE80211_VHTCAP_SUPP_CHAN_WIDTH_MASK) >= \
