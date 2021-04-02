@@ -958,7 +958,9 @@ ath_beacon_config(struct ath_softc *sc, struct ieee80211vap *vap)
 	if (vap == NULL) {
 		IEEE80211_LOCK(ic);
 		TAILQ_FOREACH(vap, &ic->ic_vaps, iv_next) {
-			if ((vap->iv_flags_ext & IEEE80211_FEXT_SWBMISS) == 0)
+			/* A STA VAP w/ SWBMISS set can't be used for beaconing */
+			if ((vap->iv_opmode == IEEE80211_M_STA) &&
+			    ((vap->iv_flags_ext & IEEE80211_FEXT_SWBMISS) != 0))
 				continue;
 			break;
 		}
