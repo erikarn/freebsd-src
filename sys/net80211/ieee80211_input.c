@@ -878,6 +878,7 @@ void
 ieee80211_ssid_mismatch(struct ieee80211vap *vap, const char *tag,
 	uint8_t mac[IEEE80211_ADDR_LEN], uint8_t *ssid)
 {
+	/* Note: still using printf() because ieee80211_print_essid() */
 	printf("[%s] discard %s frame, ssid mismatch: ",
 		ether_sprintf(mac), tag);
 	ieee80211_print_essid(ssid + 2, ssid[1]);
@@ -901,6 +902,7 @@ ieee80211_getbssid(const struct ieee80211vap *vap,
 }
 
 #include <machine/stdarg.h>
+#include <sys/syslog.h>
 
 void
 ieee80211_note(const struct ieee80211vap *vap, const char *fmt, ...)
@@ -912,7 +914,7 @@ ieee80211_note(const struct ieee80211vap *vap, const char *fmt, ...)
 	vsnprintf(buf, sizeof(buf), fmt, ap);
 	va_end(ap);
 
-	if_printf(vap->iv_ifp, "%s", buf);	/* NB: no \n */
+	if_log(vap->iv_ifp, LOG_DEBUG, "%s", buf);	/* NB: no \n */
 }
 
 void
@@ -926,7 +928,7 @@ ieee80211_note_frame(const struct ieee80211vap *vap,
 	va_start(ap, fmt);
 	vsnprintf(buf, sizeof(buf), fmt, ap);
 	va_end(ap);
-	if_printf(vap->iv_ifp, "[%s] %s\n",
+	if_log(vap->iv_ifp, LOG_DEBUG, "[%s] %s\n",
 		ether_sprintf(ieee80211_getbssid(vap, wh)), buf);
 }
 
@@ -941,7 +943,7 @@ ieee80211_note_mac(const struct ieee80211vap *vap,
 	va_start(ap, fmt);
 	vsnprintf(buf, sizeof(buf), fmt, ap);
 	va_end(ap);
-	if_printf(vap->iv_ifp, "[%s] %s\n", ether_sprintf(mac), buf);
+	if_log(vap->iv_ifp, LOG_DEBUG, "[%s] %s\n", ether_sprintf(mac), buf);
 }
 
 void
@@ -951,14 +953,14 @@ ieee80211_discard_frame(const struct ieee80211vap *vap,
 {
 	va_list ap;
 
-	if_printf(vap->iv_ifp, "[%s] discard ",
+	if_log(vap->iv_ifp, LOG_INFO, "[%s] discard ",
 		ether_sprintf(ieee80211_getbssid(vap, wh)));
-	printf("%s frame, ", type != NULL ? type :
+	log(LOG_INFO, "%s frame, ", type != NULL ? type :
 	    ieee80211_mgt_subtype_name(wh->i_fc[0]));
 	va_start(ap, fmt);
-	vprintf(fmt, ap);
+	vlog(LOG_INFO, fmt, ap);
 	va_end(ap);
-	printf("\n");
+	log(LOG_INFO, "\n");
 }
 
 void
@@ -968,16 +970,16 @@ ieee80211_discard_ie(const struct ieee80211vap *vap,
 {
 	va_list ap;
 
-	if_printf(vap->iv_ifp, "[%s] discard ",
+	if_log(vap->iv_ifp, LOG_INFO, "[%s] discard ",
 		ether_sprintf(ieee80211_getbssid(vap, wh)));
 	if (type != NULL)
-		printf("%s information element, ", type);
+		log(LOG_INFO, "%s information element, ", type);
 	else
-		printf("information element, ");
+		log(LOG_INFO, "information element, ");
 	va_start(ap, fmt);
-	vprintf(fmt, ap);
+	vlog(LOG_INFO, fmt, ap);
 	va_end(ap);
-	printf("\n");
+	log(LOG_INFO, "\n");
 }
 
 void
@@ -987,14 +989,15 @@ ieee80211_discard_mac(const struct ieee80211vap *vap,
 {
 	va_list ap;
 
-	if_printf(vap->iv_ifp, "[%s] discard ", ether_sprintf(mac));
+	if_log(vap->iv_ifp, LOG_INFO,
+	    "[%s] discard ", ether_sprintf(mac));
 	if (type != NULL)
-		printf("%s frame, ", type);
+		log(LOG_INFO, "%s frame, ", type);
 	else
-		printf("frame, ");
+		log(LOG_INFO, "frame, ");
 	va_start(ap, fmt);
-	vprintf(fmt, ap);
+	vlog(LOG_INFO, fmt, ap);
 	va_end(ap);
-	printf("\n");
+	log(LOG_INFO, "\n");
 }
 #endif /* IEEE80211_DEBUG */
