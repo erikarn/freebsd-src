@@ -246,7 +246,7 @@ ath_beacon_alloc(struct ath_softc *sc, struct ieee80211_node *ni)
 		    (ATH_BCBUF - avp->av_bslot) / ATH_BCBUF;
 		tsfadjust = htole64(tsfadjust << 10);	/* TU -> TSF */
 
-		DPRINTF(sc, ATH_DEBUG_BEACON,
+		DPRINTF(sc, ATH_DEBUG_BEACON | ATH_DEBUG_BEACON_HOSTAP,
 		    "%s: %s beacons bslot %d intval %u tsfadjust %llu\n",
 		    __func__, sc->sc_stagbeacons ? "stagger" : "burst",
 		    avp->av_bslot, ni->ni_intval,
@@ -400,7 +400,7 @@ ath_beacon_miss(struct ath_softc *sc)
 	ret = ath_hal_get_mib_cycle_counts(sc->sc_ah, &hs);
 
 	if (ath_hal_gethangstate(sc->sc_ah, 0xffff, &hangs) && hangs != 0) {
-		DPRINTF(sc, ATH_DEBUG_BEACON,
+		DPRINTF(sc, ATH_DEBUG_BEACON | ATH_DEBUG_BEACON_HOSTAP,
 		    "%s: hang=0x%08x\n",
 		    __func__,
 		    hangs);
@@ -462,6 +462,9 @@ ath_beacon_proc(void *arg, int pending)
 			    nav);
 			ath_hal_setnav(ah, 0);
 		}
+
+		/* do a quick nfcal if we haven't kicked one off yet */
+		/* (eg maybe just enqueue the cal task and make sure we do an nfcal */
 
 		DPRINTF(sc, ATH_DEBUG_BEACON,
 			"%s: missed %u consecutive beacons\n",
@@ -745,7 +748,7 @@ ath_beacon_generate(struct ath_softc *sc, struct ieee80211vap *vap)
 		}
 	}
 	if ((vap->iv_bcn_off.bo_tim[4] & 1) && cabq->axq_depth) {
-		DPRINTF(sc, ATH_DEBUG_BEACON,
+		DPRINTF(sc, ATH_DEBUG_BEACON | ATH_DEBUG_BEACON_HOSTAP,
 		    "%s: cabq did not drain, mcastq %u cabq %u\n",
 		    __func__, nmcastq, cabq->axq_depth);
 		sc->sc_stats.ast_cabq_busy++;
@@ -1034,8 +1037,7 @@ ath_beacon_config(struct ath_softc *sc, struct ieee80211vap *vap)
 	else
 		nexttbtt = roundup(nexttbtt, intval);
 
-	DPRINTF(sc, ATH_DEBUG_BEACON, "%s: nexttbtt %u intval %u (%u)\n",
-		__func__, nexttbtt, intval, ni->ni_intval);
+
 	if (ic->ic_opmode == IEEE80211_M_STA && !sc->sc_swbmiss) {
 		HAL_BEACON_STATE bs;
 		int dtimperiod, dtimcount;
@@ -1060,14 +1062,14 @@ ath_beacon_config(struct ath_softc *sc, struct ieee80211vap *vap)
 		tsf = ath_hal_gettsf64(ah);
 		tsftu = TSF_TO_TU(tsf>>32, tsf) + FUDGE;
 
-		DPRINTF(sc, ATH_DEBUG_BEACON,
+		DPRINTF(sc, ATH_DEBUG_BEACON | ATH_DEBUG_BEACON_STA,
 		    "%s: beacon tsf=%llu, hw tsf=%llu, nexttbtt=%u, tsftu=%u\n",
 		    __func__,
 		    (unsigned long long) tsf_beacon,
 		    (unsigned long long) tsf,
 		    nexttbtt,
 		    tsftu);
-		DPRINTF(sc, ATH_DEBUG_BEACON,
+		DPRINTF(sc, ATH_DEBUG_BEACON | ATH_DEBUG_BEACON_STA,
 		    "%s: beacon tsf=%llu, hw tsf=%llu, tsf delta=%lld\n",
 		    __func__,
 		    (unsigned long long) tsf_beacon,
@@ -1075,7 +1077,7 @@ ath_beacon_config(struct ath_softc *sc, struct ieee80211vap *vap)
 		    (long long) tsf -
 		    (long long) tsf_beacon);
 
-		DPRINTF(sc, ATH_DEBUG_BEACON,
+		DPRINTF(sc, ATH_DEBUG_BEACON | ATH_DEBUG_BEACON_STA,
 		    "%s: nexttbtt=%llu, beacon tsf delta=%lld\n",
 		    __func__,
 		    (unsigned long long) nexttbtt,
@@ -1110,7 +1112,7 @@ ath_beacon_config(struct ath_softc *sc, struct ieee80211vap *vap)
 			}
 		}
 
-		DPRINTF(sc, ATH_DEBUG_BEACON,
+		DPRINTF(sc, ATH_DEBUG_BEACON | ATH_DEBUG_BEACON_STA,
 		    "%s: adj nexttbtt=%llu, rx tsf delta=%lld\n",
 		    __func__,
 		    (unsigned long long) nexttbtt,
@@ -1161,7 +1163,7 @@ ath_beacon_config(struct ath_softc *sc, struct ieee80211vap *vap)
 		if (bs.bs_sleepduration > bs.bs_dtimperiod)
 			bs.bs_sleepduration = roundup(bs.bs_sleepduration, bs.bs_dtimperiod);
 
-		DPRINTF(sc, ATH_DEBUG_BEACON,
+		DPRINTF(sc, ATH_DEBUG_BEACON | ATH_DEBUG_BEACON_STA,
 			"%s: tsf %ju tsf:tu %u intval %u nexttbtt %u dtim %u "
 			"nextdtim %u bmiss %u sleep %u cfp:period %u "
 			"maxdur %u next %u timoffset %u\n"
@@ -1245,6 +1247,15 @@ ath_beacon_config(struct ath_softc *sc, struct ieee80211vap *vap)
 			ath_beacon_start_adhoc(sc, vap);
 	}
 	ieee80211_free_node(ni);
+
+	tsf = ath_hal_gettsf64(ah);
+	DPRINTF(sc, ATH_DEBUG_BEACON | ATH_DEBUG_BEACON_HOSTAP | ATH_DEBUG_BEACON_STA,
+	    "%s: nexttbtt %u intval %u (%u), tsf64=%llu tsfbeacon=%llu delta=%lld\n",
+	    __func__, nexttbtt, intval, ni->ni_intval,
+	    (unsigned long long) tsf,
+	    (unsigned long long) tsf_beacon,
+	    (long long) tsf -
+	    (long long) tsf_beacon);
 
 	ATH_LOCK(sc);
 	ath_power_restore_power_state(sc);

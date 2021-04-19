@@ -2432,7 +2432,7 @@ ath_bmiss_vap(struct ieee80211vap *vap)
 		u_int bmisstimeout =
 			vap->iv_bmissthreshold * vap->iv_bss->ni_intval * 1024;
 
-		DPRINTF(sc, ATH_DEBUG_BEACON,
+		DPRINTF(sc, ATH_DEBUG_BEACON | ATH_DEBUG_BEACON_STA,
 		    "%s: tsf %llu lastrx %lld (%llu) bmiss %u\n",
 		    __func__, (unsigned long long) tsf,
 		    (unsigned long long)(tsf - lastrx),
@@ -2464,7 +2464,8 @@ ath_bmiss_vap(struct ieee80211vap *vap)
 	ath_power_setpower(sc, HAL_PM_AWAKE, 0);
 	ath_power_restore_power_state(sc);
 	ATH_UNLOCK(sc);
-	DPRINTF(sc, ATH_DEBUG_BEACON,
+
+	DPRINTF(sc, ATH_DEBUG_BEACON | ATH_DEBUG_BEACON_STA,
 	    "%s: forced awake; force syncbeacon=1\n", __func__);
 	if ((vap->iv_flags_ext & IEEE80211_FEXT_SWBMISS) == 0) {
 		/*
@@ -6195,7 +6196,7 @@ ath_newstate(struct ieee80211vap *vap, enum ieee80211_state nstate, int arg)
 		/* For now, only do this if we're a single STA vap */
 		if (sc->sc_nvaps == 1 &&
 		    vap->iv_opmode == IEEE80211_M_STA) {
-			DPRINTF(sc, ATH_DEBUG_BEACON, "%s: syncbeacon=%d\n", __func__, sc->sc_syncbeacon);
+			DPRINTF(sc, ATH_DEBUG_BEACON | ATH_DEBUG_BEACON_STA, "%s: syncbeacon=%d\n", __func__, sc->sc_syncbeacon);
 			ATH_LOCK(sc);
 			/*
 			 * Always at least set the self-generated
