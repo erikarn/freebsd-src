@@ -67,10 +67,14 @@ ar71xx_wdog_watchdog_fn(void *private, u_int cmd, int *error)
 
 	cmd &= WD_INTERVAL;
 	if (sc->debug)
-		device_printf(sc->dev, "%s: : cmd: %x\n", __func__, cmd);
+		device_printf(sc->dev, "%s: : cmd: 0x%x\n", __func__, cmd);
 	if (cmd > 0) {
 		timer_val = (uint64_t)(1ULL << cmd) * ar71xx_ahb_freq() /
 		    1000000000;
+
+		if (sc->debug)
+			device_printf(sc->dev, "%s: cmd=0x%x, ahb_freq=%lld Hz, timer_val=%lld\n",
+			  __func__, cmd, (long long) ar71xx_ahb_freq(), timer_val);
 
 		/*
 		 * Clamp the timer value in case we overflow.
@@ -78,7 +82,7 @@ ar71xx_wdog_watchdog_fn(void *private, u_int cmd, int *error)
 		if (timer_val > 0xffffffff)
 			timer_val = 0xffffffff;
 		if (sc->debug)
-			device_printf(sc->dev, "%s: programming timer: %jx\n",
+			device_printf(sc->dev, "%s: programming timer: 0x%jx\n",
 			    __func__, (uintmax_t) timer_val);
 		/*
 		 * Make sure the watchdog is set to NOACTION and give it
