@@ -462,7 +462,7 @@ getlladdr(struct wlanstatfoo_p *wf)
 	if (p == NULL)
 		errx(1, "did not find link layer address for interface %s",
 			wf->ifr.ifr_name);
-	sdl = (const struct sockaddr_dl *) p->ifa_addr;
+	sdl = (const struct sockaddr_dl *)(void *) p->ifa_addr;
 	IEEE80211_ADDR_COPY(wf->mac, CLLADDR(sdl));
 	freeifaddrs(ifp);
 }
