@@ -163,8 +163,17 @@ tcp_update_dsack_list(struct tcpcb *tp, tcp_seq rcv_start, tcp_seq rcv_end)
 
 	INP_WLOCK_ASSERT(tp->t_inpcb);
 
+#if 0
 	KASSERT(SEQ_LT(rcv_start, rcv_end), ("rcv_start < rcv_end"));
-
+#else
+	if (! SEQ_LT(rcv_start, rcv_end)) {
+		printf("WARNING: %s: rcv_start=%d, rcv_end=%d, tp->rcv_numsacks=%d\n",
+		    __func__,
+		    (int) rcv_start,
+		    (int) rcv_end,
+		    (int) tp->rcv_numsacks);
+	}
+#endif
 	if (SEQ_LT(rcv_end, tp->rcv_nxt) ||
 	    ((rcv_end == tp->rcv_nxt) &&
 	     (tp->rcv_numsacks > 0 ) &&
@@ -265,7 +274,17 @@ tcp_update_sack_list(struct tcpcb *tp, tcp_seq rcv_start, tcp_seq rcv_end)
 	INP_WLOCK_ASSERT(tp->t_inpcb);
 
 	/* Check arguments. */
+#if 0
 	KASSERT(SEQ_LEQ(rcv_start, rcv_end), ("rcv_start <= rcv_end"));
+#else
+	if (! SEQ_LEQ(rcv_start, rcv_end)) {
+		printf("WARNING: %s: rcv_start=%d, rcv_end=%d, tp->rcv_numsacks=%d\n",
+		    __func__,
+		    (int) rcv_start,
+		    (int) rcv_end,
+		    (int) tp->rcv_numsacks);
+	}
+#endif
 
 	if ((rcv_start == rcv_end) &&
 	    (tp->rcv_numsacks >= 1) &&
@@ -480,8 +499,19 @@ tcp_sackhole_free(struct tcpcb *tp, struct sackhole *hole)
 	tp->snd_numholes--;
 	atomic_subtract_int(&V_tcp_sack_globalholes, 1);
 
+#if 0
 	KASSERT(tp->snd_numholes >= 0, ("tp->snd_numholes >= 0"));
 	KASSERT(V_tcp_sack_globalholes >= 0, ("tcp_sack_globalholes >= 0"));
+#else
+	if (tp->snd_numholes < 0) {
+	  printf("WARNING: %s: tp->snd_numholes=%d\n",
+	      __func__, (int) tp->snd_numholes);
+	}
+	if (V_tcp_sack_globalholes < 0) {
+		printf("WARNING: %s: V_tcp_sack_globalholes=%d\n",
+		__func__, (int) V_tcp_sack_globalholes);
+	}
+#endif
 }
 
 /*
@@ -688,8 +718,18 @@ tcp_sack_doack(struct tcpcb *tp, struct tcpopt *to, tcp_seq th_ack)
 			continue;
 		}
 		tp->sackhint.sack_bytes_rexmit -= (cur->rxmit - cur->start);
+#if 0
 		KASSERT(tp->sackhint.sack_bytes_rexmit >= 0,
 		    ("sackhint bytes rtx >= 0"));
+#else
+		if (tp->sackhint.sack_bytes_rexmit < 0) {
+			printf("WARNING: tp->sckhint.sack_bytes_rexmit=%d, "
+			    "cur_rxmit=%d, cur->start=%d\n",
+			    (int) tp->sackhint.sack_bytes_rexmit,
+			    cur->rxmit,
+			    cur->start);
+		}
+#endif
 		sack_changed = 1;
 		if (SEQ_LEQ(sblkp->start, cur->start)) {
 			/* Data acks at least the beginning of hole. */
@@ -752,8 +792,20 @@ tcp_sack_doack(struct tcpcb *tp, struct tcpopt *to, tcp_seq th_ack)
 	}
 	tp->sackhint.delivered_data = delivered_data;
 	tp->sackhint.sacked_bytes += delivered_data - left_edge_delta;
+#if 0
 	KASSERT((delivered_data >= 0), ("delivered_data < 0"));
 	KASSERT((tp->sackhint.sacked_bytes >= 0), ("sacked_bytes < 0"));
+#else
+	if (tp->snd_numholes < 0) {
+	  printf("WARNING: %s: delivered_data=%d\n",
+	      __func__, (int) delivered_data);
+	}
+	if (tp->sackhint.sacked_bytes < 0) {
+	  printf("WARNING: %s: tp->sackhint.sacked_bytes=%d\n",
+	      __func__, (int) tp->sackhint.sacked_bytes);
+	}
+
+#endif
 	return (sack_changed);
 }
 
@@ -770,9 +822,20 @@ tcp_free_sackholes(struct tcpcb *tp)
 		tcp_sackhole_remove(tp, q);
 	tp->sackhint.sack_bytes_rexmit = 0;
 
+#if 0
 	KASSERT(tp->snd_numholes == 0, ("tp->snd_numholes == 0"));
 	KASSERT(tp->sackhint.nexthole == NULL,
 		("tp->sackhint.nexthole == NULL"));
+#else
+	if (tp->snd_numholes != 0) {
+		printf("WARNING: %s: tp->snd_numholes=%d\n",
+		    __func__, tp->snd_numholes);
+	}
+	if (tp->sackhint.nexthole != NULL) {
+		printf("WARNING: %s: tp->sackhint.nexthole != NULL\n",
+		    __func__);
+	}
+#endif
 }
 
 /*

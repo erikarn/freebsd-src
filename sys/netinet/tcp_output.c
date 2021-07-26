@@ -1622,8 +1622,17 @@ timer:
 			if (sack_rxmit) {
 				p->rxmit -= len;
 				tp->sackhint.sack_bytes_rexmit -= len;
+#if 0
 				KASSERT(tp->sackhint.sack_bytes_rexmit >= 0,
 				    ("sackhint bytes rtx >= 0"));
+#else
+				if (tp->sackhint.sack_bytes_rexmit <= 0) {
+					printf("WARNING: tp->sackhint.sack_bytes_rexmit=%d, p->rxmit=%d, len=%d\n",
+					    (int) tp->sackhint.sack_bytes_rexmit,
+					    (int) p->rxmit,
+					    (int) len);
+				}
+#endif
 			} else
 				tp->snd_nxt -= len;
 		}
