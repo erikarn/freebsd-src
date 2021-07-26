@@ -1,0 +1,28 @@
+include GENERIC
+ident RSS
+
+device netmap
+options RSS
+options PCBGROUP
+
+# in-system lock profiling
+options LOCK_PROFILING
+
+# Flowtable - the rtentry locking is a bit .. slow.
+options 	FLOWTABLE
+
+# This debugging code has too much overhead to do accurate
+# testing with.
+nooptions         INVARIANTS
+nooptions         INVARIANT_SUPPORT
+nooptions         WITNESS
+nooptions         WITNESS_SKIPSPIN
+
+options		IEEE80211_DEBUG
+options		IEEE80211_MESH
+options		IEEE80211_TDMA
+options		IEEE80211_SUPERG
+options		IWN_DEBUG
+options		ATH_DEBUG
+options		AH_DEBUG
+options		ATH_DIAGAPI
