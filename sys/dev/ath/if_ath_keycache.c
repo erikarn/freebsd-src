@@ -421,6 +421,9 @@ ath_key_alloc(struct ieee80211vap *vap, struct ieee80211_key *k,
 {
 	struct ath_softc *sc = vap->iv_ic->ic_softc;
 
+	DPRINTF(sc, ATH_DEBUG_KEYCACHE, "%s: mac %6D: called\n",
+	    __func__, k->wk_macaddr, ":");
+
 	/*
 	 * Group key allocation must be handled specially for
 	 * parts that do not support multicast key cache search
@@ -470,15 +473,28 @@ ath_key_alloc(struct ieee80211vap *vap, struct ieee80211_key *k,
 	 * those requests to slot 0.
 	 */
 	if (k->wk_flags & IEEE80211_KEY_SWCRYPT) {
-		return key_alloc_single(sc, keyix, rxkeyix);
+		int ret;
+		ret = key_alloc_single(sc, keyix, rxkeyix);
+		DPRINTF(sc, ATH_DEBUG_KEYCACHE, "%s: SWCRYPT key %u\n", __func__, *keyix);
+		return ret;
 	} else if (k->wk_cipher->ic_cipher == IEEE80211_CIPHER_TKIP &&
 	    (k->wk_flags & IEEE80211_KEY_SWMIC) == 0) {
-		if (sc->sc_splitmic)
-			return key_alloc_2pair(sc, keyix, rxkeyix);
-		else
-			return key_alloc_pair(sc, keyix, rxkeyix);
+		if (sc->sc_splitmic) {
+			int ret;
+			ret = key_alloc_2pair(sc, keyix, rxkeyix);
+			DPRINTF(sc, ATH_DEBUG_KEYCACHE, "%s: splitmic %u\n", __func__, *keyix);
+			return ret;
+		} else {
+		int ret;
+			ret = key_alloc_pair(sc, keyix, rxkeyix);
+			DPRINTF(sc, ATH_DEBUG_KEYCACHE, "%s: alloc_pair %u\n", __func__, *keyix);
+			return ret;
+		}
 	} else {
-		return key_alloc_single(sc, keyix, rxkeyix);
+		int ret;
+		ret = key_alloc_single(sc, keyix, rxkeyix);
+		DPRINTF(sc, ATH_DEBUG_KEYCACHE, "%s: alloc_single%u\n", __func__, *keyix);
+		return ret;
 	}
 }
 
@@ -493,7 +509,8 @@ ath_key_delete(struct ieee80211vap *vap, const struct ieee80211_key *k)
 	const struct ieee80211_cipher *cip = k->wk_cipher;
 	u_int keyix = k->wk_keyix;
 
-	DPRINTF(sc, ATH_DEBUG_KEYCACHE, "%s: delete key %u\n", __func__, keyix);
+	DPRINTF(sc, ATH_DEBUG_KEYCACHE, "%s: mac %6D: delete key %u\n",
+	    __func__, k->wk_macaddr, ":", keyix);
 
 	ATH_LOCK(sc);
 	ath_power_set_power_state(sc, HAL_PM_AWAKE);
