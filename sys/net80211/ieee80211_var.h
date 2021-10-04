@@ -1023,19 +1023,19 @@ ieee80211_get_node_txpower(struct ieee80211_node *ni)
 #define	ieee80211_msg(_vap, _m)	((_vap)->iv_debug & (_m))
 #define	IEEE80211_DPRINTF(_vap, _m, _fmt, ...) do {			\
 	if (ieee80211_msg(_vap, _m))					\
-		ieee80211_note(_vap, _fmt, __VA_ARGS__);		\
+		ieee80211_note(_vap, _fmt, ## __VA_ARGS__);		\
 } while (0)
 #define	IEEE80211_NOTE(_vap, _m, _ni, _fmt, ...) do {			\
 	if (ieee80211_msg(_vap, _m))					\
-		ieee80211_note_mac(_vap, (_ni)->ni_macaddr, _fmt, __VA_ARGS__);\
+		ieee80211_note_mac(_vap, (_ni)->ni_macaddr, _fmt, ## __VA_ARGS__);\
 } while (0)
 #define	IEEE80211_NOTE_MAC(_vap, _m, _mac, _fmt, ...) do {		\
 	if (ieee80211_msg(_vap, _m))					\
-		ieee80211_note_mac(_vap, _mac, _fmt, __VA_ARGS__);	\
+		ieee80211_note_mac(_vap, _mac, _fmt, ## __VA_ARGS__);	\
 } while (0)
 #define	IEEE80211_NOTE_FRAME(_vap, _m, _wh, _fmt, ...) do {		\
 	if (ieee80211_msg(_vap, _m))					\
-		ieee80211_note_frame(_vap, _wh, _fmt, __VA_ARGS__);	\
+		ieee80211_note_frame(_vap, _wh, _fmt, ## __VA_ARGS__);	\
 } while (0)
 void	ieee80211_note(const struct ieee80211vap *, const char *, ...);
 void	ieee80211_note_mac(const struct ieee80211vap *,
