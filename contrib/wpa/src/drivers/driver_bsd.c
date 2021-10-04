@@ -75,6 +75,22 @@ struct bsd_driver_data {
 	enum ieee80211_opmode opmode;	/* operation mode */
 };
 
+static const char * ether_sprintf(const u8 *addr);
+
+static const char *
+ether_sprintf(const u8 *addr)
+{
+	static char buf[sizeof(MACSTR)];
+
+	if (addr != NULL)
+		snprintf(buf, sizeof(buf), MACSTR, MAC2STR(addr));
+	else
+		snprintf(buf, sizeof(buf), MACSTR, 0,0,0,0,0,0);
+	return buf;
+}
+
+
+
 /* Generic functions for hostapd and wpa_supplicant */
 static struct bsd_driver_data *
 bsd_get_drvindex(void *priv, unsigned int ifindex)
@@ -266,19 +282,25 @@ static int
 bsd_del_key(void *priv, const u8 *addr, int key_idx)
 {
 	struct ieee80211req_del_key wk;
+	int ret;
 
 	os_memset(&wk, 0, sizeof(wk));
 	if (addr == NULL) {
-		wpa_printf(MSG_DEBUG, "%s: key_idx=%d", __func__, key_idx);
+		wpa_printf(MSG_INFO, "%s: key_idx=%d, addr=%s",
+		__func__, key_idx, ether_sprintf(addr));
 		wk.idk_keyix = key_idx;
 	} else {
-		wpa_printf(MSG_DEBUG, "%s: addr=" MACSTR, __func__,
-			   MAC2STR(addr));
+		wpa_printf(MSG_INFO, "%s: addr=%s",
+		    __func__, ether_sprintf(addr));
 		os_memcpy(wk.idk_macaddr, addr, IEEE80211_ADDR_LEN);
 		wk.idk_keyix = (u_int8_t) IEEE80211_KEYIX_NONE;	/* XXX */
 	}
 
-	return set80211var(priv, IEEE80211_IOC_DELKEY, &wk, sizeof(wk));
+	ret = set80211var(priv, IEEE80211_IOC_DELKEY, &wk, sizeof(wk));
+
+	wpa_printf(MSG_INFO, "%s: addr=%s, ret=%d",
+	    __func__, ether_sprintf(addr), ret);
+	return ret;
 }
 
 static int
@@ -338,9 +360,11 @@ bsd_set_key(const char *ifname, void *priv, enum wpa_alg alg,
 #ifdef IEEE80211_KEY_NOREPLAY
 	struct bsd_driver_data *drv = priv;
 #endif /* IEEE80211_KEY_NOREPLAY */
+	int ret;
 
-	wpa_printf(MSG_DEBUG, "%s: alg=%d addr=%p key_idx=%d set_tx=%d "
-		   "seq_len=%zu key_len=%zu", __func__, alg, addr, key_idx,
+	wpa_printf(MSG_INFO, "%s: alg=%d addr=%s key_idx=%d set_tx=%d "
+		   "seq_len=%zu key_len=%zu",
+		   __func__, alg, ether_sprintf(addr), key_idx,
 		   set_tx, seq_len, key_len);
 
 	if (alg == WPA_ALG_NONE) {
@@ -419,7 +443,12 @@ bsd_set_key(const char *ifname, void *priv, enum wpa_alg alg,
 	}
 	os_memcpy(wk.ik_keydata, key, key_len);
 
-	return set80211var(priv, IEEE80211_IOC_WPAKEY, &wk, sizeof(wk));
+	ret = set80211var(priv, IEEE80211_IOC_WPAKEY, &wk, sizeof(wk));
+	wpa_printf(MSG_INFO, "%s: addr=%s ret=%d",
+	    __func__, ether_sprintf(addr), ret);
+
+	return ret;
+
 }
 
 static int
@@ -663,18 +692,6 @@ rtbuf_len(void)
 
 static int bsd_sta_deauth(void *priv, const u8 *own_addr, const u8 *addr,
 			  u16 reason_code);
-
-static const char *
-ether_sprintf(const u8 *addr)
-{
-	static char buf[sizeof(MACSTR)];
-
-	if (addr != NULL)
-		snprintf(buf, sizeof(buf), MACSTR, MAC2STR(addr));
-	else
-		snprintf(buf, sizeof(buf), MACSTR, 0,0,0,0,0,0);
-	return buf;
-}
 
 static int
 bsd_set_privacy(void *priv, int enabled)

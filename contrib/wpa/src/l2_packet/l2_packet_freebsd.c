@@ -65,10 +65,19 @@ int l2_packet_send(struct l2_packet_data *l2, const u8 *dst_addr, u16 proto,
 		eth->h_proto = htons(proto);
 		os_memcpy(eth + 1, buf, len);
 		ret = pcap_inject(l2->pcap, (u8 *) eth, len + sizeof(*eth));
+		if (ret == PCAP_ERROR) {
+			wpa_printf(MSG_INFO, "pcap_inject (l2_hdr) failed: %s", pcap_geterr(l2->pcap));
+		}
 		os_free(eth);
 		return ret;
-	} else
-		return pcap_inject(l2->pcap, buf, len);
+	} else {
+		int ret;
+		ret = pcap_inject(l2->pcap, buf, len);
+		if (ret == PCAP_ERROR) {
+			wpa_printf(MSG_INFO, "pcap_inject (non-l2_hdr path) failed: %s", pcap_geterr(l2->pcap));
+		}
+		return ret;
+	}
 }
 
 

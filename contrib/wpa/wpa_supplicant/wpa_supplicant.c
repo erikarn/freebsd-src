@@ -6376,7 +6376,7 @@ struct wpa_global * wpa_supplicant_init(struct wpa_params *params)
 	else
 		wpa_debug_setup_stdout();
 	if (params->wpa_debug_syslog)
-		wpa_debug_open_syslog();
+		wpa_debug_open_syslog("wpa_supplicant");
 	if (params->wpa_debug_tracing) {
 		ret = wpa_debug_open_linux_tracing();
 		if (ret) {

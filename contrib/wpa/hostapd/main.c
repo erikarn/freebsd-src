@@ -775,7 +775,7 @@ int main(int argc, char *argv[])
 		wpa_debug_setup_stdout();
 #ifdef CONFIG_DEBUG_SYSLOG
 	if (wpa_debug_syslog)
-		wpa_debug_open_syslog();
+		wpa_debug_open_syslog("hostapd");
 #endif /* CONFIG_DEBUG_SYSLOG */
 #ifdef CONFIG_DEBUG_LINUX_TRACING
 	if (enable_trace_dbg) {
