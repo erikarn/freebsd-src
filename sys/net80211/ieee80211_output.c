@@ -139,8 +139,12 @@ ieee80211_vap_pkt_send_dest(struct ieee80211vap *vap, struct mbuf *m,
 		 * the frame back when the time is right.
 		 * XXX lose WDS vap linkage?
 		 */
-		if (ieee80211_pwrsave(ni, m) != 0)
+		if (ieee80211_pwrsave(ni, m) != 0) {
+			IEEE80211_DISCARD_MAC(vap, IEEE80211_MSG_OUTPUT,
+			    ni->ni_macaddr, NULL,
+			    "%s", "failed to queue via pwrsave");
 			if_inc_counter(ifp, IFCOUNTER_OERRORS, 1);
+		}
 		ieee80211_free_node(ni);
 
 		/*
@@ -399,6 +403,7 @@ ieee80211_start_pkt(struct ieee80211vap *vap, struct mbuf *m)
 		ni = ieee80211_find_txnode(vap, eh->ether_dhost);
 		if (ni == NULL) {
 			/* NB: ieee80211_find_txnode does stat+msg */
+			IEEE80211_DISCARD_MAC(vap, IEEE80211_MSG_OUTPUT, eh->ether_dhost, NULL, "Couldn't find TX node");
 			if_inc_counter(ifp, IFCOUNTER_OERRORS, 1);
 			m_freem(m);
 			/* XXX better status? */
@@ -447,6 +452,7 @@ ieee80211_start_pkt(struct ieee80211vap *vap, struct mbuf *m)
 			 * NB: ieee80211_mesh_discover holds/disposes
 			 * frame (e.g. queueing on path discovery).
 			 */
+			IEEE80211_DISCARD_MAC(vap, IEEE80211_MSG_OUTPUT, eh->ether_dhost, NULL, "Couldn't find mesh tx node");
 			if_inc_counter(ifp, IFCOUNTER_OERRORS, 1);
 			/* XXX better status? */
 			return (ENOBUFS);
@@ -464,8 +470,10 @@ ieee80211_start_pkt(struct ieee80211vap *vap, struct mbuf *m)
 		 * for transmit.
 		 */
 		ic->ic_lastdata = ticks;
-		if (ieee80211_pwrsave(ni, m) != 0)
+		if (ieee80211_pwrsave(ni, m) != 0) {
+			IEEE80211_DISCARD_MAC(vap, IEEE80211_MSG_OUTPUT, ni->ni_macaddr, NULL, "Couldn't queue to powersave");
 			if_inc_counter(ifp, IFCOUNTER_OERRORS, 1);
+		}
 		ieee80211_free_node(ni);
 		ieee80211_new_state(vap, IEEE80211_S_RUN, 0);
 		return (0);
@@ -581,6 +589,7 @@ ieee80211_raw_output(struct ieee80211vap *vap, struct ieee80211_node *ni,
 
 	error = ic->ic_raw_xmit(ni, m, params);
 	if (error) {
+		IEEE80211_DISCARD_MAC(vap, IEEE80211_MSG_OUTPUT, ni->ni_macaddr, NULL, "raw_xmit failed (%d)", error);
 		if_inc_counter(vap->iv_ifp, IFCOUNTER_OERRORS, 1);
 		ieee80211_free_node(ni);
 	}
@@ -749,6 +758,11 @@ ieee80211_output(struct ifnet *ifp, struct mbuf *m,
 	int error;
 	int ret;
 
+	vap = ifp->if_softc;
+	ic = vap->iv_ic;
+
+	IEEE80211_DPRINTF(vap, IEEE80211_MSG_OUTPUT, "called");
+
 	if (ifp->if_drv_flags & IFF_DRV_OACTIVE) {
 		/*
 		 * Short-circuit requests if the vap is marked OACTIVE
@@ -758,10 +772,10 @@ ieee80211_output(struct ifnet *ifp, struct mbuf *m,
 		 * should not be necessary but callers of if_output don't
 		 * check OACTIVE.
 		 */
+		IEEE80211_DPRINTF(vap, IEEE80211_MSG_OUTPUT, "%s: failed, OACTIVE\n", __func__);
 		senderr(ENETDOWN);
 	}
-	vap = ifp->if_softc;
-	ic = vap->iv_ic;
+
 	/*
 	 * Hand to the 802.3 code if not tagged as
 	 * a raw 802.11 frame.
@@ -770,21 +784,29 @@ ieee80211_output(struct ifnet *ifp, struct mbuf *m,
 		return vap->iv_output(ifp, m, dst, ro);
 #ifdef MAC
 	error = mac_ifnet_check_transmit(ifp, m);
-	if (error)
+	if (error) {
+		IEEE80211_DPRINTF(vap, IEEE80211_MSG_OUTPUT, "%s: failed, mac_ifnet_check_transmit\n", __func__);
 		senderr(error);
+	}
 #endif
-	if (ifp->if_flags & IFF_MONITOR)
+	if (ifp->if_flags & IFF_MONITOR) {
+		IEEE80211_DPRINTF(vap, IEEE80211_MSG_OUTPUT, "%s: failed, IFF_MONITOR\n", __func__);
 		senderr(ENETDOWN);
-	if (!IFNET_IS_UP_RUNNING(ifp))
+	}
+	if (!IFNET_IS_UP_RUNNING(ifp)) {
+		IEEE80211_DPRINTF(vap, IEEE80211_MSG_OUTPUT, "%s: failed, ! IFNET_IS_UP_RUNNING\n", __func__);
 		senderr(ENETDOWN);
+	}
 	if (vap->iv_state == IEEE80211_S_CAC) {
 		IEEE80211_DPRINTF(vap,
 		    IEEE80211_MSG_OUTPUT | IEEE80211_MSG_DOTH,
 		    "block %s frame in CAC state\n", "raw data");
 		vap->iv_stats.is_tx_badstate++;
 		senderr(EIO);		/* XXX */
-	} else if (vap->iv_state == IEEE80211_S_SCAN)
+	} else if (vap->iv_state == IEEE80211_S_SCAN) {
+		IEEE80211_DPRINTF(vap, IEEE80211_MSG_OUTPUT, "%s: failed, state == SCAN\n", __func__);
 		senderr(EIO);
+	}
 	/* XXX bypass bridge, pfil, carp, etc. */
 
 	/*
@@ -797,8 +819,11 @@ ieee80211_output(struct ifnet *ifp, struct mbuf *m,
 		params = (const struct ieee80211_bpf_params *)dst->sa_data;
 
 	error = ieee80211_validate_frame(m, params);
-	if (error != 0)
+	if (error != 0) {
+		IEEE80211_DPRINTF(vap, IEEE80211_MSG_OUTPUT, "%s: failed, ieee80211_validate_frame\n", __func__);
 		senderr(error);
+	}
+
 
 	wh = mtod(m, struct ieee80211_frame *);
 
@@ -820,8 +845,10 @@ ieee80211_output(struct ifnet *ifp, struct mbuf *m,
 		 * Permit packets w/ bpf params through regardless
 		 * (see below about sa_len).
 		 */
-		if (dst->sa_len == 0)
+		if (dst->sa_len == 0) {
+			IEEE80211_DPRINTF(vap, IEEE80211_MSG_OUTPUT, "%s: failed, sa_len == 0\n", __func__);
 			senderr(EHOSTUNREACH);
+		}
 		ni = ieee80211_ref_node(vap->iv_bss);
 	}
 
@@ -836,8 +863,10 @@ ieee80211_output(struct ifnet *ifp, struct mbuf *m,
 
 	if (IEEE80211_IS_DATA(wh)) {
 		/* calculate priority so drivers can find the tx queue */
-		if (ieee80211_classify(ni, m))
+		if (ieee80211_classify(ni, m)) {
+			IEEE80211_DPRINTF(vap, IEEE80211_MSG_OUTPUT, "%s: failed, ! ieee80211_classify\n", __func__);
 			senderr(EIO);		/* XXX */
+		}
 
 		/* NB: ieee80211_encap does not include 802.11 header */
 		IEEE80211_NODE_STAT_ADD(ni, tx_bytes,
@@ -846,8 +875,10 @@ ieee80211_output(struct ifnet *ifp, struct mbuf *m,
 		M_WME_SETAC(m, WME_AC_BE);
 
 	error = ieee80211_sanitize_rates(ni, m, params);
-	if (error != 0)
+	if (error != 0) {
+		IEEE80211_DPRINTF(vap, IEEE80211_MSG_OUTPUT, "%s: failed, ! ieee80211_sanitize_rates\n", __func__);
 		senderr(error);
+	}
 
 	IEEE80211_NODE_STAT(ni, tx_data);
 	if (IEEE80211_IS_MULTICAST(wh->i_addr1)) {
@@ -863,6 +894,11 @@ ieee80211_output(struct ifnet *ifp, struct mbuf *m,
 bad:
 	if (m != NULL)
 		m_freem(m);
+	if (ni == NULL) {
+		IEEE80211_DPRINTF(vap, IEEE80211_MSG_OUTPUT, "ieee80211_output failed (%d)\n", error);
+	} else {
+		IEEE80211_DISCARD_MAC(vap, IEEE80211_MSG_OUTPUT, ni->ni_macaddr, NULL, "ieee80211_output failed (%d)", error);
+	}
 	if (ni != NULL)
 		ieee80211_free_node(ni);
 	if_inc_counter(ifp, IFCOUNTER_OERRORS, 1);
@@ -4103,8 +4139,12 @@ ieee80211_tx_complete(struct ieee80211_node *ni, struct mbuf *m, int status)
 			if_inc_counter(ifp, IFCOUNTER_OPACKETS, 1);
 			if (m->m_flags & M_MCAST)
 				if_inc_counter(ifp, IFCOUNTER_OMCASTS, 1);
-		} else
+		} else {
+			IEEE80211_DISCARD_MAC(ni->ni_vap, IEEE80211_MSG_OUTPUT,
+			    ni->ni_macaddr, NULL,
+			    "%s", "TX'ed but failed");
 			if_inc_counter(ifp, IFCOUNTER_OERRORS, 1);
+		}
 		if (m->m_flags & M_TXCB)
 			ieee80211_process_callback(ni, m, status);
 		ieee80211_free_node(ni);

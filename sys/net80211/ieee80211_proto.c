@@ -2486,7 +2486,7 @@ ieee80211_newstate_cb(void *xvap, int npending)
 		/* Deny any state changes while we are here. */
 		vap->iv_nstate = IEEE80211_S_INIT;
 		IEEE80211_DPRINTF(vap, IEEE80211_MSG_STATE,
-		    "%s: %s -> %s arg %d\n", __func__,
+		    "%s: %s -> %s arg %d (reinit)\n", __func__,
 		    ieee80211_state_name[vap->iv_state],
 		    ieee80211_state_name[vap->iv_nstate], arg);
 		vap->iv_newstate(vap, vap->iv_nstate, 0);
@@ -2508,6 +2508,7 @@ ieee80211_newstate_cb(void *xvap, int npending)
 		 * transition again while we are executing.
 		 *
 		 * XXX not always right, assumes ap follows sta
+		 * [ahc] - are we doing this right in AP following STA right now?? does this trigger an interface down/up transition for the AP VAPs?
 		 */
 		markwaiting(vap);
 	}
@@ -2543,12 +2544,14 @@ ieee80211_newstate_cb(void *xvap, int npending)
 		 * (i.e. coming out of power save mode).
 		 */
 		vap->iv_ifp->if_drv_flags &= ~IFF_DRV_OACTIVE;
-
 		/*
 		 * XXX TODO Kick-start a VAP queue - this should be a method!
 		 */
 
 		/* bring up any vaps waiting on us */
+		/*
+		 * XXX [ahc] again, are we correctly waking up the other VAPs here? How does hostapd, etc see the state change? Do they need to reload state?
+		 */
 		wakeupwaiting(vap);
 	} else if (nstate == IEEE80211_S_INIT) {
 		/*
@@ -2616,12 +2619,21 @@ ieee80211_new_state_locked(struct ieee80211vap *vap,
 			 * do not allow any other state changes
 			 * until this is completed.
 			 */
+#if 0
 			IEEE80211_DPRINTF(vap, IEEE80211_MSG_STATE,
 			    "%s: %s -> %s (%s) transition discarded\n",
 			    __func__,
 			    ieee80211_state_name[vap->iv_state],
 			    ieee80211_state_name[nstate],
 			    ieee80211_state_name[vap->iv_nstate]);
+#else
+			if_printf(vap->iv_ifp,
+			    "%s: %s -> %s (%s) transition discarded\n",
+			    __func__,
+			    ieee80211_state_name[vap->iv_state],
+			    ieee80211_state_name[nstate],
+			    ieee80211_state_name[vap->iv_nstate]);
+#endif
 			return -1;
 		} else if (vap->iv_state != vap->iv_nstate) {
 #if 0
