@@ -1903,8 +1903,11 @@ restart_vaps(void *arg, int npending)
 {
 	struct ieee80211com *ic = arg;
 
+	ic_printf(ic, "%s: called\n", __func__);
+
 	ieee80211_suspend_all(ic);
 	ieee80211_resume_all(ic);
+	ic_printf(ic, "%s: done\n", __func__);
 }
 
 /*
@@ -1915,6 +1918,7 @@ restart_vaps(void *arg, int npending)
 void
 ieee80211_waitfor_parent(struct ieee80211com *ic)
 {
+	ic_printf(ic, "%s: called; blocking\n", __func__);
 	taskqueue_block(ic->ic_tq);
 	ieee80211_draintask(ic, &ic->ic_parent_task);
 	ieee80211_draintask(ic, &ic->ic_mcast_task);
@@ -1923,6 +1927,7 @@ ieee80211_waitfor_parent(struct ieee80211com *ic)
 	ieee80211_draintask(ic, &ic->ic_bmiss_task);
 	ieee80211_draintask(ic, &ic->ic_chw_task);
 	taskqueue_unblock(ic->ic_tq);
+	ic_printf(ic, "%s: called; unblocking\n", __func__);
 }
 
 /*
@@ -2071,6 +2076,8 @@ ieee80211_start_all(struct ieee80211com *ic)
 {
 	struct ieee80211vap *vap;
 
+	ic_printf(ic, "%s: called\n", __func__);
+
 	IEEE80211_LOCK(ic);
 	TAILQ_FOREACH(vap, &ic->ic_vaps, iv_next) {
 		struct ifnet *ifp = vap->iv_ifp;
@@ -2078,6 +2085,7 @@ ieee80211_start_all(struct ieee80211com *ic)
 			ieee80211_start_locked(vap);
 	}
 	IEEE80211_UNLOCK(ic);
+	ic_printf(ic, "%s: done\n", __func__);
 }
 
 /*
@@ -2116,9 +2124,13 @@ ieee80211_stop(struct ieee80211vap *vap)
 {
 	struct ieee80211com *ic = vap->iv_ic;
 
+	IEEE80211_DPRINTF(vap, IEEE80211_MSG_STATE, "%s: called\n", __func__);
+
 	IEEE80211_LOCK(ic);
 	ieee80211_stop_locked(vap);
 	IEEE80211_UNLOCK(ic);
+
+	IEEE80211_DPRINTF(vap, IEEE80211_MSG_STATE, "%s: done\n", __func__);
 }
 
 /*
@@ -2129,6 +2141,8 @@ ieee80211_stop_all(struct ieee80211com *ic)
 {
 	struct ieee80211vap *vap;
 
+	ic_printf(ic, "%s: called\n", __func__);
+
 	IEEE80211_LOCK(ic);
 	TAILQ_FOREACH(vap, &ic->ic_vaps, iv_next) {
 		struct ifnet *ifp = vap->iv_ifp;
@@ -2138,6 +2152,7 @@ ieee80211_stop_all(struct ieee80211com *ic)
 	IEEE80211_UNLOCK(ic);
 
 	ieee80211_waitfor_parent(ic);
+	ic_printf(ic, "%s: done\n", __func__);
 }
 
 /*
@@ -2148,6 +2163,8 @@ void
 ieee80211_suspend_all(struct ieee80211com *ic)
 {
 	struct ieee80211vap *vap;
+
+	ic_printf(ic, "%s: called\n", __func__);
 
 	IEEE80211_LOCK(ic);
 	TAILQ_FOREACH(vap, &ic->ic_vaps, iv_next) {
@@ -2160,6 +2177,7 @@ ieee80211_suspend_all(struct ieee80211com *ic)
 	IEEE80211_UNLOCK(ic);
 
 	ieee80211_waitfor_parent(ic);
+	ic_printf(ic, "%s: done\n", __func__);
 }
 
 /*
@@ -2169,6 +2187,7 @@ void
 ieee80211_resume_all(struct ieee80211com *ic)
 {
 	struct ieee80211vap *vap;
+	ic_printf(ic, "%s: called\n", __func__);
 
 	IEEE80211_LOCK(ic);
 	TAILQ_FOREACH(vap, &ic->ic_vaps, iv_next) {
@@ -2180,6 +2199,7 @@ ieee80211_resume_all(struct ieee80211com *ic)
 		}
 	}
 	IEEE80211_UNLOCK(ic);
+	ic_printf(ic, "%s: done\n", __func__);
 }
 
 /*
@@ -2188,11 +2208,13 @@ ieee80211_resume_all(struct ieee80211com *ic)
 void
 ieee80211_restart_all(struct ieee80211com *ic)
 {
+	ic_printf(ic, "%s: called\n", __func__);
 	/*
 	 * NB: do not use ieee80211_runtask here, we will
 	 * block & drain net80211 taskqueue.
 	 */
 	taskqueue_enqueue(taskqueue_thread, &ic->ic_restart_task);
+	ic_printf(ic, "%s: done\n", __func__);
 }
 
 void
