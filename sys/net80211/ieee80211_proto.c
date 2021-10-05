@@ -2477,6 +2477,26 @@ wakeupwaiting(struct ieee80211vap *vap0)
 			vap->iv_flags_ext &= ~IEEE80211_FEXT_SCANWAIT;
 			/* NB: sta's cannot go INIT->RUN */
 			/* NB: iv_newstate may drop the lock */
+
+			/*
+			 * This is problematic if the interface has OACTIVE
+			 * set.  Only the deferred ieee80211_newstate_cb()
+			 * will end up actually /clearing/ the OACTIVE
+			 * flag on a state transition to RUN.
+			 *
+			 * But, we're not actually deferring this, and when
+			 * the deferred call occurs it shows up as a RUN->RUN
+			 * transition!  So the flag isn't/wasn't cleared!
+			 *
+			 * I'm also not sure if it's correct to actually
+			 * do the transitions here fully through the deferred
+			 * paths either as other things can be invoked as
+			 * part of that state machine.
+			 *
+			 * So just keep this in mind when looking at what
+			 * the markwaiting/wakeupwaiting routines are doing
+			 * and how they invoke vap state changes.
+			 */
 			vap->iv_newstate(vap,
 			    vap->iv_opmode == IEEE80211_M_STA ?
 			        IEEE80211_S_SCAN : IEEE80211_S_RUN, 0);
@@ -2530,7 +2550,6 @@ ieee80211_newstate_cb(void *xvap, int npending)
 		 * transition again while we are executing.
 		 *
 		 * XXX not always right, assumes ap follows sta
-		 * [ahc] - are we doing this right in AP following STA right now?? does this trigger an interface down/up transition for the AP VAPs?
 		 */
 		markwaiting(vap);
 	}
@@ -2552,6 +2571,36 @@ ieee80211_newstate_cb(void *xvap, int npending)
 		goto done;
 	}
 
+	/*
+	 * Handle the case of a RUN->RUN transition occuring when STA + AP
+	 * VAPs occur on the same radio.
+	 *
+	 * the mark and wakeup waiting routines call iv_newstate() directly,
+	 * but they do not end up deferring state changes here.
+	 * Thus, although the VAP newstate method sees a transition
+	 * of RUN->INIT->RUN, the deferred path here only sees a RUN->RUN
+	 * transition.  If OACTIVE is set then it is never cleared.
+	 *
+	 * So, if we're here and the state is RUN, just clear OACTIVE.
+	 * At some point if the markwaiting/wakeupwaiting paths end up
+	 * also invoking the deferred state updates then this will
+	 * be no-op code - and also if OACTIVE is finally retired, it'll
+	 * also be no-op code.
+	 */
+	if (nstate == IEEE80211_S_RUN) {
+		/*
+		 * XXX TODO Kick-start a VAP queue - this should be a method!
+		 */
+		if (vap->iv_ifp->if_drv_flags & IFF_DRV_OACTIVE) {
+			if_printf(vap->iv_ifp,
+			  "%s: called; ostate=%s, nstate=%s, OACTIVE was set\n",
+			  __func__,
+			  ieee80211_state_name[ostate],
+			  ieee80211_state_name[nstate]);
+		}
+		vap->iv_ifp->if_drv_flags &= ~IFF_DRV_OACTIVE;
+	}
+
 	/* No actual transition, skip post processing */
 	if (ostate == nstate)
 		goto done;
@@ -2571,9 +2620,6 @@ ieee80211_newstate_cb(void *xvap, int npending)
 		 */
 
 		/* bring up any vaps waiting on us */
-		/*
-		 * XXX [ahc] again, are we correctly waking up the other VAPs here? How does hostapd, etc see the state change? Do they need to reload state?
-		 */
 		wakeupwaiting(vap);
 	} else if (nstate == IEEE80211_S_INIT) {
 		/*
