@@ -516,7 +516,7 @@ ieee80211_vap_transmit(struct ifnet *ifp, struct mbuf *m)
 			    __func__, ieee80211_state_name[vap->iv_state]);
 			vap->iv_stats.is_tx_badstate++;
 			IEEE80211_UNLOCK(ic);
-#if 0
+#if 1
 			/* Disable; it's racy, and we shouldn't rely on OACTIVE anymore */
 			ifp->if_drv_flags |= IFF_DRV_OACTIVE;
 #endif
