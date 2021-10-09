@@ -65,33 +65,56 @@ void qca_msm_early_putc(int c);
 void
 qca_msm_early_putc(int c)
 {
+	static int is_init = 0;
+
 	int limit;
-	volatile uint32_t * UART_DM_TF0   = (uint32_t *)0x078af070;
-	volatile uint32_t * UART_DM_SR   = (uint32_t *)0x078af008;
+#define UART_BASE 0xf78af000
+
+	volatile uint32_t * UART_DM_TF0   = (uint32_t *)(UART_BASE + 0x70);
+	volatile uint32_t * UART_DM_SR   = (uint32_t *)(UART_BASE + 0x08);
 #define UART_DM_SR_TXEMT (1 << 3)
 #define UART_DM_SR_TXRDY (1 << 2)
-//	volatile uint32_t * UART_DM_ISR   = (uint32_t *)0x078af014;
-	volatile uint32_t * UART_DM_CR   = (uint32_t *)0x078af010;
+	volatile uint32_t * UART_DM_ISR   = (uint32_t *)(UART_BASE + 0x14);
+	volatile uint32_t * UART_DM_CR   = (uint32_t *)(UART_BASE + 0x10);
 #define UART_DM_TX_READY (1 << 7)
 #define UART_DM_CLEAR_TX_READY 0x300
-	volatile uint32_t * UART_DM_NO_CHARS_FOR_TX = (uint32_t *)0x078af040;
+	volatile uint32_t * UART_DM_NO_CHARS_FOR_TX = (uint32_t *)(UART_BASE + 0x40);
+	volatile uint32_t * UART_DM_TFWR = (uint32_t *)(UART_BASE + 0x1c);
+#define UART_DM_TFW_VALUE 0
+	volatile uint32_t * UART_DM_IPR = (uint32_t *)(UART_BASE + 0x18);
+#define  UART_DM_STALE_TIMEOUT_LSB 0xf
+
+	if (is_init == 0) {
+		is_init = 1;
+		*UART_DM_TFWR = UART_DM_TFW_VALUE;
+		wmb();
+		*UART_DM_IPR = UART_DM_STALE_TIMEOUT_LSB;
+		wmb();
+	}
 	
 	/* Wait until TXFIFO is empty via ISR */
-	limit = 1000;
+	limit = 100000;
 #if 1
 	if ((*UART_DM_SR & UART_DM_SR_TXEMT) == 0) {
-//		while ((*UART_DM_ISR & UART_DM_TX_READY) == 0 && --limit)
-//			DELAY(4);
+		while (((*UART_DM_ISR & UART_DM_TX_READY) == 0) && --limit) {
+			/* Note - can't use DELAY here yet, too early */
+			rmb();
+		}
 		*UART_DM_CR = UART_DM_CLEAR_TX_READY;
+		wmb();
 	}
 #endif
 
 	/* FIFO is ready.  Say we're going to write one byte */
 	*UART_DM_NO_CHARS_FOR_TX = 1;
+	wmb();
 
 #if 1
-	while ((*UART_DM_SR & UART_DM_SR_TXRDY) == 0)
-		DELAY(4);
+	limit = 100000;
+	while (((*UART_DM_SR & UART_DM_SR_TXRDY) == 0) && --limit) {
+		/* Note - can't use DELAY here yet, too early */
+		rmb();
+	}
 #endif
 
 	/* Put character in first fifo slot */
