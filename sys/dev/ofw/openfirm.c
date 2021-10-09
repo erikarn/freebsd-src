@@ -201,6 +201,8 @@ OF_install(char *name, int prio)
 	ofw_def_t *ofwp, **ofwpp;
 	static int curr_prio = 0;
 
+	OF_printf("hello, world!\n");
+
 	/* Allow OF layer to be uninstalled */
 	if (name == NULL) {
 		ofw_def_impl = NULL;
@@ -253,6 +255,8 @@ OF_init(void *cookie)
 	return (rv);
 }
 
+void qca_msm_early_putc(int c);
+
 static void
 OF_putchar(int c, void *arg __unused)
 {
@@ -260,11 +264,13 @@ OF_putchar(int c, void *arg __unused)
 
 	if (c == '\n') {
 		cbuf = '\r';
-		OF_write(stdout, &cbuf, 1);
+		//OF_write(stdout, &cbuf, 1);
+		qca_msm_early_putc(cbuf);
 	}
 
 	cbuf = c;
-	OF_write(stdout, &cbuf, 1);
+	//OF_write(stdout, &cbuf, 1);
+	qca_msm_early_putc(cbuf);
 }
 
 void

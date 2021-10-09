@@ -7,7 +7,7 @@ echo "*** Copying kernel"
 cp ../freebsd-obj/usr/home/adrian/work/freebsd/head-embedded-arm/freebsd-src/arm.armv7/sys/ASUS_AC1300/kernel ../kernel.elf
 
 echo "*** Building FIT"
-mkimage -f ../test.its ../test.itb
+mkimage -f local/test.its ../test.itb
 
 echo "*** Copying into /tftpboot"
 cp -vf ../test.itb /tftpboot

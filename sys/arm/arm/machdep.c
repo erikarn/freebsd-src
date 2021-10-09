@@ -729,6 +729,9 @@ arm_kdb_init(void)
 }
 
 #ifdef FDT
+
+void qca_msm_early_putc(int c);
+
 void *
 initarm(struct arm_boot_params *abp)
 {
@@ -744,12 +747,24 @@ initarm(struct arm_boot_params *abp)
 	struct efi_map_header *efihdr;
 #endif
 
+	qca_msm_early_putc('A');
+
+#if 0
+	while(1) {
+		qca_msm_early_putc('C');
+	}
+#endif
+
 	/* get last allocated physical address */
 	arm_physmem_kernaddr = abp->abp_physaddr;
 	lastaddr = parse_boot_param(abp) - KERNVIRTADDR + arm_physmem_kernaddr;
 
+	qca_msm_early_putc('B');
+
 	set_cpufuncs();
 	cpuinfo_init();
+
+	qca_msm_early_putc('C');
 
 	/*
 	 * Find the dtb passed in by the boot loader.
@@ -761,12 +776,18 @@ initarm(struct arm_boot_params *abp)
 	 * In case the device tree blob was not retrieved (from metadata) try
 	 * to use the statically embedded one.
 	 */
-	if (dtbp == (vm_offset_t)NULL)
+	if (dtbp == (vm_offset_t)NULL) {
+		qca_msm_early_putc('d');
 		dtbp = (vm_offset_t)&fdt_static_dtb;
+	}
 #endif
 
-	if (OF_install(OFW_FDT, 0) == FALSE)
+	qca_msm_early_putc('D');
+	if (OF_install(OFW_FDT, 0) == FALSE) {
+		qca_msm_early_putc('!');
 		panic("Cannot install FDT");
+	}
+	qca_msm_early_putc('E');
 
 	if (OF_init((void *)dtbp) != 0)
 		panic("OF_init failed with the found device tree");
