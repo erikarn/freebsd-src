@@ -26,7 +26,15 @@ cpu		CPU_CORTEXA
 ident		ASUS_AC1300
 machine		arm armv7
 
+options SOCDEV_PA=0x07800000
+options SOCDEV_VA=0x07800000
+options EARLY_PRINTF
 
+options 	FDT
+options         FDT_DTB_STATIC
+makeoptions     FDT_DTS_FILE=qcom-ipq4018-rt-ac58u.dts
+
+options 	LINUX_BOOT_ABI
 options 	SCHED_ULE
 options 	SMP
 options 	PLATFORM
