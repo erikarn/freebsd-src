@@ -52,6 +52,31 @@ __FBSDID("$FreeBSD$");
 
 void qca_msm_early_putc(int c);
 
+void ipq4018_mp_setmaxid(platform_t plat);
+void ipq4018_mp_start_ap(platform_t plat);
+
+static int
+ipq4018_attach(platform_t plat)
+{
+	return (0);
+}
+
+static void
+ipq4018_late_init(platform_t plat)
+{
+}
+
+static int
+ipq4018_devmap_init(platform_t plat)
+{
+	return (0);
+}
+
+static void
+ipq4018_cpu_reset(platform_t plat)
+{
+}
+
 /*
  * Early putc routine for EARLY_PRINTF support.  To use, add to kernel config:
  *   option SOCDEV_PA=0x07800000
@@ -125,3 +150,21 @@ qca_msm_early_putc(int c)
 }
 early_putc_t *early_putc = qca_msm_early_putc;
 #endif
+
+static platform_method_t ipq4018_methods[] = {
+        PLATFORMMETHOD(platform_attach,         ipq4018_attach),
+        PLATFORMMETHOD(platform_devmap_init,    ipq4018_devmap_init),
+        PLATFORMMETHOD(platform_late_init,      ipq4018_late_init),
+        PLATFORMMETHOD(platform_cpu_reset,      ipq4018_cpu_reset),
+
+#ifdef SMP
+        PLATFORMMETHOD(platform_mp_start_ap,    ipq4018_mp_start_ap),
+        PLATFORMMETHOD(platform_mp_setmaxid,    ipq4018_mp_setmaxid),
+#endif
+
+        PLATFORMMETHOD_END,
+};
+
+
+FDT_PLATFORM_DEF2(ipq4018, ipq4018_ac58u, "ASUS RT-AC58U", 0, "asus,rt-ac58u", 80);
+
