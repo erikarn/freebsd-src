@@ -68,8 +68,14 @@ qca_msm_early_putc(int c)
 	static int is_init = 0;
 
 	int limit;
-#define UART_BASE 0xf78af000
-
+/*
+ * This must match what's put into SOCDEV_VA.  You have to change them
+ * both together.
+ *
+ * XXX TODO I should really go and just make UART_BASE here depend upon
+ * SOCDEV_VA so they move together.
+ */
+#define UART_BASE 0x078af000
 	volatile uint32_t * UART_DM_TF0   = (uint32_t *)(UART_BASE + 0x70);
 	volatile uint32_t * UART_DM_SR   = (uint32_t *)(UART_BASE + 0x08);
 #define UART_DM_SR_TXEMT (1 << 3)
@@ -94,7 +100,6 @@ qca_msm_early_putc(int c)
 	
 	/* Wait until TXFIFO is empty via ISR */
 	limit = 100000;
-#if 1
 	if ((*UART_DM_SR & UART_DM_SR_TXEMT) == 0) {
 		while (((*UART_DM_ISR & UART_DM_TX_READY) == 0) && --limit) {
 			/* Note - can't use DELAY here yet, too early */
@@ -103,19 +108,16 @@ qca_msm_early_putc(int c)
 		*UART_DM_CR = UART_DM_CLEAR_TX_READY;
 		wmb();
 	}
-#endif
 
 	/* FIFO is ready.  Say we're going to write one byte */
 	*UART_DM_NO_CHARS_FOR_TX = 1;
 	wmb();
 
-#if 1
 	limit = 100000;
 	while (((*UART_DM_SR & UART_DM_SR_TXRDY) == 0) && --limit) {
 		/* Note - can't use DELAY here yet, too early */
 		rmb();
 	}
-#endif
 
 	/* Put character in first fifo slot */
 	*UART_DM_TF0 = c;
