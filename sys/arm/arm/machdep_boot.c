@@ -173,14 +173,18 @@ cmdline_set_env(char *cmdline, const char *guard)
 void arm_parse_fdt_bootargs(void)
 {
 
+	printf("\n%s: called; loader_envp=%p\n", __func__, loader_envp);
 #ifdef FDT
 	if (loader_envp == NULL && fdt_get_chosen_bootargs(linux_command_line,
 	    LBABI_MAX_COMMAND_LINE) == 0) {
+		printf("%s: fdt command line:\n", linux_command_line);
 		init_static_kenv(static_kenv, sizeof(static_kenv));
 		cmdline_set_env(linux_command_line, CMDLINE_GUARD);
 	}
 #endif
 }
+
+void qca_msm_early_putc(int c);
 
 /*
  * Called for armv[45].
@@ -197,6 +201,10 @@ linux_parse_boot_param(struct arm_boot_params *abp)
 	struct fdt_header *dtb_ptr;
 	uint32_t dtb_size;
 #endif
+
+	qca_msm_early_putc('E');
+
+	goto skip;
 
 	/*
 	 * Linux boot ABI: r0 = 0, r1 is the board type (!= 0) and r2
@@ -260,7 +268,9 @@ linux_parse_boot_param(struct arm_boot_params *abp)
 	bcopy(atag_list, atags,
 	    (char *)walker - (char *)atag_list + ATAG_SIZE(walker));
 
-	lastaddr = fake_preload_metadata(abp, NULL, 0);
+skip:
+	qca_msm_early_putc('e');
+	lastaddr = fake_preload_metadata(abp, &fdt_static_dtb, 131072);
 	init_static_kenv(static_kenv, sizeof(static_kenv));
 	cmdline_set_env(linux_command_line, CMDLINE_GUARD);
 	return lastaddr;
