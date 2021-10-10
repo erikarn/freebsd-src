@@ -19,10 +19,13 @@
 		led-failsafe = &led_power;
 		led-running = &led_power;
 		led-upgrade = &led_power;
+		serial0 = &blsp1_uart1;
 	};
 
 	chosen {
 		bootargs-append = " ubi.mtd=UBI_DEV";
+//		stdout-path = "serial0:115200n8";
+		stdout-path = "serial0";
 	};
 
 	soc {
