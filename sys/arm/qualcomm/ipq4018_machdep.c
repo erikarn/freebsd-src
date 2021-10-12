@@ -69,6 +69,12 @@ ipq4018_late_init(platform_t plat)
 static int
 ipq4018_devmap_init(platform_t plat)
 {
+	/*
+	 * This covers the boot UART.  Without it we can't boot successfully -
+	 * there's a mutex uninit panic in subr_vmem.c that occurs when doing
+	 * a call to pmap_mapdev() when the bus space code is doing its thing.
+	 */
+	devmap_add_entry(0x07800000, 0x00100000);
 	return (0);
 }
 
