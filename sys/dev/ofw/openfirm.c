@@ -255,8 +255,6 @@ OF_init(void *cookie)
 	return (rv);
 }
 
-void qca_msm_early_putc(int c);
-
 static void
 OF_putchar(int c, void *arg __unused)
 {
@@ -264,13 +262,11 @@ OF_putchar(int c, void *arg __unused)
 
 	if (c == '\n') {
 		cbuf = '\r';
-		//OF_write(stdout, &cbuf, 1);
-		qca_msm_early_putc(cbuf);
+		OF_write(stdout, &cbuf, 1);
 	}
 
 	cbuf = c;
-	//OF_write(stdout, &cbuf, 1);
-	qca_msm_early_putc(cbuf);
+	OF_write(stdout, &cbuf, 1);
 }
 
 void
