@@ -74,7 +74,7 @@ ipq4018_devmap_init(platform_t plat)
 	 * there's a mutex uninit panic in subr_vmem.c that occurs when doing
 	 * a call to pmap_mapdev() when the bus space code is doing its thing.
 	 */
-	devmap_add_entry(0x07800000, 0x00100000);
+	devmap_add_entry(0x078af000, 0x1000);
 	return (0);
 }
 
@@ -92,7 +92,7 @@ ipq4018_cpu_reset(platform_t plat)
  * makes sense now, but if multiple SOCs do that it will make early_putc another
  * duplicate symbol to be eliminated on the path to a generic kernel.
  */
-#if 1
+#if 0
 void
 qca_msm_early_putc(int c)
 {

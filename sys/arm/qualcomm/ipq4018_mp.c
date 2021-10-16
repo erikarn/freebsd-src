@@ -52,8 +52,6 @@ __FBSDID("$FreeBSD$");
 void ipq4018_mp_setmaxid(platform_t plat);
 void ipq4018_mp_start_ap(platform_t plat);
 
-void qca_msm_early_putc(int c);
-
 void
 ipq4018_mp_setmaxid(platform_t plat)
 {
