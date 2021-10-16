@@ -28,9 +28,10 @@ machine		arm armv7
 
 # Use a low VA here so we get the early printf stuff working all the
 # way up to cninit().
-options SOCDEV_PA=0x07800000
-options SOCDEV_VA=0x07800000
-options EARLY_PRINTF
+#options SOCDEV_PA=0x07800000
+#options SOCDEV_VA=0x07800000
+#options EARLY_PRINTF
+options BOOTVERBOSE
 
 options 	FDT
 options         FDT_DTB_STATIC
@@ -58,3 +59,5 @@ device 		ether
 device 		mii
 device 		bpf
 
+device 		generic_timer
+device 		mpcore_timer
