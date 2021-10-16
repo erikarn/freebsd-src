@@ -72,7 +72,7 @@ static boolean_t dbg_check_slot_free(enum dbg_t, u_int);
 static int dbg_remove_xpoint(struct dbg_wb_conf *);
 static int dbg_setup_xpoint(struct dbg_wb_conf *);
 
-static int dbg_capable_var;	/* Indicates that machine is capable of using
+static int dbg_capable_var = 0;	/* Indicates that machine is capable of using
 				   HW watchpoints/breakpoints */
 
 static uint32_t dbg_model;	/* Debug Arch. Model */
@@ -823,6 +823,8 @@ static __inline boolean_t
 dbg_arch_supported(void)
 {
 	uint32_t dbg_didr;
+
+	return 0; // Not supported on the IPQ4019
 
 	switch (dbg_model) {
 	case ID_DFR0_CP_DEBUG_M_V6:

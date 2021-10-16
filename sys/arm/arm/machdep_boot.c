@@ -184,8 +184,6 @@ void arm_parse_fdt_bootargs(void)
 #endif
 }
 
-void qca_msm_early_putc(int c);
-
 /*
  * Called for armv[45].
  */
@@ -201,8 +199,6 @@ linux_parse_boot_param(struct arm_boot_params *abp)
 	struct fdt_header *dtb_ptr;
 	uint32_t dtb_size;
 #endif
-
-	qca_msm_early_putc('E');
 
 	goto skip;
 
@@ -269,7 +265,6 @@ linux_parse_boot_param(struct arm_boot_params *abp)
 	    (char *)walker - (char *)atag_list + ATAG_SIZE(walker));
 
 skip:
-	qca_msm_early_putc('e');
 	lastaddr = fake_preload_metadata(abp, &fdt_static_dtb, 131072);
 	init_static_kenv(static_kenv, sizeof(static_kenv));
 	cmdline_set_env(linux_command_line, CMDLINE_GUARD);

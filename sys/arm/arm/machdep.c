@@ -728,9 +728,23 @@ arm_kdb_init(void)
 #endif
 }
 
-#ifdef FDT
+void print_va_pa(const char *prefix, uint32_t va);
 
-void qca_msm_early_putc(int c);
+void
+print_va_pa(const char *prefix, uint32_t va)
+{
+  vm_paddr_t pa;
+
+  isb();
+  cp15_ats1cpr_set(va & ~0xFFF);
+  isb();
+  pa = cp15_par_get() & ~0x0FFF;
+  isb();
+  printf("%s: %s: 0x%08x -> 0x%08x\n", __func__, prefix, va, pa);
+}
+
+
+#ifdef FDT
 
 void *
 initarm(struct arm_boot_params *abp)
@@ -747,50 +761,40 @@ initarm(struct arm_boot_params *abp)
 	struct efi_map_header *efihdr;
 #endif
 
-	qca_msm_early_putc('A');
-
-#if 0
-	while(1) {
-		qca_msm_early_putc('C');
-	}
-#endif
-
 	/* get last allocated physical address */
 	arm_physmem_kernaddr = abp->abp_physaddr;
 	lastaddr = parse_boot_param(abp) - KERNVIRTADDR + arm_physmem_kernaddr;
 
-	qca_msm_early_putc('B');
-
 	set_cpufuncs();
 	cpuinfo_init();
 
-	qca_msm_early_putc('C');
-
+#if 0
 	/*
 	 * Find the dtb passed in by the boot loader.
 	 */
 	kmdp = preload_search_by_type("elf kernel");
 	dtbp = MD_FETCH(kmdp, MODINFOMD_DTBP, vm_offset_t);
+#else
+	kmdp = NULL;
+	dtbp = 0;
+#endif
 #if defined(FDT_DTB_STATIC)
 	/*
 	 * In case the device tree blob was not retrieved (from metadata) try
 	 * to use the statically embedded one.
 	 */
 	if (dtbp == (vm_offset_t)NULL) {
-		qca_msm_early_putc('d');
 		dtbp = (vm_offset_t)&fdt_static_dtb;
 	}
 #endif
 
-	qca_msm_early_putc('D');
 	if (OF_install(OFW_FDT, 0) == FALSE) {
-		qca_msm_early_putc('!');
 		panic("Cannot install FDT");
 	}
-	qca_msm_early_putc('E');
 
-	if (OF_init((void *)dtbp) != 0)
+	if (OF_init((void *)dtbp) != 0) {
 		panic("OF_init failed with the found device tree");
+	}
 
 #if defined(LINUX_BOOT_ABI)
 	arm_parse_fdt_bootargs();
@@ -805,8 +809,9 @@ initarm(struct arm_boot_params *abp)
 #endif
 	{
 		/* Grab physical memory regions information from device tree. */
-		if (fdt_get_mem_regions(mem_regions, &mem_regions_sz,NULL) != 0)
+		if (fdt_get_mem_regions(mem_regions, &mem_regions_sz,NULL) != 0) {
 			panic("Cannot get physical memory regions");
+		}
 	}
 	physmem_hardware_regions(mem_regions, mem_regions_sz);
 
@@ -814,6 +819,14 @@ initarm(struct arm_boot_params *abp)
 	if (fdt_get_reserved_regions(mem_regions, &mem_regions_sz) == 0)
 		physmem_exclude_regions(mem_regions, mem_regions_sz,
 		    EXFLAG_NODUMP | EXFLAG_NOALLOC);
+
+	/* Hardcoded for now */
+	physmem_exclude_region(0x87e00000, 0x080000, EXFLAG_NODUMP | EXFLAG_NOALLOC);
+	physmem_exclude_region(0x87e80000, 0x180000, EXFLAG_NODUMP | EXFLAG_NOALLOC);
+
+	printf("\nlastaddr: 0x%x\n", lastaddr);
+	printf("arm_physmem_kernaddr=0x%x\n", (int) arm_physmem_kernaddr);
+	printf("dtb: 0x%x\n", dtbp);
 
 	/*
 	 * Set TEX remapping registers.
@@ -873,6 +886,7 @@ initarm(struct arm_boot_params *abp)
 	/* Allocate message buffer. */
 	msgbufp = (void *)pmap_preboot_get_vpages(
 	    round_page(msgbufsize) / PAGE_SIZE);
+	printf("\nmsgbufp: %p\n", msgbufp);
 
 	/*
 	 * Pages were allocated during the secondary bootstrap for the
@@ -889,6 +903,7 @@ initarm(struct arm_boot_params *abp)
 	err_devmap = platform_devmap_init();
 	devmap_bootstrap(0, NULL);
 	vm_max_kernel_address = platform_lastaddr();
+	printf("\nvm_max_kernel_address: 0x%x\n", vm_max_kernel_address);
 
 	/*
 	 * Only after the SOC registers block is mapped we can perform device
@@ -898,6 +913,8 @@ initarm(struct arm_boot_params *abp)
 	platform_gpio_init();
 	cninit();
 
+	print_va_pa("cninit", 0xc087f100);
+
 	/*
 	 * If we made a mapping for EARLY_PRINTF after pmap_bootstrap_prepare(),
 	 * undo it now that the normal console printf works.
@@ -905,6 +922,11 @@ initarm(struct arm_boot_params *abp)
 #if defined(EARLY_PRINTF) && defined(SOCDEV_PA) && defined(SOCDEV_VA) && SOCDEV_VA < KERNBASE
 	pmap_kremove(SOCDEV_VA);
 #endif
+
+	physmem_print_tables();
+	devmap_print_table();
+
+	print_va_pa("after devmap_print_table", 0xc087f100);
 
 	debugf("initarm: console initialized\n");
 	debugf(" arg1 kmdp = 0x%08x\n", (uint32_t)kmdp);
@@ -922,6 +944,7 @@ initarm(struct arm_boot_params *abp)
 		    err_devmap);
 
 	platform_late_init();
+	print_va_pa("after platform_late_init", 0xc087f100);
 
 	root = OF_finddevice("/");
 	if (OF_getprop(root, "freebsd,dts-version", dts_version, sizeof(dts_version)) > 0) {
@@ -934,6 +957,11 @@ initarm(struct arm_boot_params *abp)
 		printf("WARNING: Cannot find freebsd,dts-version property, "
 		    "cannot check DTB compliance\n");
 	}
+
+	printf("*** Getting ready to init proc0..\n");
+	printf("*** abp_physaddr = 0x%x\n", abp->abp_physaddr);
+
+	print_va_pa("pre proc0", 0xc087f100);
 
 	/*
 	 * We must now clean the cache again....
@@ -952,6 +980,8 @@ initarm(struct arm_boot_params *abp)
 	enable_interrupts(PSR_A);
 	pmap_bootstrap(0);
 
+	print_va_pa("post pmap_bootstrap()", 0xc087f100);
+
 	/* Exclude the kernel (and all the things we allocated which immediately
 	 * follow the kernel) from the VM allocation pool but not from crash
 	 * dumps.  virtual_avail is a global variable which tracks the kva we've
@@ -963,6 +993,8 @@ initarm(struct arm_boot_params *abp)
 		pmap_preboot_get_pages(0) - abp->abp_physaddr, EXFLAG_NOALLOC);
 	physmem_init_kernel_globals();
 
+	printf("*** physmem=0x%lx\n", physmem);
+
 	init_param2(physmem);
 	/* Init message buffer. */
 	msgbufinit(msgbufp, msgbufsize);
@@ -970,6 +1002,10 @@ initarm(struct arm_boot_params *abp)
 	arm_kdb_init();
 	/* Apply possible BP hardening. */
 	cpuinfo_init_bp_hardening();
+
+	identify_arm_cpu();
+	print_va_pa("post identify_arm_cpu()", 0xc087f100);
+
 	return ((void *)STACKALIGN(thread0.td_pcb));
 
 }

@@ -93,6 +93,8 @@ platform_probe_and_attach(void)
 	plat_obj = &plat_kernel_obj;
 	best_prio = 0;
 
+	printf("%s: called\n", __func__);
+
 	/*
 	 * We are unable to use TUNABLE_STR as the read will happen
 	 * well after this function has returned.
@@ -104,6 +106,8 @@ platform_probe_and_attach(void)
 	 */
 	SET_FOREACH(platpp, platform_set) {
 		platp = *platpp;
+
+		printf("%s: checking %p\n", __func__, platp);
 
 		/*
 		 * Take care of compiling the selected class, and
