@@ -5,6 +5,7 @@ sys/tools/fdt/make_dtb.sh /home/adrian/work/freebsd/head-embedded-arm/freebsd-sr
 
 echo "*** Copying kernel"
 cp ../freebsd-obj/usr/home/adrian/work/freebsd/head-embedded-arm/freebsd-src/arm.armv7/sys/ASUS_AC1300/kernel ../kernel.elf
+cp ../freebsd-obj/usr/home/adrian/work/freebsd/head-embedded-arm/freebsd-src/arm.armv7/sys/ASUS_AC1300/kernel.debug ../kernel.debug
 
 echo "*** Building FIT"
 # mkimage -f local/test.its ../test.itb
