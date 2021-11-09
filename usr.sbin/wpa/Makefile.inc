@@ -86,6 +86,10 @@ NEED_AES_ENCBLOCK=y
 NEED_AES_OMAC1=y
 .endif
 
+.if ${MK_OPENSSL} != "no"
+CFLAGS+=-DCONFIG_PASN
+.endif
+
 .if !empty(CFLAGS:M*-DEAP_AKA)
 NEED_SIM_COMMON=y
 NEED_AES_CBC=y

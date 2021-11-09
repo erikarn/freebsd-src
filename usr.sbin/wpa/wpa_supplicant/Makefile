@@ -32,6 +32,10 @@ SRCS=	blacklist.c \
 	wpa_supplicant.c \
 	wpas_glue.c
 
+.if ${MK_OPENSSL} != "no"
+SRCS+=	pasn_supplicant.c
+.endif
+
 MAN=	wpa_supplicant.8 wpa_supplicant.conf.5
 
 .if ${MK_EXAMPLES} != "no"
