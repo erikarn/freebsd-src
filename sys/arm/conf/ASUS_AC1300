@@ -50,3 +50,14 @@ device 		ether
 device 		mii
 device 		bpf
 
+options 	GEOM_UZIP
+device 		xz
+
+# NOR flash
+device		mx25l
+
+# 4 megabyte rootfs
+options 	MD_ROOT
+options 	MD_ROOT_SIZE=4096
+options 	ROOTDEVNAME=\"ufs:md0.uzip\"
+makeoptions 	MFS_IMAGE=/tftpboot/mfs-arm.uzip
