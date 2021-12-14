@@ -216,7 +216,7 @@ w25n_probe(device_t dev)
 	return (ENXIO);
 found:
 #endif
-	device_set_desc(dev, "M25Pxx Flash Family");
+	device_set_desc(dev, "W25N NAND Flash Family");
 
 	return (0);
 }
@@ -292,7 +292,7 @@ w25n_detach(device_t dev)
 		sc->sc_taskstate = TSTATE_STOPPING;
 		wakeup(sc);
 		while (err == 0 && sc->sc_taskstate != TSTATE_STOPPED) {
-			err = msleep(sc, &sc->sc_mtx, 0, "mx25dt", hz * 3);
+			err = msleep(sc, &sc->sc_mtx, 0, "w25nd", hz * 3);
 			if (err != 0) {
 				sc->sc_taskstate = TSTATE_RUNNING;
 				device_printf(sc->sc_dev,
