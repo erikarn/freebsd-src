@@ -53,8 +53,11 @@ device 		bpf
 options 	GEOM_UZIP
 device 		xz
 
-# NOR flash
+# SPI NOR flash
 device		mx25l
+
+# SPI NAND flash
+device		w25n
 
 # 4 megabyte rootfs
 options 	MD_ROOT
