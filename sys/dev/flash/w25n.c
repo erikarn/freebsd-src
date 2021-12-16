@@ -107,11 +107,12 @@ static void w25n_task(void *arg);
 
 static struct w25n_flash_ident flash_devices[] = {
 
-	{ "w25n01gv",	0xef, 0xaa21, 64 * 1024, 2048, 128 * 1024, FL_NONE },
+	{ "w25n01gv",	0xef, 0xaa21, 2048, 64 * 1024, 128 * 1024, FL_NONE },
 };
 
 static int
-w25n_wait_for_device_ready(struct w25n_softc *sc)
+w25n_read_status_register(struct w25n_softc *sc, uint8_t reg,
+    uint8_t *retval)
 {
 	uint8_t txBuf[3], rxBuf[3];
 	struct spi_command cmd;
@@ -119,17 +120,51 @@ w25n_wait_for_device_ready(struct w25n_softc *sc)
 
 	memset(&cmd, 0, sizeof(cmd));
 
+	txBuf[0] = CMD_READ_STATUS;
+	txBuf[1] = reg;
+	cmd.tx_cmd = txBuf;
+	cmd.rx_cmd = rxBuf;
+	cmd.rx_cmd_sz = 3;
+	cmd.tx_cmd_sz = 3;
+	err = SPIBUS_TRANSFER(sc->sc_parent, sc->sc_dev, &cmd);
+	if (err != 0)
+		return (err);
+	*retval = rxBuf[2];
+	return (0);
+}
+
+static int
+w25n_wait_for_device_ready(struct w25n_softc *sc)
+{
+	int err;
+	uint8_t val;
+
 	do {
-		txBuf[0] = CMD_READ_STATUS;
-		txBuf[1] = 0xc0; /* XXX status register 3 */
-		cmd.tx_cmd = txBuf;
-		cmd.rx_cmd = rxBuf;
-		cmd.rx_cmd_sz = 3;
-		cmd.tx_cmd_sz = 3;
-		err = SPIBUS_TRANSFER(sc->sc_parent, sc->sc_dev, &cmd);
-	} while (err == 0 && (rxBuf[2] & STATUS_REG_3_BUSY));
+		err = w25n_read_status_register(sc, STATUS_REG_3, &val);
+	} while (err == 0 && (val & STATUS_REG_3_BUSY));
 
 	return (err);
+}
+
+static int
+w25n_set_page_address(struct w25n_softc *sc, uint16_t page_idx)
+{
+	uint8_t txBuf[4], rxBuf[4];
+	struct spi_command cmd;
+	int err;
+
+	txBuf[0] = CMD_PAGE_DATA_READ;
+	txBuf[1] = 0; /* dummy */
+	txBuf[2] = (page_idx >> 8) & 0xff;
+	txBuf[3] = (page_idx >> 0) & 0xff;
+	cmd.tx_cmd = txBuf;
+	cmd.rx_cmd = rxBuf;
+	cmd.rx_cmd_sz = 4;
+	cmd.tx_cmd_sz = 4;
+	err = SPIBUS_TRANSFER(sc->sc_parent, sc->sc_dev, &cmd);
+	if (err != 0)
+		return (err);
+	return (0);
 }
 
 static struct w25n_flash_ident*
@@ -181,8 +216,115 @@ w25n_write(struct w25n_softc *sc, off_t offset, caddr_t data, off_t count)
 static int
 w25n_read(struct w25n_softc *sc, off_t offset, caddr_t data, off_t count)
 {
+	uint8_t txBuf[4], rxBuf[4];
+	struct spi_command cmd;
+	int err;
+	int read_size;
+	uint16_t page_idx;
+	uint8_t st3, ecc_status;
 
-	return (ENXIO);
+	/*
+	 * We only support reading things at multiples of the page size.
+	 */
+	if (count % sc->sc_disk->d_sectorsize != 0) {
+		device_printf(sc->sc_dev, "%s: invalid count\n", __func__);
+		return (EIO);
+	}
+	if (offset % sc->sc_disk->d_sectorsize != 0) {
+		device_printf(sc->sc_dev, "%s: invalid offset\n", __func__);
+		return (EIO);
+	}
+
+	page_idx = offset / sc->sc_disk->d_sectorsize;
+
+	while (count > 0) {
+		/* Wait until we're ready */
+		err = w25n_wait_for_device_ready(sc);
+		if (err != 0) {
+			device_printf(sc->sc_dev, "%s: failed to wait\n",
+			    __func__);
+			return (err);
+		}
+
+		/* Issue the page change */
+		err = w25n_set_page_address(sc, page_idx);
+		if (err != 0) {
+			device_printf(sc->sc_dev, "%s: page change failed\n",
+			    __func__);
+			return (err);
+		}
+
+		/* Wait until the page change has read in data */
+		err = w25n_wait_for_device_ready(sc);
+		if (err != 0) {
+			device_printf(sc->sc_dev,
+			    "%s: failed to wait again\n",
+			    __func__);
+			return (err);
+		}
+
+		/*
+		 * Now we can issue a read command for the data
+		 * in the buffer.  We'll read into the data buffer
+		 * until we run out of data in this page.
+		 *
+		 * To simplify things we're not starting at an
+		 * arbitrary offset; so the column address here
+		 * inside the page is 0.  If we later want to support
+		 * that kind of operation then we could do the math
+		 * here.
+		 */
+		read_size = MIN(count, sc->sc_disk->d_sectorsize);
+
+		memset(data, 0xef, read_size);
+
+		txBuf[0] = CMD_FAST_READ;
+		txBuf[1] = 0; /* column address 15:8 */
+		txBuf[2] = 0; /* column address 7:0 */
+		txBuf[3] = 0; /* dummy byte */
+		cmd.tx_cmd_sz = 4;
+		cmd.rx_cmd_sz = 4;
+		cmd.tx_cmd = txBuf;
+		cmd.rx_cmd = rxBuf;
+
+		cmd.tx_data = data;
+		cmd.rx_data = data;
+		cmd.tx_data_sz = read_size;
+		cmd.rx_data_sz = read_size;
+
+		err = SPIBUS_TRANSFER(sc->sc_parent, sc->sc_dev, &cmd);
+		if (err != 0) {
+			device_printf(sc->sc_dev,
+			    "ERROR: failed to do FAST_READ (%u)\n",
+			    err);
+			return (err);
+		}
+
+		/*
+		 * Now, check ECC status bits, see if we had an ECC
+		 * error.
+		 */
+		err = w25n_read_status_register(sc, STATUS_REG_3, &st3);
+		if (err != 0) {
+			device_printf(sc->sc_dev,
+			    "%s: failed to wait again\n", __func__);
+			return (err);
+		}
+		ecc_status = (st3 >> STATUS_REG_3_ECC_STATUS_SHIFT)
+		    & STATUS_REG_3_ECC_STATUS_MASK;
+		if ((ecc_status != STATUS_ECC_OK)
+		    && (ecc_status != STATUS_ECC_1BIT_OK)) {
+			device_printf(sc->sc_dev,
+			    "%s: ECC status failed\n", __func__);
+			return (EIO);
+		}
+
+		count -= read_size;
+		data += read_size;
+		page_idx += 1;
+	}
+
+	return (0);
 }
 
 #ifdef	FDT
@@ -227,6 +369,7 @@ w25n_attach(device_t dev)
 	struct w25n_softc *sc;
 	struct w25n_flash_ident *ident;
 	int err;
+	uint8_t st1, st2, st3;
 
 	sc = device_get_softc(dev);
 	sc->sc_dev = dev;
@@ -241,8 +384,50 @@ w25n_attach(device_t dev)
 	if ((err = w25n_wait_for_device_ready(sc)) != 0)
 		return (err);
 
-	sc->sc_flags = ident->flags;
+	/*
+	 * Read the configuration, protection and status registers.
+	 * Print them out here so the initial configuration can be checked.
+	 */
+	err = w25n_read_status_register(sc, STATUS_REG_1, &st1);
+	if (err != 0)
+		return (err);
+	err = w25n_read_status_register(sc, STATUS_REG_2, &st2);
+	if (err != 0)
+		return (err);
+	err = w25n_read_status_register(sc, STATUS_REG_3, &st3);
+	if (err != 0)
+		return (err);
 
+	device_printf(sc->sc_dev,
+	    "device type %s, size %dK in %d sectors of %dK, erase size %dK\n",
+	    ident->name,
+	    ident->sectorcount * ident->sectorsize / 1024,
+	    ident->sectorcount, ident->sectorsize / 1024,
+	    ident->erasesize / 1024);
+
+	if (bootverbose)
+		device_printf(sc->sc_dev,
+		    "status1=0x%08x, status2=0x%08x, status3=0x%08x\n",
+		    st1, st2, st3);
+
+	/*
+	 * For now we're only going to support parts that have
+	 * device ECC enabled.  Later on it may be interesting
+	 * to do software driven ECC and figure out how we
+	 * expose it over GEOM, but that day isn't today.
+	 */
+	if ((st2 & STATUS_REG_2_ECC_EN) == 0) {
+		device_printf(sc->sc_dev,
+		    "ERROR: only ECC in HW is supported\n");
+		return (err);
+	}
+	if ((st2 & STATUS_REG_2_BUF_EN) == 0) {
+		device_printf(sc->sc_dev,
+		    "ERROR: only BUF mode is supported\n");
+		return (err);
+	}
+
+	sc->sc_flags = ident->flags;
 	sc->sc_erasesize = ident->erasesize;
 
 	sc->sc_disk = disk_alloc();
@@ -264,16 +449,8 @@ w25n_attach(device_t dev)
 
 	disk_create(sc->sc_disk, DISK_VERSION);
 	bioq_init(&sc->sc_bio_queue);
-
 	kproc_create(&w25n_task, sc, &sc->sc_p, 0, 0, "task: w25n flash");
 	sc->sc_taskstate = TSTATE_RUNNING;
-
-	device_printf(sc->sc_dev, 
-	    "device type %s, size %dK in %d sectors of %dK, erase size %dK\n",
-	    ident->name,
-	    ident->sectorcount * ident->sectorsize / 1024,
-	    ident->sectorcount, ident->sectorsize / 1024,
-	    sc->sc_erasesize / 1024);
 
 	return (0);
 }
