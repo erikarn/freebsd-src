@@ -317,7 +317,8 @@ qcom_tlmm_ipq4018_attach(device_t dev)
 		return (ENXIO);
 	}
 
-	if ((bus_setup_intr(dev, sc->gpio_irq_res, INTR_TYPE_MISC,
+	if ((bus_setup_intr(dev, sc->gpio_irq_res,
+	    INTR_TYPE_MISC | INTR_MPSAFE,
 	    qcom_tlmm_filter, qcom_tlmm_intr, sc, &sc->gpio_ih))) {
 		device_printf(dev,
 		    "WARNING: unable to register interrupt handler\n");
