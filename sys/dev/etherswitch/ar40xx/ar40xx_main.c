@@ -53,6 +53,8 @@
 #include <dev/mii/mii.h>
 #include <dev/mii/miivar.h>
 #include <dev/mdio/mdio.h>
+#include <dev/extres/clk/clk.h>
+#include <dev/extres/hwreset/hwreset.h>
 
 #include <dev/fdt/fdt_common.h>
 #include <dev/ofw/ofw_bus.h>
@@ -60,6 +62,7 @@
 
 #include <dev/etherswitch/etherswitch.h>
 #include <dev/etherswitch/ar40xx/ar40xx_var.h>
+
 
 #include "mdio_if.h"
 #include "miibus_if.h"
@@ -74,17 +77,11 @@ static int
 ar40xx_probe(device_t dev)
 {
 
-//	device_printf(dev, "%s: called\n", __func__);
-
-	if (! ofw_bus_status_okay(dev)) {
-//		device_printf(dev, "%s: not bus status ok\n", __func__);
+	if (! ofw_bus_status_okay(dev))
 		return (ENXIO);
-	}
 
-	if (ofw_bus_search_compatible(dev, compat_data)->ocd_data == 0) {
-//		device_printf(dev, "%s: didn't find a match\n", __func__);
+	if (ofw_bus_search_compatible(dev, compat_data)->ocd_data == 0)
 		return (ENXIO);
-	}
 
 	device_set_desc(dev, "IPQ4018 ESS Switch fabric / PSGMII PHY");
 	return (BUS_PROBE_DEFAULT);
@@ -94,33 +91,112 @@ static int
 ar40xx_attach(device_t dev)
 {
 	struct ar40xx_softc *sc = device_get_softc(dev);
+	phandle_t psgmii_p, root_p, mdio_p;
+	int ret;
 
-	/* sc->sc_switchtype is already decided in ar40xx_probe() */
 	sc->sc_dev = dev;
 	mtx_init(&sc->sc_mtx, "ar40xx", NULL, MTX_DEF);
 
-	// get switch base address
+	psgmii_p = OF_finddevice("/soc/ess-psgmii");
+	if (psgmii_p == -1) {
+		device_printf(dev,
+		    "%s: couldn't find /soc/ess-psgmii DT node\n",
+		    __func__);
+		goto error;
+	}
 
-	// get psgmii base address
+	// get the ipq4019-mdio node here, to talk to our local PHYs if needed
+	root_p = OF_finddevice("/soc");
+	mdio_p = ofw_bus_find_compatible(root_p, "qcom,ipq4019-mdio");
+	if (mdio_p == -1) {
+		device_printf(dev, "%s: couldn't find ipq4019-mdio DT node\n",
+		    __func__);
+		goto error;
+	}
+	sc->sc_mdio_phandle = mdio_p;
+
+	// get psgmii base address from psgmii node
+	ret = OF_decode_addr(psgmii_p, 0, &sc->sc_psgmii_mem_tag,
+	    &sc->sc_psgmii_mem_handle,
+	    &sc->sc_psgmii_mem_size);
+	if (ret != 0) {
+		device_printf(dev, "%s: couldn't map psgmii mem (%d)\n",
+		    __func__, ret);
+		goto error;
+	}
+
+	// get switch base address
+	sc->sc_ess_mem_rid = 0;
+	sc->sc_ess_mem_res = bus_alloc_resource_any(dev, SYS_RES_MEMORY,
+	    &sc->sc_ess_mem_rid, RF_ACTIVE);
+	if (sc->sc_ess_mem_res == NULL) {
+		device_printf(dev, "%s: failed to find memory resource\n",
+		    __func__);
+		goto error;
+	}
 
 	// get switch_mac_mode
-
-	// get clock
-
-	// get reset
+	ret = OF_getencprop(ofw_bus_get_node(dev), "switch_mac_mode",
+	    &sc->sc_config.switch_mac_mode,
+	    sizeof(sc->sc_config.switch_mac_mode));
+	if (ret < 0) {
+		device_printf(dev, "%s: missing switch_mac_mode property\n",
+		    __func__);
+		goto error;
+	}
 
 	// switch_cpu_bmp
+	ret = OF_getencprop(ofw_bus_get_node(dev), "switch_cpu_bmp",
+	    &sc->sc_config.switch_cpu_bmp,
+	    sizeof(sc->sc_config.switch_cpu_bmp));
+	if (ret < 0) {
+		device_printf(dev, "%s: missing switch_cpu_bmp property\n",
+		    __func__);
+		goto error;
+	}
 
 	// switch_lan_bmp
+	ret = OF_getencprop(ofw_bus_get_node(dev), "switch_lan_bmp",
+	    &sc->sc_config.switch_lan_bmp,
+	    sizeof(sc->sc_config.switch_lan_bmp));
+	if (ret < 0) {
+		device_printf(dev, "%s: missing switch_lan_bmp property\n",
+		    __func__);
+		goto error;
+	}
 
 	// switch_wan_bmp
+	ret = OF_getencprop(ofw_bus_get_node(dev), "switch_wan_bmp",
+	    &sc->sc_config.switch_wan_bmp,
+	    sizeof(sc->sc_config.switch_wan_bmp));
+	if (ret < 0) {
+		device_printf(dev, "%s: missing switch_wan_bmp property\n",
+		    __func__);
+		goto error;
+	}
 
-	// .. do we need the ipq4019-mdio node here? for mii-bus? or?
+	// get clock
+	ret = clk_get_by_ofw_name(dev, 0, "ess_clk", &sc->sc_ess_clk);
+	if (ret != 0) {
+		device_printf(dev, "%s: failed to find ess_clk (%d)\n",
+		    __func__, ret);
+		goto error;
+	}
+
+	// get reset
+	ret = hwreset_get_by_ofw_name(dev, 0, "ess_rst", &sc->sc_ess_rst);
+	if (ret != 0) {
+		device_printf(dev, "%s: failed to find ess_rst (%d)\n",
+		    __func__, ret);
+		goto error;
+	}
+
 
 	/*
 	 * Ok, at this point we have enough resources to do an initial
 	 * reset and configuration.
 	 */
+	device_printf(dev, "%s: TODO\n", __func__);
 
 	// ess reset
 
@@ -134,7 +210,16 @@ ar40xx_attach(device_t dev)
 
 	// init_globals
 
+	// sw reset switch
+
+	// cpuport setup
+
+	// start qm error check
+
 	return (0);
+error:
+	/* XXX TODO: free resources */
+	return (ENXIO);
 }
 
 static int

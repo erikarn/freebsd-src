@@ -33,6 +33,31 @@
 struct ar40xx_softc {
 	struct mtx	sc_mtx;		/* serialize access to softc */
 	device_t	sc_dev;
+
+	/* ess-switch memory resource */
+	struct resource	*sc_ess_mem_res;
+	int		sc_ess_mem_rid;
+
+	/* ess-switch clock resource */
+	clk_t		sc_ess_clk;
+
+	/* ess-switch reset resource */
+	hwreset_t	sc_ess_rst;
+
+	/* memory for the ess-psgmii config interface */
+	bus_space_tag_t		sc_psgmii_mem_tag;
+	bus_space_handle_t	sc_psgmii_mem_handle;
+	bus_size_t		sc_psgmii_mem_size;
+
+	/* reference to the ipq4019-mdio interface */
+	phandle_t		sc_mdio_phandle;
+
+	struct {
+		uint32_t switch_mac_mode;
+		uint32_t switch_cpu_bmp;
+		uint32_t switch_lan_bmp;
+		uint32_t switch_wan_bmp;
+	} sc_config;
 };
 
 #endif	/* __AR40XX_VAR_H__ */
