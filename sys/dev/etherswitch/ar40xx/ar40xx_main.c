@@ -74,11 +74,17 @@ static int
 ar40xx_probe(device_t dev)
 {
 
-	if (! ofw_bus_status_okay(dev))
-		return (ENXIO);
+//	device_printf(dev, "%s: called\n", __func__);
 
-	if (ofw_bus_search_compatible(dev, compat_data)->ocd_data == 0)
+	if (! ofw_bus_status_okay(dev)) {
+//		device_printf(dev, "%s: not bus status ok\n", __func__);
 		return (ENXIO);
+	}
+
+	if (ofw_bus_search_compatible(dev, compat_data)->ocd_data == 0) {
+//		device_printf(dev, "%s: didn't find a match\n", __func__);
+		return (ENXIO);
+	}
 
 	device_set_desc(dev, "IPQ4018 ESS Switch fabric / PSGMII PHY");
 	return (BUS_PROBE_DEFAULT);
@@ -157,12 +163,19 @@ DEFINE_CLASS_0(ar40xx, ar40xx_driver, ar40xx_methods,
     sizeof(struct ar40xx_softc));
 static devclass_t ar40xx_devclass;
 
+DRIVER_MODULE(ar40xx, simplebus, ar40xx_driver, ar40xx_devclass, 0, 0);
+DRIVER_MODULE(ar40xx, ofwbus, ar40xx_driver, ar40xx_devclass, 0, 0);
+
+// TODO: yes, we need to get the rest of the dependencies in here
+
+#if 0
 DRIVER_MODULE(ar40xx, mdio, ar40xx_driver, ar40xx_devclass, 0, 0);
 DRIVER_MODULE(miibus, ar40xx, miibus_driver, miibus_devclass, 0, 0);
 DRIVER_MODULE(mdio, ar40xx, mdio_driver, mdio_devclass, 0, 0);
 DRIVER_MODULE(etherswitch, ar40xx, etherswitch_driver, etherswitch_devclass, 0, 0);
 MODULE_VERSION(ar40xx, 1);
 MODULE_DEPEND(ar40xx, mdio, 1, 1, 1);
+#endif
 
 //MODULE_DEPEND(ar40xx, miibus, 1, 1, 1); /* XXX which versions? */
 //MODULE_DEPEND(ar40xx, etherswitch, 1, 1, 1); /* XXX which versions? */
