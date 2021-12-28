@@ -28,9 +28,9 @@ machine		arm armv7
 
 # Use a low VA here so we get the early printf stuff working all the
 # way up to cninit().
-#options SOCDEV_PA=0x07800000
-#options SOCDEV_VA=0x07800000
-#options EARLY_PRINTF
+#options 	SOCDEV_PA=0x07800000
+#options 	SOCDEV_VA=0x07800000
+#options 	EARLY_PRINTF
 options 	BOOTVERBOSE
 
 options 	FDT_DTB_STATIC
