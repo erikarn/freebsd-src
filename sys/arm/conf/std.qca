@@ -72,3 +72,8 @@ device 		xhci
 device 		dwc3
 device 		qcom_dwc3
 options		USB_HOST_ALIGN=64
+
+# Ethernet support
+device 		etherswitch
+device 		mdio
+device 		ar40xx_switch
