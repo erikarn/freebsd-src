@@ -1,0 +1,143 @@
+// SPDX-License-Identifier: GPL-2.0-only
+
+/*
+ * Copyright (c) 2015, The Linux Foundation. All rights reserved.
+ */
+
+#include <dt-bindings/net/qcom-qca807x.h>
+
+/ {
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	soc {
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		mdio: mdio@90000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "qcom,ipq4019-mdio";
+			reg = <0x90000 0x64>;
+			status = "disabled";
+
+			ethphy0: ethernet-phy@0 {
+				reg = <0>;
+
+				qcom,control-dac = <QCA807X_CONTROL_DAC_DSP_VOLT_QUARTER_BIAS>;
+			};
+
+			ethphy1: ethernet-phy@1 {
+				reg = <1>;
+
+				qcom,control-dac = <QCA807X_CONTROL_DAC_DSP_VOLT_QUARTER_BIAS>;
+			};
+
+			ethphy2: ethernet-phy@2 {
+				reg = <2>;
+
+				qcom,control-dac = <QCA807X_CONTROL_DAC_DSP_VOLT_QUARTER_BIAS>;
+			};
+
+			ethphy3: ethernet-phy@3 {
+				reg = <3>;
+
+				qcom,control-dac = <QCA807X_CONTROL_DAC_DSP_VOLT_QUARTER_BIAS>;
+			};
+
+			ethphy4: ethernet-phy@4 {
+				reg = <4>;
+
+				qcom,control-dac = <QCA807X_CONTROL_DAC_DSP_VOLT_QUARTER_BIAS>;
+			};
+
+			psgmiiphy: psgmii-phy@5 {
+				reg = <5>;
+
+				qcom,tx-driver-strength = <PSGMII_QSGMII_TX_DRIVER_300MV>;
+				qcom,psgmii-az;
+			};
+		};
+
+		ess-switch@c000000 {
+			compatible = "qcom,ess-switch";
+			reg = <0xc000000 0x80000>;
+			switch_access_mode = "local bus";
+			resets = <&gcc ESS_RESET>;
+			reset-names = "ess_rst";
+			clocks = <&gcc GCC_ESS_CLK>;
+			clock-names = "ess_clk";
+			switch_cpu_bmp = <0x1>;
+			switch_lan_bmp = <0x1e>;
+			switch_wan_bmp = <0x20>;
+			switch_mac_mode = <0>; /* PORT_WRAPPER_PSGMII */
+			switch_initvlas = <0x7c 0x54>;
+			status = "disabled";
+		};
+
+		ess-psgmii@98000 {
+			compatible = "qcom,ess-psgmii";
+			reg = <0x98000 0x800>;
+			psgmii_access_mode = "local bus";
+			status = "disabled";
+		};
+
+		edma@c080000 {
+			compatible = "qcom,ess-edma";
+			reg = <0xc080000 0x8000>;
+			qcom,page-mode = <0>;
+			qcom,rx_head_buf_size = <1540>;
+			qcom,mdio_supported;
+			qcom,poll_required = <1>;
+			qcom,num_gmac = <2>;
+			interrupts = <0  65 IRQ_TYPE_EDGE_RISING
+				      0  66 IRQ_TYPE_EDGE_RISING
+				      0  67 IRQ_TYPE_EDGE_RISING
+				      0  68 IRQ_TYPE_EDGE_RISING
+				      0  69 IRQ_TYPE_EDGE_RISING
+				      0  70 IRQ_TYPE_EDGE_RISING
+				      0  71 IRQ_TYPE_EDGE_RISING
+				      0  72 IRQ_TYPE_EDGE_RISING
+				      0  73 IRQ_TYPE_EDGE_RISING
+				      0  74 IRQ_TYPE_EDGE_RISING
+				      0  75 IRQ_TYPE_EDGE_RISING
+				      0  76 IRQ_TYPE_EDGE_RISING
+				      0  77 IRQ_TYPE_EDGE_RISING
+				      0  78 IRQ_TYPE_EDGE_RISING
+				      0  79 IRQ_TYPE_EDGE_RISING
+				      0  80 IRQ_TYPE_EDGE_RISING
+				      0 240 IRQ_TYPE_EDGE_RISING
+				      0 241 IRQ_TYPE_EDGE_RISING
+				      0 242 IRQ_TYPE_EDGE_RISING
+				      0 243 IRQ_TYPE_EDGE_RISING
+				      0 244 IRQ_TYPE_EDGE_RISING
+				      0 245 IRQ_TYPE_EDGE_RISING
+				      0 246 IRQ_TYPE_EDGE_RISING
+				      0 247 IRQ_TYPE_EDGE_RISING
+				      0 248 IRQ_TYPE_EDGE_RISING
+				      0 249 IRQ_TYPE_EDGE_RISING
+				      0 250 IRQ_TYPE_EDGE_RISING
+				      0 251 IRQ_TYPE_EDGE_RISING
+				      0 252 IRQ_TYPE_EDGE_RISING
+				      0 253 IRQ_TYPE_EDGE_RISING
+				      0 254 IRQ_TYPE_EDGE_RISING
+				      0 255 IRQ_TYPE_EDGE_RISING>;
+
+			status = "disabled";
+
+			gmac0: gmac0 {
+				local-mac-address = [00 00 00 00 00 00];
+				vlan_tag = <1 0x1f>;
+			};
+
+			gmac1: gmac1 {
+				local-mac-address = [00 00 00 00 00 00];
+				qcom,phy_mdio_addr = <4>;
+				qcom,poll_required = <1>;
+				qcom,forced_speed = <1000>;
+				qcom,forced_duplex = <1>;
+				vlan_tag = <2 0x20>;
+			};
+		};
+	};
+};
