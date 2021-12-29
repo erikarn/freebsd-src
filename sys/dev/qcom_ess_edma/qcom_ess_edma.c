@@ -64,7 +64,7 @@ qcom_ess_edma_probe(device_t dev)
 		return (ENXIO);
 
 	device_set_desc(dev,
-	    "Qualcomm Atheross TLMM IPQ4018/IPQ4019 GPIO/Pinmux driver");
+	    "Qualcomm Atheros IPQ4018/IPQ4019 Ethernet driver");
 	return (0);
 }
 
