@@ -10,6 +10,9 @@ arm/qualcomm/qcom_ipq4018_mdio.c	optional qcom_ipq4018_mdio
 
 dev/qcom_dwc3/qcom_dwc3.c		optional qcom_dwc3
 
+dev/qcom_ess_edma/qcom_ess_edma.c	optional qcom_ess_edma
+dev/qcom_ess_edma/qcom_ess_edma_hw.c	optional qcom_ess_edma
+
 dev/qcom_rnd/qcom_rnd.c			optional qcom_rnd
 
 dev/etherswitch/ar40xx/ar40xx_main.c	optional mdio etherswitch ar40xx_switch
