@@ -250,6 +250,7 @@ static devclass_t ar40xx_devclass;
 
 DRIVER_MODULE(ar40xx, simplebus, ar40xx_driver, ar40xx_devclass, 0, 0);
 DRIVER_MODULE(ar40xx, ofwbus, ar40xx_driver, ar40xx_devclass, 0, 0);
+MODULE_VERSION(ar40xx, 1);
 
 // TODO: yes, we need to get the rest of the dependencies in here
 
