@@ -52,6 +52,7 @@ __FBSDID("$FreeBSD$");
 #include <dev/qcom_ess_edma/qcom_ess_edma_var.h>
 #include <dev/qcom_ess_edma/qcom_ess_edma_reg.h>
 #include <dev/qcom_ess_edma/qcom_ess_edma_hw.h>
+#include <dev/qcom_ess_edma/qcom_ess_edma_desc.h>
 
 static int
 qcom_ess_edma_probe(device_t dev)
@@ -96,6 +97,19 @@ qcom_ess_edma_detach(device_t dev)
 	}
 	for (i = 0; i < QCOM_ESS_EDMA_NUM_RX_IRQS; i++) {
 		(void) qcom_ess_edma_release_intr(sc, &sc->sc_rx_irq[i]);
+	}
+
+	for (i = 0; i < QCOM_ESS_EDMA_NUM_TX_RINGS; i++) {
+		(void) qcom_ess_edma_desc_ring_free(sc, &sc->sc_tx_ring[i]);
+	}
+
+	for (i = 0; i < QCOM_ESS_EDMA_NUM_RX_RINGS; i++) {
+		(void) qcom_ess_edma_desc_ring_free(sc, &sc->sc_rx_ring[i]);
+	}
+
+	if (sc->sc_dma_tag) {
+		bus_dma_tag_destroy(sc->sc_dma_tag);
+		sc->sc_dma_tag = NULL;
 	}
 
 	if (sc->sc_mem_res)
@@ -171,13 +185,32 @@ qcom_ess_edma_attach(device_t dev)
 	sc->sc_dev = dev;
 	sc->sc_debug = 0;
 
+	/* Create parent DMA tag. */
+	ret = bus_dma_tag_create(
+	    bus_get_dma_tag(sc->sc_dev),	/* parent */
+	    1, 0,				/* alignment, boundary */
+	    BUS_SPACE_MAXADDR_32BIT,		/* lowaddr */
+	    BUS_SPACE_MAXADDR,			/* highaddr */
+	    NULL, NULL,				/* filter, filterarg */
+	    BUS_SPACE_MAXSIZE_32BIT,		/* maxsize */
+	    0,					/* nsegments */
+	    BUS_SPACE_MAXSIZE_32BIT,		/* maxsegsize */
+	    0,					/* flags */
+	    NULL, NULL,				/* lockfunc, lockarg */
+	    &sc->sc_dma_tag);
+	if (ret != 0) {
+		device_printf(sc->sc_dev,
+		    "ERROR: failed to create parent DMA tag\n");
+		goto error;
+	}
+
 	/* Map control/status registers. */
 	sc->sc_mem_rid = 0;
 	sc->sc_mem_res = bus_alloc_resource_any(dev, SYS_RES_MEMORY,
 	    &sc->sc_mem_rid, RF_ACTIVE);
 
 	if (sc->sc_mem_res == NULL) {
-		device_printf(dev, "couldn't map memory\n");
+		device_printf(dev, "ERROR: couldn't map MMIO space\n");
 		goto error;
 	}
 
@@ -214,21 +247,32 @@ qcom_ess_edma_attach(device_t dev)
 	sc->sc_state.wol_intr_mask = 0;
 	sc->sc_state.intr_sw_idx_w = EDMA_INTR_SW_IDX_W_TYPE;
 
-	EDMA_LOCK(sc);
-
-	/* allocate tx queues */
-
-	/* allocate rx queues */
 
 	/* allocate tx rings */
+	for (i = 0; i < QCOM_ESS_EDMA_NUM_TX_RINGS; i++) {
+		if (qcom_ess_edma_desc_ring_setup(sc, &sc->sc_tx_ring[i],
+		    sc->sc_config.tx_ring_count,
+		    sizeof(struct qcom_ess_edma_sw_desc_tx),
+		    sizeof(struct qcom_ess_edma_tx_desc)) != 0)
+			goto error;
+	}
 
 	/* allocate rx rings */
+	for (i = 0; i < QCOM_ESS_EDMA_NUM_RX_RINGS; i++) {
+		if (qcom_ess_edma_desc_ring_setup(sc, &sc->sc_rx_ring[i],
+		    sc->sc_config.rx_ring_count,
+		    sizeof(struct qcom_ess_edma_sw_desc_rx),
+		    sizeof(struct qcom_ess_edma_rx_free_desc)) != 0)
+			goto error;
+	}
 
 	/*
 	 * (if there's no ess-switch / we're a single phy, we
 	 * still need to reset the ess fabric.  Worry about this
 	 * later.)
 	 */
+
+	EDMA_LOCK(sc);
 
 	/* disable all interrupts */
 	ret = qcom_ess_edma_hw_intr_disable(sc);
@@ -242,7 +286,10 @@ qcom_ess_edma_attach(device_t dev)
 	/* reset edma */
 	ret = qcom_ess_edma_hw_stop(sc);
 
+	/* fill RX ring here, explicitly */
+
 	/* configure edma */
+	/* (note: when porting code; don't double-fill the RX rings) */
 
 	/* setup rss indirection table */
 	ret = qcom_ess_edma_hw_configure_rss_table(sc);

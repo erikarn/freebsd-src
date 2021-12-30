@@ -47,6 +47,11 @@
 #ifndef	__QCOM_ESS_EDMA_REG_H__
 #define	__QCOM_ESS_EDMA_REG_H__
 
+/*
+ * Alignment of descriptor ring memory allocation.
+ */
+#define	EDMA_DESC_RING_ALIGN		PAGE_SIZE
+
 /* register definition */
 #define	EDMA_REG_MAS_CTRL		0x0
 #define	EDMA_REG_TIMEOUT_CTRL		0x004
@@ -340,6 +345,15 @@
 #define	EDMA_TPD_MSS_SHIFT 18
 #define	EDMA_TPD_CUSTOM_CSUM_SHIFT 18
 
+/* TX descriptor - little endian */
+struct qcom_ess_edma_tx_desc {
+	uint16_t len; /* full packet including CRC */
+	uint16_t svlan_tag; /* vlan tag */
+	uint32_t word1; /* byte 4-7 */
+	uint32_t addr; /* address of buffer */
+	uint32_t word3; /* byte 12 */
+} __packed;
+
 /* RRD descriptor fields */
 #define	EDMA_RRD_NUM_RFD_MASK 0x000F
 #define	EDMA_RRD_SVLAN 0x8000
@@ -355,6 +369,13 @@
 #define	EDMA_RRD_PORT_TYPE_SHIFT 7
 #define	EDMA_RRD_PORT_TYPE_MASK 0x1F
 
+/* RX RRD descriptor */
+
+/* RX RFD descriptor - little endian */
+struct qcom_ess_edma_rx_free_desc {
+	uint32_t	addr; /* buffer addr */
+} __packed;
+
 #define	ESS_RGMII_CTRL		0x0004
 
 /* Configurations */
@@ -369,6 +390,5 @@
 #define EDMA_RFD_BURST 8
 #define EDMA_RFD_THR 16
 #define EDMA_RFD_LTHR 0
-
 
 #endif	/* __QCOM_ESS_EDMA_REG_H__ */

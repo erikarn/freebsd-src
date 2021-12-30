@@ -70,16 +70,54 @@
 #define	QCOM_ESS_EDMA_NUM_TX_IRQS	16
 #define	QCOM_ESS_EDMA_NUM_RX_IRQS	8
 
+#define	QCOM_ESS_EDMA_NUM_TX_RINGS	16
+#define	QCOM_ESS_EDMA_NUM_RX_RINGS	8
+
 #define	EDMA_TX_RING_SIZE		128
 #define	EDMA_RX_RING_SIZE		128
 
 struct qcom_ess_edma_softc;
 
+/*
+ * An instance of an interrupt queue.
+ */
 struct qcom_ess_edma_intr {
 	struct qcom_ess_edma_softc	*sc;
 	struct resource			*irq_res;
 	int				irq_rid;
 	void				*irq_intr;
+};
+
+/*
+ * A TX/RX descriptor ring.
+ */
+struct qcom_ess_edma_desc_ring {
+	bus_dma_tag_t		dma_tag;
+
+	bus_dmamap_t		hw_desc_map;
+	bus_addr_t		hw_desc_paddr;
+	void			*hw_desc;
+
+	void			*sw_desc;
+	int			hw_entry_size; /* hw desc entry size */
+	int			sw_entry_size; /* sw desc entry size */
+	int			ring_count; /* Number of entries */
+
+	uint16_t		next_to_fill;
+	uint16_t		next_to_clean;
+	uint16_t		pending_fill;
+};
+
+/*
+ * Placeholder structs for transmit and receive software
+ * ring entries.
+ */
+struct qcom_ess_edma_sw_desc_tx {
+	void *arg;
+};
+
+struct qcom_ess_edma_sw_desc_rx {
+	struct mbuf *m;
 };
 
 struct qcom_ess_edma_softc {
@@ -88,9 +126,13 @@ struct qcom_ess_edma_softc {
 	struct resource		*sc_mem_res;
 	int			sc_mem_rid;
 	uint32_t		sc_debug;
+	bus_dma_tag_t		sc_dma_tag;
 
 	struct qcom_ess_edma_intr sc_tx_irq[QCOM_ESS_EDMA_NUM_TX_IRQS];
 	struct qcom_ess_edma_intr sc_rx_irq[QCOM_ESS_EDMA_NUM_RX_IRQS];
+
+	struct qcom_ess_edma_desc_ring sc_tx_ring[QCOM_ESS_EDMA_NUM_TX_RINGS];
+	struct qcom_ess_edma_desc_ring sc_rx_ring[QCOM_ESS_EDMA_NUM_RX_RINGS];
 
 	struct {
 		uint32_t num_gmac;

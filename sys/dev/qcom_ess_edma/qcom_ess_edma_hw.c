@@ -60,6 +60,14 @@ __FBSDID("$FreeBSD$");
  * for the ESS core - and that includes both the EDMA (ethernet)
  * and switch hardware.
  *
+ * AND, it's a placeholder for what the linux ess-edma driver
+ * is doing directly to the ess core because in some instances
+ * where there's a single PHY hooked up, it's possible that
+ * ess-switch won't be initialised.  In that case it defaults
+ * to a very minimal switch config.  Now, that's honestly pretty
+ * bad, and instead we should be doing that kind of awareness
+ * in ar40xx_switch.
+ *
  * So, for now this is a big no-op, at least until everything
  * is implemented enough that I can get the switch/phy code and
  * this EDMA driver code to co-exist.
