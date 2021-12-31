@@ -64,8 +64,29 @@
 
 #include <dev/etherswitch/ar40xx/ar40xx_var.h>
 #include <dev/etherswitch/ar40xx/ar40xx_reg.h>
+#include <dev/etherswitch/ar40xx/ar40xx_hw.h>
 
 #include "mdio_if.h"
 #include "miibus_if.h"
 #include "etherswitch_if.h"
 
+int
+ar40xx_hw_ess_reset(struct ar40xx_softc *sc)
+{
+	device_printf(sc->sc_dev, "%s: TODO\n", __func__);
+	return (0);
+}
+
+int
+ar40xx_hw_init_globals(struct ar40xx_softc *sc)
+{
+	device_printf(sc->sc_dev, "%s: TODO\n", __func__);
+	return (0);
+}
+
+int
+ar40xx_hw_reset_switch(struct ar40xx_softc *sc)
+{
+	device_printf(sc->sc_dev, "%s: TODO\n", __func__);
+	return (0);
+}

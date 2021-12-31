@@ -66,6 +66,7 @@
 #include <dev/etherswitch/ar40xx/ar40xx_reg.h>
 #include <dev/etherswitch/ar40xx/ar40xx_hw.h>
 #include <dev/etherswitch/ar40xx/ar40xx_hw_psgmii.h>
+#include <dev/etherswitch/ar40xx/ar40xx_hw_port.h>
 
 #include "mdio_if.h"
 #include "miibus_if.h"
@@ -95,7 +96,7 @@ ar40xx_attach(device_t dev)
 {
 	struct ar40xx_softc *sc = device_get_softc(dev);
 	phandle_t psgmii_p, root_p, mdio_p;
-	int ret;
+	int ret, i;
 
 	sc->sc_dev = dev;
 	mtx_init(&sc->sc_mtx, "ar40xx", NULL, MTX_DEF);
@@ -202,24 +203,34 @@ ar40xx_attach(device_t dev)
 	device_printf(dev, "%s: TODO\n", __func__);
 
 	// ess reset
+	ret = ar40xx_hw_ess_reset(sc);
 
 	// psgmii_self_test
+	ret = ar40xx_hw_psgmii_self_test(sc);
 
 	// psgmii_self_test_clean
+	ret = ar40xx_hw_psgmii_self_test_clean(sc);
 
 	// mac_mode_init
 	ret = ar40xx_hw_psgmii_set_mac_mode(sc,
 	    sc->sc_config.switch_mac_mode);
 
 	// init_port for each port
+	for (i = 0; i < AR40XX_NUM_PORTS; i++) {
+		ret = ar40xx_hw_port_init(sc, i);
+	}
 
 	// init_globals
+	ret = ar40xx_hw_init_globals(sc);
 
 	// sw reset switch
+	ret = ar40xx_hw_reset_switch(sc);
 
 	// cpuport setup
+	ret = ar40xx_hw_port_cpuport_setup(sc);
 
-	// start qm error check
+	// start qm error check task
+	// XXX TODO
 
 	return (0);
 error:

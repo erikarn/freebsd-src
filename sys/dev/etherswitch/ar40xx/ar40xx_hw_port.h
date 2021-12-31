@@ -26,13 +26,11 @@
  *
  * $FreeBSD$
  */
-#ifndef	__AR40XX_HW_PSGMII_H__
-#define	__AR40XX_HW_PSGMII_H__
+#ifndef	__AR40XX_HW_PORT_H__
+#define	__AR40XX_HW_PORT_H__
 
-extern	int ar40xx_hw_psgmii_set_mac_mode(struct ar40xx_softc *sc,
-	    uint32_t mac_mode);
-extern	int ar40xx_hw_psgmii_self_test(struct ar40xx_softc *sc);
-extern	int ar40xx_hw_psgmii_self_test_clean(struct ar40xx_softc *sc);
+extern	int ar40xx_hw_port_init(struct ar40xx_softc *sc, int port);
+extern	int ar40xx_hw_port_cpuport_setup(struct ar40xx_softc *sc);
 
-#endif	/* __AR40XX_HW_PSGMII_H__ */
+#endif	/* __AR40XX_HW_PORT_H__ */
 

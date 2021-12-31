@@ -64,54 +64,22 @@
 
 #include <dev/etherswitch/ar40xx/ar40xx_var.h>
 #include <dev/etherswitch/ar40xx/ar40xx_reg.h>
-#include <dev/etherswitch/ar40xx/ar40xx_hw_psgmii.h>
+#include <dev/etherswitch/ar40xx/ar40xx_hw_port.h>
 
 #include "mdio_if.h"
 #include "miibus_if.h"
 #include "etherswitch_if.h"
 
-/*
- * Routines that control the ess-psgmii block - the interconnect
- * between the ess-switch and the external multi-port PHY
- * (eg Maple.)
- */
-
-static void
-ar40xx_hw_psgmii_reg_write(struct ar40xx_softc *sc, uint32_t reg,
-    uint32_t val)
-{
-	bus_space_write_4(sc->sc_psgmii_mem_tag, sc->sc_psgmii_mem_handle,
-	    reg, val);
-	bus_space_barrier(sc->sc_psgmii_mem_tag, sc->sc_psgmii_mem_handle,
-	    0, sc->sc_psgmii_mem_size, BUS_SPACE_BARRIER_WRITE);
-}
 
 int
-ar40xx_hw_psgmii_set_mac_mode(struct ar40xx_softc *sc, uint32_t mac_mode)
+ar40xx_hw_port_init(struct ar40xx_softc *sc, int port)
 {
-	if (mac_mode == PORT_WRAPPER_PSGMII) {
-		device_printf(sc->sc_dev, "TODO: MAC_MODE=PSGMII\n");
-		ar40xx_hw_psgmii_reg_write(sc, AR40XX_PSGMII_MODE_CONTROL,
-		    0x2200);
-		ar40xx_hw_psgmii_reg_write(sc, AR40XX_PSGMIIPHY_TX_CONTROL,
-		    0x8380);
-	} else {
-		device_printf(sc->sc_dev, "WARNING: unknown MAC_MODE=%u\n",
-		    mac_mode);
-	}
-
+	device_printf(sc->sc_dev, "%s: TODO port %d\n", __func__, port);
 	return (0);
 }
 
 int
-ar40xx_hw_psgmii_self_test(struct ar40xx_softc *sc)
-{
-	device_printf(sc->sc_dev, "%s: TODO\n", __func__);
-	return (0);
-}
-
-int
-ar40xx_hw_psgmii_self_test_clean(struct ar40xx_softc *sc)
+ar40xx_hw_port_cpuport_setup(struct ar40xx_softc *sc)
 {
 	device_printf(sc->sc_dev, "%s: TODO\n", __func__);
 	return (0);

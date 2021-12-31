@@ -29,5 +29,9 @@
 #ifndef	__AR40XX_HW_H__
 #define	__AR40XX_HW_H__
 
+extern	int ar40xx_hw_ess_reset(struct ar40xx_softc *sc);
+extern	int ar40xx_hw_init_globals(struct ar40xx_softc *sc);
+extern	int ar40xx_hw_reset_switch(struct ar40xx_softc *sc);
+
 #endif	/* __AR40XX_HW_H__ */
 
