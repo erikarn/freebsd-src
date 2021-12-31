@@ -53,6 +53,7 @@ __FBSDID("$FreeBSD$");
 #include <dev/qcom_ess_edma/qcom_ess_edma_reg.h>
 #include <dev/qcom_ess_edma/qcom_ess_edma_hw.h>
 #include <dev/qcom_ess_edma/qcom_ess_edma_desc.h>
+#include <dev/qcom_ess_edma/qcom_ess_edma_rx.h>
 
 static int
 qcom_ess_edma_probe(device_t dev)
@@ -289,6 +290,10 @@ qcom_ess_edma_attach(device_t dev)
 	ret = qcom_ess_edma_hw_stop(sc);
 
 	/* fill RX ring here, explicitly */
+	for (i = 0; i < QCOM_ESS_EDMA_NUM_RX_RINGS; i++) {
+		(void) qcom_ess_edma_rx_ring_fill(sc, i,
+		    sc->sc_config.rx_ring_count);
+	}
 
 	/* configure edma */
 	/* (note: when porting code; don't double-fill the RX rings) */

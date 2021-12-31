@@ -318,3 +318,55 @@ qcom_ess_edma_hw_stop(struct qcom_ess_edma_softc *sc)
 
 	return (0);
 }
+
+/*
+ * Update the producer index for the given receive queue.
+ */
+int
+qcom_ess_hw_rfd_prod_index_update(struct qcom_ess_edma_softc *sc, int queue,
+    int idx)
+{
+	uint32_t reg;
+
+	EDMA_LOCK_ASSERT(sc);
+
+	EDMA_REG_BARRIER_READ(sc);
+	reg = EDMA_REG_READ(sc, EDMA_REG_RFD_IDX_Q(queue));
+	reg &= ~EDMA_RFD_PROD_IDX_BITS;
+	reg |= idx;
+	EDMA_REG_WRITE(sc, EDMA_REG_RFD_IDX_Q(queue), reg);
+	EDMA_REG_BARRIER_WRITE(sc);
+
+	return (0);
+}
+
+/*
+ * Fetch the consumer index for the given receive queue.
+ */
+int
+qcom_ess_hw_rfd_get_cons_index(struct qcom_ess_edma_softc *sc, int queue)
+{
+	uint32_t reg;
+
+	EDMA_LOCK_ASSERT(sc);
+
+	EDMA_REG_BARRIER_READ(sc);
+	reg = EDMA_REG_READ(sc, EDMA_REG_RFD_IDX_Q(queue));
+	return (reg >> EDMA_RFD_CONS_IDX_SHIFT) & EDMA_RFD_CONS_IDX_MASK;
+}
+
+/*
+ * Update the software consumed index to the hardware, so
+ * it knows what we've read.
+ */
+int
+qcom_ess_hw_rfd_sw_cons_index_update(struct qcom_ess_edma_softc *sc,
+    int queue, int idx)
+{
+	EDMA_LOCK_ASSERT(sc);
+
+	EDMA_REG_WRITE(sc, EDMA_REG_RX_SW_CONS_IDX_Q(queue), idx);
+	EDMA_REG_BARRIER_WRITE(sc);
+
+	return (0);
+}

@@ -52,4 +52,11 @@ extern	int qcom_ess_edma_hw_configure_default_axi_transaction_size(
 extern	int qcom_ess_edma_hw_stop_txrx_queues(struct qcom_ess_edma_softc *sc);
 extern	int qcom_ess_edma_hw_stop(struct qcom_ess_edma_softc *sc);
 
+extern	int qcom_ess_hw_rfd_prod_index_update(struct qcom_ess_edma_softc *sc,
+	    int queue, int idx);
+extern	int qcom_ess_hw_rfd_get_cons_index(struct qcom_ess_edma_softc *sc,
+	    int queue);
+extern	int qcom_ess_hw_rfd_sw_cons_index_update(
+	    struct qcom_ess_edma_softc *sc, int queue, int idx);
+
 #endif	/* __QCOM_ESS_EDMA_VAR_H__ */

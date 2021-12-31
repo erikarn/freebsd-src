@@ -173,3 +173,64 @@ qcom_ess_edma_rx_buf_clean(struct qcom_ess_edma_softc *sc,
 
 	return (m);
 }
+
+/*
+ * Fill the current ring, up to 'num' entries (or the ring is full.)
+ * It will also update the producer index for the given queue.
+ *
+ * Returns 0 if OK, error if there's a problem.
+ */
+int
+qcom_ess_edma_rx_ring_fill(struct qcom_ess_edma_softc *sc,
+    int queue, int num)
+{
+	struct qcom_ess_edma_desc_ring *ring;
+	int num_fill;
+	int idx;
+	int error;
+	int prod_index;
+	int n = 0;
+
+	EDMA_LOCK_ASSERT(sc);
+
+	ring = &sc->sc_rx_ring[queue];
+
+	num_fill = num;
+	if (num_fill > ring->ring_count)
+		num_fill = ring->ring_count - 1;
+	idx = ring->next_to_fill;
+
+	while (num_fill != 0) {
+		error = qcom_ess_edma_rx_buf_alloc(sc, ring, idx);
+		if (error != 0) {
+			device_printf(sc->sc_dev,
+			    "ERROR: queue %d: failed to alloc rx buf (%d)\n",
+			    queue, error);
+			break;
+		}
+		num_fill--;
+
+		/* Update ring index, wrap at ring_count */
+		idx++;
+		if (idx >= ring->ring_count)
+			idx = 0;
+		n++;
+	}
+
+	ring->next_to_fill = idx;
+
+	/* Flush ring updates before HW index is updated */
+	qcom_ess_edma_desc_ring_flush_preupdate(sc, ring);
+
+	/* producer index is the ring number, minus 1 (ie the slot BEFORE) */
+	if (idx == 0)
+		prod_index = ring->ring_count = 1;
+	else
+		prod_index = idx - 1;
+	(void) qcom_ess_hw_rfd_prod_index_update(sc, queue, prod_index);
+
+	device_printf(sc->sc_dev, "%s: queue %d: added %d bufs\n",
+	    __func__, queue, n);
+
+	return (0);
+}

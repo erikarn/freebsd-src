@@ -37,5 +37,7 @@ extern	int qcom_ess_edma_rx_buf_alloc(struct qcom_ess_edma_softc *sc,
 extern	struct mbuf * qcom_ess_edma_rx_buf_clean(
 	    struct qcom_ess_edma_softc *sc,
 	    struct qcom_ess_edma_desc_ring *ring, int idx);
+extern	int qcom_ess_edma_rx_ring_fill(struct qcom_ess_edma_softc *sc,
+    int queue, int num);
 
 #endif	/* __QCOM_ESS_EDMA_RX_H__ */
