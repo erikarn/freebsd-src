@@ -141,7 +141,6 @@ struct qcom_ess_edma_softc {
 
 	struct {
 		uint32_t num_gmac;
-		uint32_t rx_head_buf_size;
 		uint32_t mdio_supported;
 		uint32_t poll_required;
 		uint32_t rss_type;

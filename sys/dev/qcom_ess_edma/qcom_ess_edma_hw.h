@@ -52,11 +52,19 @@ extern	int qcom_ess_edma_hw_configure_default_axi_transaction_size(
 extern	int qcom_ess_edma_hw_stop_txrx_queues(struct qcom_ess_edma_softc *sc);
 extern	int qcom_ess_edma_hw_stop(struct qcom_ess_edma_softc *sc);
 
-extern	int qcom_ess_hw_rfd_prod_index_update(struct qcom_ess_edma_softc *sc,
-	    int queue, int idx);
-extern	int qcom_ess_hw_rfd_get_cons_index(struct qcom_ess_edma_softc *sc,
-	    int queue);
-extern	int qcom_ess_hw_rfd_sw_cons_index_update(
+extern	int qcom_ess_edma_hw_rfd_prod_index_update(
 	    struct qcom_ess_edma_softc *sc, int queue, int idx);
+extern	int qcom_ess_edma_hw_rfd_get_cons_index(
+	    struct qcom_ess_edma_softc *sc, int queue);
+extern	int qcom_ess_edma_hw_rfd_sw_cons_index_update(
+	    struct qcom_ess_edma_softc *sc, int queue, int idx);
+
+extern	int qcom_ess_edma_hw_setup(struct qcom_ess_edma_softc *sc);
+extern	int qcom_ess_edma_hw_setup_tx(struct qcom_ess_edma_softc *sc);
+extern	int qcom_ess_edma_hw_setup_rx(struct qcom_ess_edma_softc *sc);
+extern	int qcom_ess_edma_hw_setup_txrx_desc_rings(
+	    struct qcom_ess_edma_softc *sc);
+extern	int qcom_ess_edma_hw_tx_enable(struct qcom_ess_edma_softc *sc);
+extern	int qcom_ess_edma_hw_rx_enable(struct qcom_ess_edma_softc *sc);
 
 #endif	/* __QCOM_ESS_EDMA_VAR_H__ */

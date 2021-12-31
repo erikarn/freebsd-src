@@ -152,6 +152,7 @@ qcom_ess_edma_setup_intr(struct qcom_ess_edma_softc *sc,
     struct qcom_ess_edma_intr *intr, int rid)
 {
 
+	device_printf(sc->sc_dev, "%s: setting up interrupt id %d\n", __func__, rid);
 	intr->sc = sc;
 	intr->irq_rid = rid;
 	intr->irq_res = bus_alloc_resource_any(sc->sc_dev,
@@ -164,7 +165,7 @@ qcom_ess_edma_setup_intr(struct qcom_ess_edma_softc *sc,
 	}
 
 	if ((bus_setup_intr(sc->sc_dev, intr->irq_res,
-	    INTR_TYPE_MISC | INTR_MPSAFE,
+	    INTR_TYPE_NET | INTR_MPSAFE,
 	    qcom_ess_edma_filter, qcom_ess_edma_intr, sc, &intr->irq_intr))) {
 		device_printf(sc->sc_dev,
 		    "ERROR: unable to register interrupt handler for"
@@ -295,8 +296,11 @@ qcom_ess_edma_attach(device_t dev)
 		    sc->sc_config.rx_ring_count);
 	}
 
-	/* configure edma */
-	/* (note: when porting code; don't double-fill the RX rings) */
+	/* configure TX/RX rings; RSS config; initial interrupt rates, etc */
+	ret = qcom_ess_edma_hw_setup(sc);
+	ret = qcom_ess_edma_hw_setup_tx(sc);
+	ret = qcom_ess_edma_hw_setup_rx(sc);
+	ret = qcom_ess_edma_hw_setup_txrx_desc_rings(sc);
 
 	/* setup rss indirection table */
 	ret = qcom_ess_edma_hw_configure_rss_table(sc);
@@ -311,14 +315,17 @@ qcom_ess_edma_attach(device_t dev)
 	ret = qcom_ess_edma_hw_configure_default_axi_transaction_size(sc);
 
 	/* enable IRQs */
+	ret = qcom_ess_edma_hw_intr_enable(sc);
 
 	/* enable TX control */
+	ret = qcom_ess_edma_hw_tx_enable(sc);
 
 	/* enable RX control */
+	ret = qcom_ess_edma_hw_rx_enable(sc);
 
 	EDMA_UNLOCK(sc);
 
-	device_printf(dev, "%s: TODO\n", __func__);
+	device_printf(dev, "%s: Ready\n", __func__);
 	return (0);
 
 error_locked:

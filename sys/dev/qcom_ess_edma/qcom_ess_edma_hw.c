@@ -323,8 +323,8 @@ qcom_ess_edma_hw_stop(struct qcom_ess_edma_softc *sc)
  * Update the producer index for the given receive queue.
  */
 int
-qcom_ess_hw_rfd_prod_index_update(struct qcom_ess_edma_softc *sc, int queue,
-    int idx)
+qcom_ess_edma_hw_rfd_prod_index_update(struct qcom_ess_edma_softc *sc,
+    int queue, int idx)
 {
 	uint32_t reg;
 
@@ -344,7 +344,7 @@ qcom_ess_hw_rfd_prod_index_update(struct qcom_ess_edma_softc *sc, int queue,
  * Fetch the consumer index for the given receive queue.
  */
 int
-qcom_ess_hw_rfd_get_cons_index(struct qcom_ess_edma_softc *sc, int queue)
+qcom_ess_edma_hw_rfd_get_cons_index(struct qcom_ess_edma_softc *sc, int queue)
 {
 	uint32_t reg;
 
@@ -360,12 +360,190 @@ qcom_ess_hw_rfd_get_cons_index(struct qcom_ess_edma_softc *sc, int queue)
  * it knows what we've read.
  */
 int
-qcom_ess_hw_rfd_sw_cons_index_update(struct qcom_ess_edma_softc *sc,
+qcom_ess_edma_hw_rfd_sw_cons_index_update(struct qcom_ess_edma_softc *sc,
     int queue, int idx)
 {
 	EDMA_LOCK_ASSERT(sc);
 
 	EDMA_REG_WRITE(sc, EDMA_REG_RX_SW_CONS_IDX_Q(queue), idx);
+	EDMA_REG_BARRIER_WRITE(sc);
+
+	return (0);
+}
+
+/*
+ * Setup initial hardware configuration.
+ */
+int
+qcom_ess_edma_hw_setup(struct qcom_ess_edma_softc *sc)
+{
+	uint32_t reg;
+
+	EDMA_LOCK_ASSERT(sc);
+
+	EDMA_REG_BARRIER_READ(sc);
+	reg = EDMA_REG_READ(sc, EDMA_REG_INTR_CTRL);
+	reg &= ~(1 << EDMA_INTR_SW_IDX_W_TYP_SHIFT);
+	reg |= sc->sc_state.intr_sw_idx_w << EDMA_INTR_SW_IDX_W_TYP_SHIFT;
+	EDMA_REG_WRITE(sc, EDMA_REG_INTR_CTRL, reg);
+
+
+	/* Clear wake-on-lan config */
+	EDMA_REG_WRITE(sc, EDMA_REG_WOL_CTRL, 0);
+
+	/* configure initial interrupt moderation config */
+	reg = (EDMA_TX_IMT << EDMA_IRQ_MODRT_TX_TIMER_SHIFT);
+	reg |= (EDMA_RX_IMT << EDMA_IRQ_MODRT_RX_TIMER_SHIFT);
+	EDMA_REG_WRITE(sc, EDMA_REG_IRQ_MODRT_TIMER_INIT, reg);
+
+	EDMA_REG_BARRIER_WRITE(sc);
+
+	return (0);
+}
+
+int
+qcom_ess_edma_hw_setup_tx(struct qcom_ess_edma_softc *sc)
+{
+	uint32_t reg;
+
+	EDMA_LOCK_ASSERT(sc);
+
+	reg = (EDMA_TPD_BURST << EDMA_TXQ_NUM_TPD_BURST_SHIFT);
+	reg |= EDMA_TXQ_CTRL_TPD_BURST_EN;
+	reg |= (EDMA_TXF_BURST << EDMA_TXQ_TXF_BURST_NUM_SHIFT);
+	EDMA_REG_WRITE(sc, EDMA_REG_TXQ_CTRL, reg);
+	EDMA_REG_BARRIER_WRITE(sc);
+
+	return (0);
+}
+
+int
+qcom_ess_edma_hw_setup_rx(struct qcom_ess_edma_softc *sc)
+{
+	uint32_t reg;
+
+	EDMA_LOCK_ASSERT(sc);
+
+	/* Configure RSS types */
+	EDMA_REG_WRITE(sc, EDMA_REG_RSS_TYPE, sc->sc_config.rss_type);
+
+	/* Configure RFD burst */
+	reg = (EDMA_RFD_BURST << EDMA_RXQ_RFD_BURST_NUM_SHIFT);
+	/* .. and RFD prefetch threshold */
+	reg |= (EDMA_RFD_THR << EDMA_RXQ_RFD_PF_THRESH_SHIFT);
+	/* ... and threshold to generate RFD interrupt */
+	reg |= (EDMA_RFD_LTHR << EDMA_RXQ_RFD_LOW_THRESH_SHIFT);
+	EDMA_REG_WRITE(sc, EDMA_REG_RX_DESC1, reg);
+
+	/* Set RX FIFO threshold to begin DMAing data to host */
+	reg = EDMA_FIFO_THRESH_128_BYTE;
+	/* Remove VLANs (??) */
+	reg |= EDMA_RXQ_CTRL_RMV_VLAN;
+	EDMA_REG_WRITE(sc, EDMA_REG_RXQ_CTRL, reg);
+
+	EDMA_REG_BARRIER_WRITE(sc);
+	return (0);
+}
+
+/*
+ * Note: this particular routine is a bit big and likely should be split
+ * across main, hw, desc, rx and tx.  But to expedite initial bring-up,
+ * let's just commit the sins here and get receive up and going.
+ */
+int
+qcom_ess_edma_hw_setup_txrx_desc_rings(struct qcom_ess_edma_softc *sc)
+{
+	uint32_t reg, i, idx;
+
+	EDMA_LOCK_ASSERT(sc);
+
+	/*
+	 * setup base addresses for each transmit ring, and
+	 * read in the initial index to use for transmit.
+	 */
+	for (i = 0; i < QCOM_ESS_EDMA_NUM_TX_RINGS; i++) {
+		/* Descriptor ring based address */
+		device_printf(sc->sc_dev, "TXQ[%d]: ring paddr=0x%08lx\n",
+		    i, sc->sc_tx_ring[i].hw_desc_paddr);
+		EDMA_REG_WRITE(sc, EDMA_REG_TPD_BASE_ADDR_Q(i),
+		    sc->sc_tx_ring[i].hw_desc_paddr);
+
+		/* And now, grab the consumer index */
+		reg = EDMA_REG_READ(sc, EDMA_REG_TPD_IDX_Q(i));
+		idx = (reg >> EDMA_TPD_CONS_IDX_SHIFT) & 0xffff;
+
+		sc->sc_tx_ring[i].next_to_fill = idx;
+		sc->sc_tx_ring[i].next_to_clean = idx;
+
+		/* Update prod and sw consumer indexes */
+		reg &= ~(EDMA_TPD_PROD_IDX_MASK << EDMA_TPD_PROD_IDX_SHIFT);
+		reg |= idx;
+		EDMA_REG_WRITE(sc, EDMA_REG_TPD_IDX_Q(i), reg);
+		EDMA_REG_WRITE(sc, EDMA_REG_TX_SW_CONS_IDX_Q(i), idx);
+
+		/* Set the ring size */
+		EDMA_REG_WRITE(sc, EDMA_REG_TPD_RING_SIZE,
+		    sc->sc_config.tx_ring_count & EDMA_TPD_RING_SIZE_MASK);
+
+	}
+
+	/* Set base addresses for each RFD ring */
+	for (i = 0; i < QCOM_ESS_EDMA_NUM_RX_RINGS; i++) {
+		device_printf(sc->sc_dev, "RXQ[%d]: ring paddr=0x%08lx\n",
+		    i, sc->sc_rx_ring[i].hw_desc_paddr);
+		EDMA_REG_WRITE(sc, EDMA_REG_RFD_BASE_ADDR_Q(i),
+		    sc->sc_rx_ring[i].hw_desc_paddr);
+	}
+	EDMA_REG_BARRIER_WRITE(sc);
+
+	/* Configure RX buffer size */
+	reg = (sc->sc_config.rx_buf_size & EDMA_RX_BUF_SIZE_MASK)
+	    << EDMA_RX_BUF_SIZE_SHIFT;
+	/* .. and RFD ring size */
+	reg |= (sc->sc_config.rx_ring_count & EDMA_RFD_RING_SIZE_MASK)
+	    << EDMA_RFD_RING_SIZE_SHIFT;
+	EDMA_REG_WRITE(sc, EDMA_REG_RX_DESC0, reg);
+
+	/* Disable the TX low/high watermark (for interrupts?) */
+	EDMA_REG_WRITE(sc, EDMA_REG_TXF_WATER_MARK, 0);
+
+	EDMA_REG_BARRIER_WRITE(sc);
+
+	/* Load all the ring base addresses into the hardware */
+	EDMA_REG_BARRIER_READ(sc);
+	reg = EDMA_REG_READ(sc, EDMA_REG_TX_SRAM_PART);
+	reg |= 1 << EDMA_LOAD_PTR_SHIFT;
+	EDMA_REG_WRITE(sc, EDMA_REG_TX_SRAM_PART, reg);
+	EDMA_REG_BARRIER_WRITE(sc);
+
+	return (0);
+}
+
+int
+qcom_ess_edma_hw_tx_enable(struct qcom_ess_edma_softc *sc)
+{
+	EDMA_LOCK_ASSERT(sc);
+	uint32_t reg;
+
+	EDMA_REG_BARRIER_READ(sc);
+	reg = EDMA_REG_READ(sc, EDMA_REG_TXQ_CTRL);
+	reg |= EDMA_TXQ_CTRL_TXQ_EN;
+	EDMA_REG_WRITE(sc, EDMA_REG_TXQ_CTRL, reg);
+	EDMA_REG_BARRIER_WRITE(sc);
+
+	return (0);
+}
+
+int
+qcom_ess_edma_hw_rx_enable(struct qcom_ess_edma_softc *sc)
+{
+	EDMA_LOCK_ASSERT(sc);
+	uint32_t reg;
+
+	EDMA_REG_BARRIER_READ(sc);
+	reg = EDMA_REG_READ(sc, EDMA_REG_RXQ_CTRL);
+	reg |= EDMA_RXQ_CTRL_EN;
+	EDMA_REG_WRITE(sc, EDMA_REG_RXQ_CTRL, reg);
 	EDMA_REG_BARRIER_WRITE(sc);
 
 	return (0);

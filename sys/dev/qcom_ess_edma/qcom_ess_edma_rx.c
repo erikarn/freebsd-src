@@ -224,13 +224,13 @@ qcom_ess_edma_rx_ring_fill(struct qcom_ess_edma_softc *sc,
 
 	/* producer index is the ring number, minus 1 (ie the slot BEFORE) */
 	if (idx == 0)
-		prod_index = ring->ring_count = 1;
+		prod_index = ring->ring_count - 1;
 	else
 		prod_index = idx - 1;
-	(void) qcom_ess_hw_rfd_prod_index_update(sc, queue, prod_index);
+	(void) qcom_ess_edma_hw_rfd_prod_index_update(sc, queue, prod_index);
 
-	device_printf(sc->sc_dev, "%s: queue %d: added %d bufs\n",
-	    __func__, queue, n);
+	device_printf(sc->sc_dev, "%s: queue %d: added %d bufs, prod_idx=%u\n",
+	    __func__, queue, n, prod_index);
 
 	return (0);
 }
