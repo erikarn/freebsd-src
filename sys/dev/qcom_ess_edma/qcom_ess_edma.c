@@ -177,6 +177,61 @@ qcom_ess_edma_setup_intr(struct qcom_ess_edma_softc *sc,
 }
 
 static int
+qcom_ess_edma_sysctl_dump_state(SYSCTL_HANDLER_ARGS)
+{
+	struct qcom_ess_edma_softc *sc = arg1;
+	int val = 0;
+	int error;
+	int i;
+
+	error = sysctl_handle_int(oidp, &val, 0, req);
+	if (error || !req->newptr)
+		return (error);
+	if (val == 0)
+		return (0);
+
+	EDMA_LOCK(sc);
+	for (i = 0; i < QCOM_ESS_EDMA_NUM_RX_RINGS; i++) {
+		device_printf(sc->sc_dev, "RXQ[%d]: prod=%u, cons=%u, hw prod=%u, hw cons=%u\n",
+		    i,
+		    sc->sc_rx_ring[i].next_to_fill,
+		    sc->sc_rx_ring[i].next_to_clean,
+		    EDMA_REG_READ(sc, EDMA_REG_RFD_IDX_Q(i)) & EDMA_RFD_PROD_IDX_BITS,
+		    qcom_ess_edma_hw_rfd_get_cons_index(sc, i));
+	}
+
+	device_printf(sc->sc_dev, "EDMA_REG_TXQ_CTRL=0x%08x\n", EDMA_REG_READ(sc, EDMA_REG_TXQ_CTRL));
+	device_printf(sc->sc_dev, "EDMA_REG_RXQ_CTRL=0x%08x\n", EDMA_REG_READ(sc, EDMA_REG_RXQ_CTRL));
+	device_printf(sc->sc_dev, "EDMA_REG_RX_DESC0=0x%08x\n", EDMA_REG_READ(sc, EDMA_REG_RX_DESC0));
+	device_printf(sc->sc_dev, "EDMA_REG_RX_DESC1=0x%08x\n", EDMA_REG_READ(sc, EDMA_REG_RX_DESC1));
+	device_printf(sc->sc_dev, "EDMA_REG_RX_ISR=0x%08x\n", EDMA_REG_READ(sc, EDMA_REG_RX_ISR));
+	device_printf(sc->sc_dev, "EDMA_REG_TX_ISR=0x%08x\n", EDMA_REG_READ(sc, EDMA_REG_TX_ISR));
+	device_printf(sc->sc_dev, "EDMA_REG_MISC_ISR=0x%08x\n", EDMA_REG_READ(sc, EDMA_REG_MISC_ISR));
+	device_printf(sc->sc_dev, "EDMA_REG_WOL_ISR=0x%08x\n", EDMA_REG_READ(sc, EDMA_REG_WOL_ISR));
+	EDMA_UNLOCK(sc);
+
+	return (0);
+}
+
+static int
+qcom_ess_edma_attach_sysctl(struct qcom_ess_edma_softc *sc)
+{
+	struct sysctl_ctx_list *ctx = device_get_sysctl_ctx(sc->sc_dev);
+	struct sysctl_oid *tree = device_get_sysctl_tree(sc->sc_dev);
+
+	SYSCTL_ADD_INT(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
+	    "debug", CTLFLAG_RW, &sc->sc_debug, 0,
+	    "debugging flags");
+
+	SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
+	    "state", CTLTYPE_INT | CTLFLAG_RW, sc,
+	    0, qcom_ess_edma_sysctl_dump_state, "I", "");
+
+	return (0);
+
+}
+
+static int
 qcom_ess_edma_attach(device_t dev)
 {
 	struct qcom_ess_edma_softc *sc = device_get_softc(dev);
@@ -186,6 +241,8 @@ qcom_ess_edma_attach(device_t dev)
 
 	sc->sc_dev = dev;
 	sc->sc_debug = 0;
+
+	(void) qcom_ess_edma_attach_sysctl(sc);
 
 	/* Create parent DMA tag. */
 	ret = bus_dma_tag_create(
