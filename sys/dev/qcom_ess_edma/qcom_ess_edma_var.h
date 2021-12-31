@@ -92,7 +92,8 @@ struct qcom_ess_edma_intr {
  * A TX/RX descriptor ring.
  */
 struct qcom_ess_edma_desc_ring {
-	bus_dma_tag_t		dma_tag;
+	bus_dma_tag_t		hw_ring_dma_tag; /* tag for hw ring */
+	bus_dma_tag_t		buffer_dma_tag; /* tag for mbufs */
 
 	bus_dmamap_t		hw_desc_map;
 	bus_addr_t		hw_desc_paddr;
@@ -102,6 +103,8 @@ struct qcom_ess_edma_desc_ring {
 	int			hw_entry_size; /* hw desc entry size */
 	int			sw_entry_size; /* sw desc entry size */
 	int			ring_count; /* Number of entries */
+	int			buffer_align;
+	int			ring_align;
 
 	uint16_t		next_to_fill;
 	uint16_t		next_to_clean;
@@ -117,7 +120,9 @@ struct qcom_ess_edma_sw_desc_tx {
 };
 
 struct qcom_ess_edma_sw_desc_rx {
-	struct mbuf *m;
+	struct mbuf		*m;
+	bus_dmamap_t		m_dmamap;
+	bus_addr_t		m_physaddr;
 };
 
 struct qcom_ess_edma_softc {
@@ -142,7 +147,6 @@ struct qcom_ess_edma_softc {
 		uint32_t rss_type;
 
 		uint32_t rx_buf_size;
-		uint32_t page_mode; /* use 4K pages or not? */
 
 		uint32_t tx_intr_mask;
 		uint32_t rx_intr_mask;

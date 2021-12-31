@@ -253,7 +253,8 @@ qcom_ess_edma_attach(device_t dev)
 		if (qcom_ess_edma_desc_ring_setup(sc, &sc->sc_tx_ring[i],
 		    sc->sc_config.tx_ring_count,
 		    sizeof(struct qcom_ess_edma_sw_desc_tx),
-		    sizeof(struct qcom_ess_edma_tx_desc)) != 0)
+		    sizeof(struct qcom_ess_edma_tx_desc),
+		    ESS_EDMA_TX_BUFFER_ALIGN) != 0)
 			goto error;
 	}
 
@@ -262,7 +263,8 @@ qcom_ess_edma_attach(device_t dev)
 		if (qcom_ess_edma_desc_ring_setup(sc, &sc->sc_rx_ring[i],
 		    sc->sc_config.rx_ring_count,
 		    sizeof(struct qcom_ess_edma_sw_desc_rx),
-		    sizeof(struct qcom_ess_edma_rx_free_desc)) != 0)
+		    sizeof(struct qcom_ess_edma_rx_free_desc),
+		    ESS_EDMA_RX_BUFFER_ALIGN) != 0)
 			goto error;
 	}
 

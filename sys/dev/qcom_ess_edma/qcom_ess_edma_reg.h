@@ -52,6 +52,13 @@
  */
 #define	EDMA_DESC_RING_ALIGN		PAGE_SIZE
 
+/* Not sure if this is really valid or not */
+#define	EDMA_DESC_MAX_BUFFER_SIZE	4096
+
+/* XXX TODO: not sure about these yet? Whether HW or performance based */
+#define	ESS_EDMA_TX_BUFFER_ALIGN	128
+#define	ESS_EDMA_RX_BUFFER_ALIGN	128
+
 /* register definition */
 #define	EDMA_REG_MAS_CTRL		0x0
 #define	EDMA_REG_TIMEOUT_CTRL		0x004

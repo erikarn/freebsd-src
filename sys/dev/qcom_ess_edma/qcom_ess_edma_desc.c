@@ -72,13 +72,15 @@ qcom_ess_edma_desc_ring_setup(struct qcom_ess_edma_softc *sc,
     struct qcom_ess_edma_desc_ring *ring,
     int count,
     int sw_desc_size,
-    int hw_desc_size)
+    int hw_desc_size,
+    int buffer_align)
 {
 	int error;
 
 	/*
 	 * For now set it to 4 byte alignment, no max size.
 	 */
+	ring->ring_align = EDMA_DESC_RING_ALIGN;
 	error = bus_dma_tag_create(
 	    sc->sc_dma_tag,		/* parent */
 	    EDMA_DESC_RING_ALIGN, 0,	/* alignment, boundary */
@@ -90,10 +92,32 @@ qcom_ess_edma_desc_ring_setup(struct qcom_ess_edma_softc *sc,
 	    count * hw_desc_size,	/* maxsegsize */
 	    0,				/* flags */
 	    NULL, NULL,			/* lockfunc, lockarg */
-	    &ring->dma_tag);
+	    &ring->hw_ring_dma_tag);
 	if (error != 0) {
 		device_printf(sc->sc_dev,
 		    "ERROR: failed to create descriptor DMA tag (%d)\n",
+		    error);
+		goto error;
+	}
+
+	/*
+	 * Buffer ring - used passed in value
+	 */
+	error = bus_dma_tag_create(
+	    sc->sc_dma_tag,		/* parent */
+	    buffer_align, 0,		/* alignment, boundary */
+	    BUS_SPACE_MAXADDR,		/* lowaddr */
+	    BUS_SPACE_MAXADDR,		/* highaddr */
+	    NULL, NULL,			/* filter, filterarg */
+	    EDMA_DESC_MAX_BUFFER_SIZE,	/* maxsize */
+	    1,				/* nsegments */
+	    EDMA_DESC_MAX_BUFFER_SIZE,	/* maxsegsize */
+	    0,				/* flags */
+	    NULL, NULL,			/* lockfunc, lockarg */
+	    &ring->buffer_dma_tag);
+	if (error != 0) {
+		device_printf(sc->sc_dev,
+		    "ERROR: failed to create buffer DMA tag (%d)\n",
 		    error);
 		goto error;
 	}
@@ -113,7 +137,7 @@ qcom_ess_edma_desc_ring_setup(struct qcom_ess_edma_softc *sc,
 	 * Allocate hardware descriptors, initialise map, get
 	 * physical address.
 	 */
-	error = bus_dmamem_alloc(ring->dma_tag,
+	error = bus_dmamem_alloc(ring->hw_ring_dma_tag,
 	    (void **)&ring->hw_desc,
 	     BUS_DMA_WAITOK | BUS_DMA_COHERENT | BUS_DMA_ZERO,
 	    &ring->hw_desc_map);
@@ -123,10 +147,10 @@ qcom_ess_edma_desc_ring_setup(struct qcom_ess_edma_softc *sc,
 		goto error;
 	}
 	ring->hw_desc_paddr = 0;
-	error = bus_dmamap_load(ring->dma_tag, ring->hw_desc_map,
+	error = bus_dmamap_load(ring->hw_ring_dma_tag, ring->hw_desc_map,
 	    ring->hw_desc, count * hw_desc_size, qcom_ess_edma_desc_map_addr,
 	    &ring->hw_desc_paddr, BUS_DMA_NOWAIT);
-	bus_dmamap_sync(ring->dma_tag, ring->hw_desc_map,
+	bus_dmamap_sync(ring->hw_ring_dma_tag, ring->hw_desc_map,
 	    BUS_DMASYNC_PREWRITE);
 
 	/*
@@ -139,10 +163,10 @@ qcom_ess_edma_desc_ring_setup(struct qcom_ess_edma_softc *sc,
 	return (0);
 error:
 	if (ring->hw_desc != NULL) {
-		bus_dmamap_sync(ring->dma_tag, ring->hw_desc_map,
+		bus_dmamap_sync(ring->hw_ring_dma_tag, ring->hw_desc_map,
 		    BUS_DMASYNC_POSTREAD | BUS_DMASYNC_POSTWRITE);
-		bus_dmamap_unload(ring->dma_tag, ring->hw_desc_map);
-		bus_dmamem_free(ring->dma_tag, ring->hw_desc,
+		bus_dmamap_unload(ring->hw_ring_dma_tag, ring->hw_desc_map);
+		bus_dmamem_free(ring->hw_ring_dma_tag, ring->hw_desc,
 		    ring->hw_desc_map);
 		ring->hw_desc = NULL;
 	}
@@ -150,9 +174,13 @@ error:
 		free(ring->sw_desc, M_TEMP);
 		ring->sw_desc = NULL;
 	}
-	if (ring->dma_tag != NULL) {
-		bus_dma_tag_destroy(ring->dma_tag);
-		ring->dma_tag = NULL;
+	if (ring->hw_ring_dma_tag != NULL) {
+		bus_dma_tag_destroy(ring->hw_ring_dma_tag);
+		ring->hw_ring_dma_tag = NULL;
+	}
+	if (ring->buffer_dma_tag != NULL) {
+		bus_dma_tag_destroy(ring->buffer_dma_tag);
+		ring->buffer_dma_tag = NULL;
 	}
 
 	return (error);
@@ -170,10 +198,10 @@ qcom_ess_edma_desc_ring_free(struct qcom_ess_edma_softc *sc,
 {
 
 	if (ring->hw_desc != NULL) {
-		bus_dmamap_sync(ring->dma_tag, ring->hw_desc_map,
+		bus_dmamap_sync(ring->hw_ring_dma_tag, ring->hw_desc_map,
 		    BUS_DMASYNC_POSTREAD | BUS_DMASYNC_POSTWRITE);
-		bus_dmamap_unload(ring->dma_tag, ring->hw_desc_map);
-		bus_dmamem_free(ring->dma_tag, ring->hw_desc,
+		bus_dmamap_unload(ring->hw_ring_dma_tag, ring->hw_desc_map);
+		bus_dmamem_free(ring->hw_ring_dma_tag, ring->hw_desc,
 		    ring->hw_desc_map);
 		ring->hw_desc = NULL;
 	}
@@ -183,10 +211,83 @@ qcom_ess_edma_desc_ring_free(struct qcom_ess_edma_softc *sc,
 		ring->sw_desc = NULL;
 	}
 
-	if (ring->dma_tag != NULL) {
-		bus_dma_tag_destroy(ring->dma_tag);
-		ring->dma_tag = NULL;
+	if (ring->hw_ring_dma_tag != NULL) {
+		bus_dma_tag_destroy(ring->hw_ring_dma_tag);
+		ring->hw_ring_dma_tag = NULL;
 	}
+	if (ring->buffer_dma_tag != NULL) {
+		bus_dma_tag_destroy(ring->buffer_dma_tag);
+		ring->buffer_dma_tag = NULL;
+	}
+
+	return (0);
+}
+
+/*
+ * Fetch the given software descriptor pointer by index.
+ *
+ * Returns NULL if the index is out of bounds.
+ */
+void *
+qcom_ess_edma_desc_ring_get_sw_desc(struct qcom_ess_edma_softc *sc,
+    struct qcom_ess_edma_desc_ring *ring, uint16_t index)
+{
+	char *p;
+
+	if (index >= ring->ring_count)
+		return (NULL);
+
+	p = (char *) ring->sw_desc;
+
+	return (void *) (p + (ring->sw_entry_size * index));
+}
+
+/*
+ * Fetch the given hardware descriptor pointer by index.
+ *
+ * Returns NULL if the index is out of bounds.
+ */
+void *
+qcom_ess_edma_desc_ring_get_hw_desc(struct qcom_ess_edma_softc *sc,
+    struct qcom_ess_edma_desc_ring *ring, uint16_t index)
+{
+	char *p;
+
+	if (index >= ring->ring_count)
+		return (NULL);
+
+	p = (char *) ring->sw_desc;
+
+	return (void *) (p + (ring->sw_entry_size * index));
+}
+
+/*
+ * Flush the hardware ring after a write, before the hardware
+ * gets to it.
+ */
+int
+qcom_ess_edma_desc_ring_flush_preupdate(struct qcom_ess_edma_softc *sc,
+    struct qcom_ess_edma_desc_ring *ring)
+{
+
+	bus_dmamap_sync(ring->hw_ring_dma_tag, ring->hw_desc_map,
+	    BUS_DMASYNC_PREWRITE);
+
+	return (0);
+}
+
+
+/*
+ * Flush the hardware ring after the hardware writes into it,
+ * before a read.
+ */
+int
+qcom_ess_edma_desc_ring_flush_postupdate(struct qcom_ess_edma_softc *sc,
+    struct qcom_ess_edma_desc_ring *ring)
+{
+
+	bus_dmamap_sync(ring->hw_ring_dma_tag, ring->hw_desc_map,
+	    BUS_DMASYNC_POSTREAD | BUS_DMASYNC_POSTWRITE);
 
 	return (0);
 }
