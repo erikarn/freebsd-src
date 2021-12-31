@@ -61,8 +61,11 @@
 #include <dev/ofw/ofw_bus_subr.h>
 
 #include <dev/etherswitch/etherswitch.h>
-#include <dev/etherswitch/ar40xx/ar40xx_var.h>
 
+#include <dev/etherswitch/ar40xx/ar40xx_var.h>
+#include <dev/etherswitch/ar40xx/ar40xx_reg.h>
+#include <dev/etherswitch/ar40xx/ar40xx_hw.h>
+#include <dev/etherswitch/ar40xx/ar40xx_hw_psgmii.h>
 
 #include "mdio_if.h"
 #include "miibus_if.h"
@@ -205,6 +208,8 @@ ar40xx_attach(device_t dev)
 	// psgmii_self_test_clean
 
 	// mac_mode_init
+	ret = ar40xx_hw_psgmii_set_mac_mode(sc,
+	    sc->sc_config.switch_mac_mode);
 
 	// init_port for each port
 
