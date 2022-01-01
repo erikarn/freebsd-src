@@ -16,10 +16,6 @@
 #ifndef	__AR40XX_REG_H__
 #define	__AR40XX_REG_H__
 
-#define	AR40XX_MAX_VLANS	128
-#define	AR40XX_NUM_PORTS	6
-#define	AR40XX_NUM_PHYS	5
-
 #define	BITS(_s, _n)	(((1UL << (_n)) - 1) << _s)
 #define	BIT(_n)		(1UL << (_n))
 

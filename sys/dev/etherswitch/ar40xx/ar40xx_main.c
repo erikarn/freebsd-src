@@ -138,6 +138,13 @@ ar40xx_attach(device_t dev)
 		    __func__);
 		goto error;
 	}
+	sc->sc_ess_mem_size = (size_t) bus_get_resource_count(dev,
+	    SYS_RES_MEMORY, sc->sc_ess_mem_rid);
+	if (sc->sc_ess_mem_size == 0) {
+		device_printf(dev, "%s: failed to get device memory size\n",
+		    __func__);
+		goto error;
+	}
 
 	// get switch_mac_mode
 	ret = OF_getencprop(ofw_bus_get_node(dev), "switch_mac_mode",

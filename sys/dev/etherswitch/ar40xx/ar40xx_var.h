@@ -29,6 +29,30 @@
 #ifndef	__AR40XX_VAR_H__
 #define	__AR40XX_VAR_H__
 
+#define	AR40XX_LOCK(_sc)		mtx_lock(&(_sc)->sc_mtx)
+#define	AR40XX_UNLOCK(_sc)		mtx_unlock(&(_sc)->sc_mtx)
+#define	AR40XX_LOCK_ASSERT(_sc)		mtx_assert(&(_sc)->sc_mtx, MA_OWNED)
+
+/*
+ * register space access macros
+ */
+#define	AR40XX_REG_WRITE(sc, reg, val)		do {		\
+	    bus_write_4(sc->sc_ess_mem_res, (reg), (val));	\
+	    } while (0)
+
+#define	AR40XX_REG_READ(sc, reg)	bus_read_4(sc->sc_ess_mem_res, (reg))
+
+#define	AR40XX_REG_BARRIER_WRITE(sc)	bus_barrier((sc)->sc_ess_mem_res,	\
+	    0, (sc)->sc_ess_mem_size, BUS_SPACE_BARRIER_WRITE)
+#define	AR40XX_REG_BARRIER_READ(sc)	bus_barrier((sc)->sc_ess_mem_res,	\
+	    0, (sc)->sc_ess_mem_size, BUS_SPACE_BARRIER_READ)
+#define	AR40XX_REG_BARRIER_RW(sc)	bus_barrier((sc)->sc_ess_mem_res,	\
+	    0, (sc)->sc_ess_mem_size,					\
+	    BUS_SPACE_BARRIER_READ | BUS_SPACE_BARRIER_WRITE)
+
+#define	AR40XX_MAX_VLANS		128
+#define	AR40XX_NUM_PORTS		6
+#define	AR40XX_NUM_PHYS			5
 
 struct ar40xx_softc {
 	struct mtx	sc_mtx;		/* serialize access to softc */
@@ -37,6 +61,7 @@ struct ar40xx_softc {
 	/* ess-switch memory resource */
 	struct resource	*sc_ess_mem_res;
 	int		sc_ess_mem_rid;
+	size_t		sc_ess_mem_size;
 
 	/* ess-switch clock resource */
 	clk_t		sc_ess_clk;
@@ -58,6 +83,21 @@ struct ar40xx_softc {
 		uint32_t switch_lan_bmp;
 		uint32_t switch_wan_bmp;
 	} sc_config;
+
+	struct {
+		bool vlan;
+		uint16_t vlan_id[AR40XX_MAX_VLANS];
+		uint8_t vlan_table[AR40XX_MAX_VLANS];
+		uint16_t vlan_tagged;
+		uint16_t pvid[AR40XX_NUM_PORTS];
+	} sc_vlan;
+
+	struct {
+		bool mirror_rx;
+		bool mirror_tx;
+		int source_port;
+		int monitor_port;
+	} sc_monitor;
 };
 
 #endif	/* __AR40XX_VAR_H__ */
