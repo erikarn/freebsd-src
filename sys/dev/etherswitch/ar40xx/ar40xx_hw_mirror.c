@@ -64,7 +64,8 @@
 
 #include <dev/etherswitch/ar40xx/ar40xx_var.h>
 #include <dev/etherswitch/ar40xx/ar40xx_reg.h>
-#include <dev/etherswitch/ar40xx/ar40xx_hw_port.h>
+#include <dev/etherswitch/ar40xx/ar40xx_hw.h>
+#include <dev/etherswitch/ar40xx/ar40xx_hw_mirror.h>
 
 #include "mdio_if.h"
 #include "miibus_if.h"
@@ -72,82 +73,62 @@
 
 
 int
-ar40xx_hw_port_init(struct ar40xx_softc *sc, int port)
+ar40xx_hw_mirror_set_registers(struct ar40xx_softc *sc)
 {
 	uint32_t reg;
+	int port;
 
-	device_printf(sc->sc_dev, "%s: called; port %d\n", __func__, port);
-
-	AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_STATUS(port), 0);
-	AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_HEADER(port), 0);
-	AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_VLAN0(port), 0);
-
-	reg = AR40XX_PORT_VLAN1_OUT_MODE_UNTOUCH
-	     << AR40XX_PORT_VLAN1_OUT_MODE_S;
-	AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_VLAN1(port), reg);
-
-	reg = AR40XX_PORT_LOOKUP_LEARN;
-	reg |= AR40XX_PORT_STATE_FORWARD << AR40XX_PORT_LOOKUP_STATE_S;
-	AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_LOOKUP(port), reg);
+	/* Reset the mirror registers before configuring */
+	reg = AR40XX_REG_READ(sc, AR40XX_REG_FWD_CTRL0);
+	reg &= ~(AR40XX_FWD_CTRL0_MIRROR_PORT);
+	reg |= (0xF << AR40XX_FWD_CTRL0_MIRROR_PORT_S);
+	AR40XX_REG_WRITE(sc, AR40XX_REG_FWD_CTRL0, reg);
 	AR40XX_REG_BARRIER_WRITE(sc);
 
-	return (0);
-}
+	for (port = 0; port < AR40XX_NUM_PORTS; port++) {
+		reg = AR40XX_REG_READ(sc, AR40XX_REG_PORT_LOOKUP(port));
+		reg &= ~AR40XX_PORT_LOOKUP_ING_MIRROR_EN;
+		AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_LOOKUP(port), reg);
 
-int
-ar40xx_hw_port_cpuport_setup(struct ar40xx_softc *sc)
-{
-	uint32_t reg;
+		reg = AR40XX_REG_READ(sc, AR40XX_REG_PORT_HOL_CTRL1(port));
+		reg &= ~AR40XX_PORT_HOL_CTRL1_EG_MIRROR_EN;
+		AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_HOL_CTRL1(port), reg);
 
-	device_printf(sc->sc_dev, "%s: called\n", __func__);
-
-	reg = AR40XX_PORT_STATUS_TXFLOW
-	    | AR40XX_PORT_STATUS_RXFLOW
-	    | AR40XX_PORT_TXHALF_FLOW
-	    | AR40XX_PORT_DUPLEX
-	    | AR40XX_PORT_SPEED_1000M;
-	AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_STATUS(0), reg);
-	DELAY(20);
-
-	reg |= AR40XX_PORT_TX_EN | AR40XX_PORT_RX_EN;
-        AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_STATUS(0), reg);
-	AR40XX_REG_BARRIER_WRITE(sc);
-
-	return (0);
-}
-
-int
-ar40xx_hw_port_setup(struct ar40xx_softc *sc, int port, uint32_t members)
-{
-	uint32_t egress, ingress, reg;
-	uint32_t pvid = sc->sc_vlan.vlan_id[sc->sc_vlan.pvid[port]];
-
-	if (sc->sc_vlan.vlan) {
-		egress = AR40XX_PORT_VLAN1_OUT_MODE_UNMOD;
-		ingress = AR40XX_IN_SECURE;
-	} else {
-		egress = AR40XX_PORT_VLAN1_OUT_MODE_UNTOUCH;
-		ingress = AR40XX_IN_PORT_ONLY;
+		AR40XX_REG_BARRIER_WRITE(sc);
 	}
 
-	reg = pvid << AR40XX_PORT_VLAN0_DEF_SVID_S;
-	reg |= pvid << AR40XX_PORT_VLAN0_DEF_CVID_S;
-	AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_VLAN0(port), reg);
-	AR40XX_REG_BARRIER_WRITE(sc);
+	/* Now, enable mirroring if requested */
+	if (sc->sc_monitor.source_port >= AR40XX_NUM_PORTS
+	    || sc->sc_monitor.monitor_port >= AR40XX_NUM_PORTS
+	    || sc->sc_monitor.source_port == sc->sc_monitor.monitor_port) {
+		return (0);
+	}
 
-	reg = AR40XX_PORT_VLAN1_PORT_VLAN_PROP;
-	reg |= egress << AR40XX_PORT_VLAN1_OUT_MODE_S;
-	AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_VLAN1(port), reg);
-	AR40XX_REG_BARRIER_WRITE(sc);
+	reg = AR40XX_REG_READ(sc, AR40XX_REG_FWD_CTRL0);
+	reg &= ~AR40XX_FWD_CTRL0_MIRROR_PORT;
+	reg |=
+	    (sc->sc_monitor.monitor_port << AR40XX_FWD_CTRL0_MIRROR_PORT_S);
+	AR40XX_REG_WRITE(sc, AR40XX_REG_FWD_CTRL0, reg);
 
-	reg = members;
-	reg |= AR40XX_PORT_LOOKUP_LEARN;
-	reg |= ingress << AR40XX_PORT_LOOKUP_IN_MODE_S;
-	reg |= AR40XX_PORT_STATE_FORWARD << AR40XX_PORT_LOOKUP_STATE_S;
-	AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_LOOKUP(port), reg);
-	AR40XX_REG_BARRIER_WRITE(sc);
+	if (sc->sc_monitor.mirror_rx) {
+		reg = AR40XX_REG_READ(sc,
+		    AR40XX_REG_PORT_LOOKUP(sc->sc_monitor.source_port));
+		reg |= AR40XX_PORT_LOOKUP_ING_MIRROR_EN;
+		AR40XX_REG_WRITE(sc,
+		    AR40XX_REG_PORT_LOOKUP(sc->sc_monitor.source_port),
+		    reg);
+		AR40XX_REG_BARRIER_WRITE(sc);
+	}
+
+	if (sc->sc_monitor.mirror_tx) {
+		reg = AR40XX_REG_READ(sc,
+		    AR40XX_REG_PORT_HOL_CTRL1(sc->sc_monitor.source_port));
+		reg |= AR40XX_PORT_HOL_CTRL1_EG_MIRROR_EN;
+		AR40XX_REG_WRITE(sc,
+		    AR40XX_REG_PORT_HOL_CTRL1(sc->sc_monitor.source_port),
+		    reg);
+		AR40XX_REG_BARRIER_WRITE(sc);
+	}
 
 	return (0);
 }
-
-

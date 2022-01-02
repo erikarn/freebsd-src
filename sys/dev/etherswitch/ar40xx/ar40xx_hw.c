@@ -66,6 +66,14 @@
 #include <dev/etherswitch/ar40xx/ar40xx_reg.h>
 #include <dev/etherswitch/ar40xx/ar40xx_hw.h>
 
+/*
+ * XXX these are here for now; move the code using these
+ * into main.c once this is all done!
+ */
+#include <dev/etherswitch/ar40xx/ar40xx_hw_vtu.h>
+#include <dev/etherswitch/ar40xx/ar40xx_hw_port.h>
+#include <dev/etherswitch/ar40xx/ar40xx_hw_mirror.h>
+
 #include "mdio_if.h"
 #include "miibus_if.h"
 #include "etherswitch_if.h"
@@ -159,17 +167,91 @@ ar40xx_hw_vlan_init(struct ar40xx_softc *sc)
 	return (0);
 }
 
+/*
+ * Apply the per-port and global configuration from software.
+ *
+ * XXX TODO: Again, this is calling back into other hw routines; let's
+ * eventually move this to main.c
+ */
 int
 ar40xx_hw_sw_hw_apply(struct ar40xx_softc *sc)
 {
+	uint8_t portmask[AR40XX_NUM_PORTS];
+	int i, j, ret;
 
-	device_printf(sc->sc_dev, "%s: TODO\n", __func__);
+	device_printf(sc->sc_dev, "%s: called\n", __func__);
+
+	/*
+	 * Flush the VTU configuration.
+	 */
+	ret = ar40xx_hw_vtu_flush(sc);
+	if (ret != 0) {
+		device_printf(sc->sc_dev,
+		    "ERROR: couldn't apply config; vtu flush failed (%d)\n",
+		    ret);
+		return (ret);
+	}
+
+	memset(portmask, 0, sizeof(portmask));
+
+	/*
+	 * Configure the ports based on whether it's 802.1q
+	 * VLANs, or just straight up per-port VLANs.
+	 */
+	if (sc->sc_vlan.vlan) {
+		device_printf(sc->sc_dev, "%s: configuring 802.1q VLANs\n",
+		    __func__);
+		for (j = 0; j < AR40XX_MAX_VLANS; j++) {
+			uint8_t vp = sc->sc_vlan.vlan_table[j];
+
+			if (!vp)
+				continue;
+
+			for (i = 0; i < AR40XX_NUM_PORTS; i++) {
+				uint8_t mask = (1U << i);
+
+				if (vp & mask)
+					portmask[i] |= vp & ~mask;
+			}
+
+			ar40xx_hw_vtu_load_vlan(sc, sc->sc_vlan.vlan_id[j],
+			    sc->sc_vlan.vlan_table[j]);
+		}
+	} else {
+		device_printf(sc->sc_dev, "%s: configuring per-port VLANs\n",
+		    __func__);
+		for (i = 0; i < AR40XX_NUM_PORTS; i++) {
+			if (i == AR40XX_PORT_CPU)
+				continue;
+
+			portmask[i] = (1U << AR40XX_PORT_CPU);
+			portmask[AR40XX_PORT_CPU] |= (1U << i);
+		}
+	}
+
+	/*
+	 * Update per-port destination mask, vlan tag settings
+	 */
+	for (i = 0; i < AR40XX_NUM_PORTS; i++)
+		(void) ar40xx_hw_port_setup(sc, i, portmask[i]);
+
+	/* Set the mirror register config */
+	ret = ar40xx_hw_mirror_set_registers(sc);
+	if (ret != 0) {
+		device_printf(sc->sc_dev,
+		    "ERROR: couldn't apply config; mirror config failed"
+		    " (%d)\n",
+		    ret);
+		return (ret);
+	}
+
 	return (0);
 }
 
 
 /*
  * XXX TODO: this is a bit overloaded; should likely live in main.c
+ * with calls into various hw functions to do stuff.
  */
 int
 ar40xx_hw_reset_switch(struct ar40xx_softc *sc)
@@ -200,3 +282,49 @@ ar40xx_hw_reset_switch(struct ar40xx_softc *sc)
 
 	return (ret);
 }
+
+int
+ar40xx_hw_wait_bit(struct ar40xx_softc *sc, int reg, uint32_t mask,
+    uint32_t val)
+{
+	int timeout = 20;
+	uint32_t t;
+
+	while (true) {
+		AR40XX_REG_BARRIER_READ(sc);
+		t = AR40XX_REG_READ(sc, reg);
+		if ((t & mask) == val)
+			return 0;
+
+		if (timeout-- <= 0)
+			break;
+
+		DELAY(20);
+	}
+
+	device_printf(sc->sc_dev, "ERROR: timeout for reg "
+	    "%08x: %08x & %08x != %08x\n",
+	    (unsigned int)reg, t, mask, val);
+	return (ETIMEDOUT);
+}
+
+int
+ar40xx_hw_atu_flush(struct ar40xx_softc *sc)
+{
+	int ret;
+
+	device_printf(sc->sc_dev, "%s: called\n", __func__);
+
+	ret = ar40xx_hw_wait_bit(sc, AR40XX_REG_ATU_FUNC,
+	    AR40XX_ATU_FUNC_BUSY, 0);
+	if (ret != 0)
+		return (ret);
+
+	AR40XX_REG_WRITE(sc, AR40XX_REG_ATU_FUNC,
+	    AR40XX_ATU_FUNC_OP_FLUSH
+	    | AR40XX_ATU_FUNC_BUSY);
+	AR40XX_REG_BARRIER_WRITE(sc);
+
+        return ret;
+}
+

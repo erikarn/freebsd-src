@@ -64,7 +64,8 @@
 
 #include <dev/etherswitch/ar40xx/ar40xx_var.h>
 #include <dev/etherswitch/ar40xx/ar40xx_reg.h>
-#include <dev/etherswitch/ar40xx/ar40xx_hw_port.h>
+#include <dev/etherswitch/ar40xx/ar40xx_hw.h>
+#include <dev/etherswitch/ar40xx/ar40xx_hw_vtu.h>
 
 #include "mdio_if.h"
 #include "miibus_if.h"
@@ -72,82 +73,67 @@
 
 
 int
-ar40xx_hw_port_init(struct ar40xx_softc *sc, int port)
+ar40xx_hw_vtu_op(struct ar40xx_softc *sc, uint32_t op, uint32_t val)
 {
-	uint32_t reg;
+	int ret;
 
-	device_printf(sc->sc_dev, "%s: called; port %d\n", __func__, port);
+	device_printf(sc->sc_dev, "%s: called; op=%d, val=%d\n",
+	    __func__, op, val);
 
-	AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_STATUS(port), 0);
-	AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_HEADER(port), 0);
-	AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_VLAN0(port), 0);
+	ret = (ar40xx_hw_wait_bit(sc, AR40XX_REG_VTU_FUNC1,
+                            AR40XX_VTU_FUNC1_BUSY, 0));
+	if (ret != 0)
+		return (ret);
 
-	reg = AR40XX_PORT_VLAN1_OUT_MODE_UNTOUCH
-	     << AR40XX_PORT_VLAN1_OUT_MODE_S;
-	AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_VLAN1(port), reg);
+	if ((op & AR40XX_VTU_FUNC1_OP) == AR40XX_VTU_FUNC1_OP_LOAD) {
+		AR40XX_REG_WRITE(sc, AR40XX_REG_VTU_FUNC0, val);
+		AR40XX_REG_BARRIER_WRITE(sc);
+	}
 
-	reg = AR40XX_PORT_LOOKUP_LEARN;
-	reg |= AR40XX_PORT_STATE_FORWARD << AR40XX_PORT_LOOKUP_STATE_S;
-	AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_LOOKUP(port), reg);
+	op |= AR40XX_VTU_FUNC1_BUSY;
+	AR40XX_REG_WRITE(sc, AR40XX_REG_VTU_FUNC1, op);
 	AR40XX_REG_BARRIER_WRITE(sc);
 
 	return (0);
 }
 
 int
-ar40xx_hw_port_cpuport_setup(struct ar40xx_softc *sc)
+ar40xx_hw_vtu_load_vlan(struct ar40xx_softc *sc, uint32_t vid,
+    uint32_t port_mask)
 {
-	uint32_t reg;
+
+	uint32_t op, val, mode;
+	int i, ret;
+
+	device_printf(sc->sc_dev, "%s: called; vid=%d port_mask=0x%08x\n",
+	    __func__, vid, port_mask);
+
+	op = AR40XX_VTU_FUNC1_OP_LOAD | (vid << AR40XX_VTU_FUNC1_VID_S);
+	val = AR40XX_VTU_FUNC0_VALID | AR40XX_VTU_FUNC0_IVL;
+	for (i = 0; i < AR40XX_NUM_PORTS; i++) {
+		if ((port_mask & (1U << i)) == 0)
+			mode = AR40XX_VTU_FUNC0_EG_MODE_NOT;
+		else if (sc->sc_vlan.vlan == 0)
+			mode = AR40XX_VTU_FUNC0_EG_MODE_KEEP;
+		else if ((sc->sc_vlan.vlan_tagged & (1U << i))
+		    || (sc->sc_vlan.vlan_id[sc->sc_vlan.pvid[i]] != vid))
+			mode = AR40XX_VTU_FUNC0_EG_MODE_TAG;
+		else
+			mode = AR40XX_VTU_FUNC0_EG_MODE_UNTAG;
+		val |= mode << AR40XX_VTU_FUNC0_EG_MODE_S(i);
+	}
+	ret = ar40xx_hw_vtu_op(sc, op, val);
+
+	return (ret);
+}
+
+int
+ar40xx_hw_vtu_flush(struct ar40xx_softc *sc)
+{
+	int ret;
 
 	device_printf(sc->sc_dev, "%s: called\n", __func__);
 
-	reg = AR40XX_PORT_STATUS_TXFLOW
-	    | AR40XX_PORT_STATUS_RXFLOW
-	    | AR40XX_PORT_TXHALF_FLOW
-	    | AR40XX_PORT_DUPLEX
-	    | AR40XX_PORT_SPEED_1000M;
-	AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_STATUS(0), reg);
-	DELAY(20);
-
-	reg |= AR40XX_PORT_TX_EN | AR40XX_PORT_RX_EN;
-        AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_STATUS(0), reg);
-	AR40XX_REG_BARRIER_WRITE(sc);
-
-	return (0);
+	ret = ar40xx_hw_vtu_op(sc, AR40XX_VTU_FUNC1_OP_FLUSH, 0);
+	return (ret);
 }
-
-int
-ar40xx_hw_port_setup(struct ar40xx_softc *sc, int port, uint32_t members)
-{
-	uint32_t egress, ingress, reg;
-	uint32_t pvid = sc->sc_vlan.vlan_id[sc->sc_vlan.pvid[port]];
-
-	if (sc->sc_vlan.vlan) {
-		egress = AR40XX_PORT_VLAN1_OUT_MODE_UNMOD;
-		ingress = AR40XX_IN_SECURE;
-	} else {
-		egress = AR40XX_PORT_VLAN1_OUT_MODE_UNTOUCH;
-		ingress = AR40XX_IN_PORT_ONLY;
-	}
-
-	reg = pvid << AR40XX_PORT_VLAN0_DEF_SVID_S;
-	reg |= pvid << AR40XX_PORT_VLAN0_DEF_CVID_S;
-	AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_VLAN0(port), reg);
-	AR40XX_REG_BARRIER_WRITE(sc);
-
-	reg = AR40XX_PORT_VLAN1_PORT_VLAN_PROP;
-	reg |= egress << AR40XX_PORT_VLAN1_OUT_MODE_S;
-	AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_VLAN1(port), reg);
-	AR40XX_REG_BARRIER_WRITE(sc);
-
-	reg = members;
-	reg |= AR40XX_PORT_LOOKUP_LEARN;
-	reg |= ingress << AR40XX_PORT_LOOKUP_IN_MODE_S;
-	reg |= AR40XX_PORT_STATE_FORWARD << AR40XX_PORT_LOOKUP_STATE_S;
-	AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_LOOKUP(port), reg);
-	AR40XX_REG_BARRIER_WRITE(sc);
-
-	return (0);
-}
-
-

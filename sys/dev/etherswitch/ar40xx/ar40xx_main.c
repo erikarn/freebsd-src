@@ -202,12 +202,11 @@ ar40xx_attach(device_t dev)
 		goto error;
 	}
 
-
 	/*
 	 * Ok, at this point we have enough resources to do an initial
 	 * reset and configuration.
 	 */
-	device_printf(dev, "%s: TODO\n", __func__);
+	device_printf(dev, "%s: begin startup\n", __func__);
 
 	// ess reset
 	ret = ar40xx_hw_ess_reset(sc);
@@ -238,6 +237,8 @@ ar40xx_attach(device_t dev)
 
 	// start qm error check task
 	// XXX TODO
+	device_printf(dev, "%s: TODO: QM error check\n", __func__);
+	device_printf(dev, "%s: TODO: MIIBUS, PHY\n", __func__);
 
 	return (0);
 error:

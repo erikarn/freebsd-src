@@ -26,13 +26,14 @@
  *
  * $FreeBSD$
  */
-#ifndef	__AR40XX_HW_PORT_H__
-#define	__AR40XX_HW_PORT_H__
+#ifndef	__AR40XX_HW_VTU_H__
+#define	__AR40XX_HW_VTU_H__
 
-extern	int ar40xx_hw_port_init(struct ar40xx_softc *sc, int port);
-extern	int ar40xx_hw_port_cpuport_setup(struct ar40xx_softc *sc);
-extern	int ar40xx_hw_port_setup(struct ar40xx_softc *sc, int port,
-	    uint32_t members);
+extern	int ar40xx_hw_vtu_op(struct ar40xx_softc *sc, uint32_t op,
+	    uint32_t val);
+extern	int ar40xx_hw_vtu_load_vlan(struct ar40xx_softc *sc, uint32_t vid,
+	    uint32_t port_mask);
+extern	int ar40xx_hw_vtu_flush(struct ar40xx_softc *sc);
 
-#endif	/* __AR40XX_HW_PORT_H__ */
+#endif	/* __AR40XX_HW_VTU_H__ */
 

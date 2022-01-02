@@ -21,6 +21,9 @@ dev/etherswitch/ar40xx/ar40xx_main.c	optional mdio etherswitch ar40xx_switch
 dev/etherswitch/ar40xx/ar40xx_hw.c	optional mdio etherswitch ar40xx_switch
 dev/etherswitch/ar40xx/ar40xx_hw_port.c	optional mdio etherswitch ar40xx_switch
 dev/etherswitch/ar40xx/ar40xx_hw_psgmii.c	optional mdio etherswitch ar40xx_switch
+dev/etherswitch/ar40xx/ar40xx_hw_mirror.c	optional mdio etherswitch ar40xx_switch
+dev/etherswitch/ar40xx/ar40xx_hw_vtu.c	optional mdio etherswitch ar40xx_switch
+dev/etherswitch/ar40xx/ar40xx_hw_mdio.c	optional mdio etherswitch ar40xx_switch
 
 dev/qcom_qup/qcom_spi.c			optional qcom_qup_spi
 dev/qcom_qup/qcom_spi_hw.c		optional qcom_qup_spi

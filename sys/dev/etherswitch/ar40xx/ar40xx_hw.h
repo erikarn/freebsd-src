@@ -34,6 +34,9 @@ extern	int ar40xx_hw_init_globals(struct ar40xx_softc *sc);
 extern	int ar40xx_hw_vlan_init(struct ar40xx_softc *sc);
 extern	int ar40xx_hw_sw_hw_apply(struct ar40xx_softc *sc);
 extern	int ar40xx_hw_reset_switch(struct ar40xx_softc *sc);
+extern	int ar40xx_hw_wait_bit(struct ar40xx_softc *sc, int reg,
+	    uint32_t mask, uint32_t val);
+extern	int ar40xx_hw_atu_flush(struct ar40xx_softc *sc);
 
 #endif	/* __AR40XX_HW_H__ */
 
