@@ -149,5 +149,3 @@ ar40xx_hw_port_setup(struct ar40xx_softc *sc, int port, uint32_t members)
 
 	return (0);
 }
-
-

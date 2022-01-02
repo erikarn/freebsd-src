@@ -101,6 +101,30 @@ ar40xx_tick(void *arg)
 	callout_reset(&sc->sc_phy_callout, hz, ar40xx_tick, sc);
 }
 
+static void
+ar40xx_statchg(device_t dev)
+{
+	struct ar40xx_softc *sc = device_get_softc(dev);
+
+	device_printf(sc->sc_dev, "%s\n", __func__);
+}
+
+static int
+ar40xx_readphy(device_t dev, int phy, int reg)
+{
+	struct ar40xx_softc *sc = device_get_softc(dev);
+
+	return MDIO_READREG(sc->sc_mdio_dev, phy, reg);
+}
+
+static int
+ar40xx_writephy(device_t dev, int phy, int reg, int val)
+{
+	struct ar40xx_softc *sc = device_get_softc(dev);
+
+	return MDIO_WRITEREG(sc->sc_mdio_dev, phy, reg, val);
+}
+
 static int
 ar40xx_attach(device_t dev)
 {
@@ -253,7 +277,13 @@ ar40xx_attach(device_t dev)
 	// start qm error check task
 	// XXX TODO
 	device_printf(dev, "%s: TODO: QM error check\n", __func__);
-	device_printf(dev, "%s: TODO: MIIBUS, PHY\n", __func__);
+
+	// Attach PHYs
+	ret = ar40xx_attach_phys(sc);
+
+	ret = bus_generic_probe(dev);
+	bus_enumerate_hinted_children(dev);
+	ret = bus_generic_attach(dev);
 
 	// Start timer
 	callout_init_mtx(&sc->sc_phy_callout, &sc->sc_mtx, 0);
@@ -272,11 +302,22 @@ static int
 ar40xx_detach(device_t dev)
 {
 	struct ar40xx_softc *sc = device_get_softc(dev);
+	int i;
 
 	device_printf(sc->sc_dev, "%s: called\n", __func__);
 
 	callout_drain(&sc->sc_phy_callout);
 
+	/* Free PHYs */
+	for (i = 0; i < AR40XX_NUM_PHYS; i++) {
+		if (sc->sc_phys.miibus[i] != NULL)
+			device_delete_child(dev, sc->sc_phys.miibus[i]);
+		if (sc->sc_phys.ifp[i] != NULL)
+			if_free(sc->sc_phys.ifp[i]);
+		free(sc->sc_phys.ifname[i], M_DEVBUF);
+	}
+
+	bus_generic_detach(dev);
 	mtx_destroy(&sc->sc_mtx);
 
 	return (0);
@@ -291,6 +332,15 @@ static device_method_t ar40xx_methods[] = {
 	/* bus interface */
 	DEVMETHOD(bus_add_child,	device_add_child_ordered),
 
+	/* MII interface */
+	DEVMETHOD(miibus_readreg,	ar40xx_readphy),
+	DEVMETHOD(miibus_writereg,	ar40xx_writephy),
+	DEVMETHOD(miibus_statchg,	ar40xx_statchg),
+
+	/* MDIO interface */
+
+	/* etherswitch interface */
+
 	DEVMETHOD_END
 };
 
@@ -300,18 +350,10 @@ static devclass_t ar40xx_devclass;
 
 DRIVER_MODULE(ar40xx, simplebus, ar40xx_driver, ar40xx_devclass, 0, 0);
 DRIVER_MODULE(ar40xx, ofwbus, ar40xx_driver, ar40xx_devclass, 0, 0);
-MODULE_VERSION(ar40xx, 1);
-
-// TODO: yes, we need to get the rest of the dependencies in here
-
-#if 0
-DRIVER_MODULE(ar40xx, mdio, ar40xx_driver, ar40xx_devclass, 0, 0);
 DRIVER_MODULE(miibus, ar40xx, miibus_driver, miibus_devclass, 0, 0);
 DRIVER_MODULE(mdio, ar40xx, mdio_driver, mdio_devclass, 0, 0);
 DRIVER_MODULE(etherswitch, ar40xx, etherswitch_driver, etherswitch_devclass, 0, 0);
-MODULE_VERSION(ar40xx, 1);
 MODULE_DEPEND(ar40xx, mdio, 1, 1, 1);
-#endif
-
-//MODULE_DEPEND(ar40xx, miibus, 1, 1, 1); /* XXX which versions? */
-//MODULE_DEPEND(ar40xx, etherswitch, 1, 1, 1); /* XXX which versions? */
+MODULE_DEPEND(ar40xx, miibus, 1, 1, 1);
+MODULE_DEPEND(ar40xx, etherswitch, 1, 1, 1);
+MODULE_VERSION(ar40xx, 1);

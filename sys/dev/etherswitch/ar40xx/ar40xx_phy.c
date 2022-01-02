@@ -77,13 +77,116 @@
 int
 ar40xx_phy_tick(struct ar40xx_softc *sc)
 {
+	struct mii_softc *miisc;
+	struct mii_data *mii;
+	int i, port;
 
 	AR40XX_LOCK_ASSERT(sc);
 
 	/*
 	 * Loop over; update port status here
 	 */
-	device_printf(sc->sc_dev, "%s: called!\n", __func__);
+//	device_printf(sc->sc_dev, "%s: called!\n", __func__);
 
+	for (i = 0; i < AR40XX_NUM_PHYS; i++) {
+		port = i;
+		mii = device_get_softc(sc->sc_phys.miibus[port]);
+		mii_tick(mii);
+		LIST_FOREACH(miisc, &mii->mii_phys, mii_list) {
+			if (IFM_INST(mii->mii_media.ifm_cur->ifm_media) !=
+			    miisc->mii_inst)
+				continue;
+			ukphy_status(miisc);
+			mii_phy_update(miisc, MII_POLLSTAT);
+		}
+	}
+
+	return (0);
+}
+
+static inline int
+ar40xx_portforphy(int phy)
+{
+
+	return (phy+1);
+}
+
+static inline struct mii_data *
+ar40xx_miiforport(struct ar40xx_softc *sc, int port)
+{
+	int phy;
+
+	phy = port-1;
+
+	if (phy < 0 || phy >= AR40XX_NUM_PHYS)
+		return (NULL);
+	return (device_get_softc(sc->sc_phys.miibus[phy]));
+}
+
+static int
+ar40xx_ifmedia_upd(struct ifnet *ifp)
+{
+	struct ar40xx_softc *sc = ifp->if_softc;
+	struct mii_data *mii = ar40xx_miiforport(sc, ifp->if_dunit);
+
+	device_printf(sc->sc_dev, "%s\n", __func__);
+
+	if (mii == NULL)
+		return (ENXIO);
+	mii_mediachg(mii);
+	return (0);
+}
+
+static void
+ar40xx_ifmedia_sts(struct ifnet *ifp, struct ifmediareq *ifmr)
+{
+	struct ar40xx_softc *sc = ifp->if_softc;
+	struct mii_data *mii = ar40xx_miiforport(sc, ifp->if_dunit);
+
+	device_printf(sc->sc_dev, "%s\n", __func__);
+
+	if (mii == NULL)
+		return;
+	mii_pollstat(mii);
+	ifmr->ifm_active = mii->mii_media_active;
+	ifmr->ifm_status = mii->mii_media_status;
+}
+
+int
+ar40xx_attach_phys(struct ar40xx_softc *sc)
+{
+	int phy, err = 0;
+	char name[IFNAMSIZ];
+
+	/* PHYs need an interface, so we generate a dummy one */
+	snprintf(name, IFNAMSIZ, "%sport", device_get_nameunit(sc->sc_dev));
+	for (phy = 0; phy < AR40XX_NUM_PHYS; phy++) {
+		sc->sc_phys.ifp[phy] = if_alloc(IFT_ETHER);
+		if (sc->sc_phys.ifp[phy] == NULL) {
+			device_printf(sc->sc_dev, "couldn't allocate ifnet structure\n");
+			err = ENOMEM;
+			break;
+		}
+
+		sc->sc_phys.ifp[phy]->if_softc = sc;
+		sc->sc_phys.ifp[phy]->if_flags |= IFF_UP | IFF_BROADCAST |
+		    IFF_DRV_RUNNING | IFF_SIMPLEX;
+		sc->sc_phys.ifname[phy] = malloc(strlen(name)+1, M_DEVBUF, M_WAITOK);
+		bcopy(name, sc->sc_phys.ifname[phy], strlen(name)+1);
+		if_initname(sc->sc_phys.ifp[phy], sc->sc_phys.ifname[phy],
+		    ar40xx_portforphy(phy));
+		err = mii_attach(sc->sc_dev, &sc->sc_phys.miibus[phy], sc->sc_phys.ifp[phy],
+		    ar40xx_ifmedia_upd, ar40xx_ifmedia_sts, \
+		    BMSR_DEFCAPMASK, phy, MII_OFFSET_ANY, 0);
+		device_printf(sc->sc_dev, "%s attached to pseudo interface %s\n",
+		    device_get_nameunit(sc->sc_phys.miibus[phy]),
+		    sc->sc_phys.ifp[phy]->if_xname);
+		if (err != 0) {
+			device_printf(sc->sc_dev,
+			    "attaching PHY %d failed\n",
+			    phy);
+			return (err);
+		}
+	}
 	return (0);
 }

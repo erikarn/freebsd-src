@@ -102,6 +102,12 @@ struct ar40xx_softc {
 		int source_port;
 		int monitor_port;
 	} sc_monitor;
+
+	struct {
+		char *ifname[AR40XX_NUM_PHYS];
+		device_t miibus[AR40XX_NUM_PHYS];
+		struct ifnet *ifp[AR40XX_NUM_PHYS];
+	} sc_phys;
 };
 
 #endif	/* __AR40XX_VAR_H__ */
