@@ -93,3 +93,44 @@ ar40xx_hw_phy_debug_read(struct ar40xx_softc *sc, int phy, uint16_t dbg)
 
 /* TODO: mmd */
 
+
+int
+ar40xx_hw_phy_mmd_write(struct ar40xx_softc *sc, uint32_t phy_id,
+    uint16_t mmd_num, uint16_t reg_id, uint16_t reg_val)
+{
+
+	AR40XX_LOCK_ASSERT(sc);
+
+	MDIO_WRITEREG(sc->sc_mdio_dev, phy_id, AR40XX_MII_ATH_MMD_ADDR,
+	    mmd_num);
+	MDIO_WRITEREG(sc->sc_mdio_dev, phy_id, AR40XX_MII_ATH_MMD_DATA,
+	    reg_id);
+	MDIO_WRITEREG(sc->sc_mdio_dev, phy_id, AR40XX_MII_ATH_MMD_ADDR,
+	    0x4000 | mmd_num);
+	MDIO_WRITEREG(sc->sc_mdio_dev, phy_id, AR40XX_MII_ATH_MMD_DATA,
+	    reg_val);
+
+	return (0);
+}
+
+int
+ar40xx_hw_phy_mmd_read(struct ar40xx_softc *sc, uint32_t phy_id,
+    uint16_t mmd_num, uint16_t reg_id)
+{
+	uint16_t value;
+
+	AR40XX_LOCK_ASSERT(sc);
+
+	MDIO_WRITEREG(sc->sc_mdio_dev, phy_id, AR40XX_MII_ATH_MMD_ADDR,
+	     mmd_num);
+	MDIO_WRITEREG(sc->sc_mdio_dev, phy_id, AR40XX_MII_ATH_MMD_DATA,
+	    reg_id);
+	MDIO_WRITEREG(sc->sc_mdio_dev, phy_id, AR40XX_MII_ATH_MMD_ADDR,
+	    0x4000 | mmd_num);
+
+	value = MDIO_READREG(sc->sc_mdio_dev, phy_id,
+	    AR40XX_MII_ATH_MMD_DATA);
+
+	return value;
+}
+

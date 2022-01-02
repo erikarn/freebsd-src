@@ -253,6 +253,8 @@ ar40xx_attach(device_t dev)
 	 */
 	device_printf(dev, "%s: begin startup\n", __func__);
 
+	AR40XX_LOCK(sc);
+
 	// ess reset
 	ret = ar40xx_hw_ess_reset(sc);
 
@@ -279,6 +281,8 @@ ar40xx_attach(device_t dev)
 
 	// cpuport setup
 	ret = ar40xx_hw_port_cpuport_setup(sc);
+
+	AR40XX_UNLOCK(sc);
 
 	// start qm error check task
 	// XXX TODO

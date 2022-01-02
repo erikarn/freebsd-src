@@ -82,6 +82,10 @@ struct ar40xx_softc {
 	device_t		sc_mdio_dev;
 
 	struct {
+		uint32_t	phy_t_status;
+	} sc_psgmii;
+
+	struct {
 		uint32_t switch_mac_mode;
 		uint32_t switch_cpu_bmp;
 		uint32_t switch_lan_bmp;

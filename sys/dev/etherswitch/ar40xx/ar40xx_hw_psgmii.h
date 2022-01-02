@@ -33,6 +33,11 @@ extern	int ar40xx_hw_psgmii_set_mac_mode(struct ar40xx_softc *sc,
 	    uint32_t mac_mode);
 extern	int ar40xx_hw_psgmii_self_test(struct ar40xx_softc *sc);
 extern	int ar40xx_hw_psgmii_self_test_clean(struct ar40xx_softc *sc);
+extern	int ar40xx_hw_psgmii_single_phy_testing(struct ar40xx_softc *sc,
+	    int phy);
+extern	int ar40xx_hw_malibu_psgmii_ess_reset(struct ar40xx_softc *sc);
+extern	int ar40xx_hw_psgmii_all_phy_testing(struct ar40xx_softc *sc);
+
 
 #endif	/* __AR40XX_HW_PSGMII_H__ */
 
