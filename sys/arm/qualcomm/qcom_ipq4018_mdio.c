@@ -224,6 +224,12 @@ qcom_ipq4018_mdio_writereg(device_t dev, int phy, int reg, int value)
 	device_printf(dev, "%s: called; phy=0x%x reg=0x%x val=0x%x\n",
 	    __func__, phy, reg, value);
 
+	MDIO_LOCK(sc);
+	if (qcom_ipq4018_mdio_wait(sc) != 0) {
+		MDIO_UNLOCK(sc);
+		return (-1);
+	}
+
 	/* Set phy/reg values */
 	qcom_ipq4018_mdio_set_phy_reg_addr(sc, phy, reg);
 
@@ -242,6 +248,7 @@ qcom_ipq4018_mdio_writereg(device_t dev, int phy, int reg, int value)
 		MDIO_UNLOCK(sc);
 		return (-1);
 	}
+	MDIO_UNLOCK(sc);
 
 	return (0);
 }
