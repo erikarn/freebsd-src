@@ -64,6 +64,7 @@
 
 #include <dev/etherswitch/ar40xx/ar40xx_var.h>
 #include <dev/etherswitch/ar40xx/ar40xx_reg.h>
+#include <dev/etherswitch/ar40xx/ar40xx_phy.h>
 #include <dev/etherswitch/ar40xx/ar40xx_hw.h>
 #include <dev/etherswitch/ar40xx/ar40xx_hw_psgmii.h>
 #include <dev/etherswitch/ar40xx/ar40xx_hw_port.h>
@@ -89,6 +90,15 @@ ar40xx_probe(device_t dev)
 
 	device_set_desc(dev, "IPQ4018 ESS Switch fabric / PSGMII PHY");
 	return (BUS_PROBE_DEFAULT);
+}
+
+static void
+ar40xx_tick(void *arg)
+{
+	struct ar40xx_softc *sc = arg;
+
+	(void) ar40xx_phy_tick(sc);
+	callout_reset(&sc->sc_phy_callout, hz, ar40xx_tick, sc);
 }
 
 static int
@@ -118,6 +128,11 @@ ar40xx_attach(device_t dev)
 		goto error;
 	}
 	sc->sc_mdio_phandle = mdio_p;
+	sc->sc_mdio_dev = OF_device_from_xref(OF_xref_from_node(mdio_p));
+	if (sc->sc_mdio_dev == NULL) {
+		device_printf(dev, "%s: couldn't get mdio device (mdio_p=%u)\n", __func__, mdio_p);
+		goto error;
+	}
 
 	// get psgmii base address from psgmii node
 	ret = OF_decode_addr(psgmii_p, 0, &sc->sc_psgmii_mem_tag,
@@ -240,6 +255,13 @@ ar40xx_attach(device_t dev)
 	device_printf(dev, "%s: TODO: QM error check\n", __func__);
 	device_printf(dev, "%s: TODO: MIIBUS, PHY\n", __func__);
 
+	// Start timer
+	callout_init_mtx(&sc->sc_phy_callout, &sc->sc_mtx, 0);
+
+	AR40XX_LOCK(sc);
+	ar40xx_tick(sc);
+	AR40XX_UNLOCK(sc);
+
 	return (0);
 error:
 	/* XXX TODO: free resources */
@@ -250,6 +272,10 @@ static int
 ar40xx_detach(device_t dev)
 {
 	struct ar40xx_softc *sc = device_get_softc(dev);
+
+	device_printf(sc->sc_dev, "%s: called\n", __func__);
+
+	callout_drain(&sc->sc_phy_callout);
 
 	mtx_destroy(&sc->sc_mtx);
 

@@ -69,6 +69,9 @@ struct ar40xx_softc {
 	/* ess-switch reset resource */
 	hwreset_t	sc_ess_rst;
 
+	/* phy update callout timer */
+	struct callout	sc_phy_callout;
+
 	/* memory for the ess-psgmii config interface */
 	bus_space_tag_t		sc_psgmii_mem_tag;
 	bus_space_handle_t	sc_psgmii_mem_handle;
@@ -76,6 +79,7 @@ struct ar40xx_softc {
 
 	/* reference to the ipq4019-mdio interface */
 	phandle_t		sc_mdio_phandle;
+	device_t		sc_mdio_dev;
 
 	struct {
 		uint32_t switch_mac_mode;
