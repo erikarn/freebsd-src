@@ -89,8 +89,11 @@ qcom_ipq4018_mdio_detach(device_t dev)
 static int
 qcom_ipq4018_mdio_attach(device_t dev)
 {
+	phandle_t node;
 	struct qcom_ipq4018_mdio_softc *sc = device_get_softc(dev);
 	int error = 0;
+
+	node = ofw_bus_get_node(dev);
 
 	sc->sc_dev = dev;
 	sc->sc_debug = 0;
@@ -117,6 +120,8 @@ qcom_ipq4018_mdio_attach(device_t dev)
 		goto error;
 
 	}
+
+	OF_device_register_xref(OF_xref_from_node(node), dev);
 
 	return (0);
 error:
