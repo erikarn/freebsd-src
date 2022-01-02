@@ -180,8 +180,10 @@ qcom_ipq4018_mdio_readreg(device_t dev, int phy, int reg)
 	uint32_t ret;
 
 	/* XXX TODO: linux rejects clause 45 addresses here? */
+#if 0
 	device_printf(dev, "%s: called; phy=0x%x reg=0x%x\n",
 	    __func__, phy, reg);
+#endif
 
 	MDIO_LOCK(sc);
 	if (qcom_ipq4018_mdio_wait(sc) != 0) {
@@ -209,7 +211,9 @@ qcom_ipq4018_mdio_readreg(device_t dev, int phy, int reg)
 	ret = MDIO_READ(sc, QCOM_IPQ4018_MDIO_REG_READ);
 	MDIO_UNLOCK(sc);
 
+#if 0
 	device_printf(dev, "%s: -> 0x%x\n", __func__, ret);
+#endif
 
 	return (ret);
 }
@@ -221,8 +225,10 @@ qcom_ipq4018_mdio_writereg(device_t dev, int phy, int reg, int value)
 
 	/* XXX TODO: linux rejects clause 45 addresses here? */
 
+#if 0
 	device_printf(dev, "%s: called; phy=0x%x reg=0x%x val=0x%x\n",
 	    __func__, phy, reg, value);
+#endif
 
 	MDIO_LOCK(sc);
 	if (qcom_ipq4018_mdio_wait(sc) != 0) {
