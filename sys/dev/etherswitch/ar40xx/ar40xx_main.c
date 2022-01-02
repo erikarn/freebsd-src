@@ -232,6 +232,12 @@ ar40xx_attach(device_t dev)
 		    __func__, ret);
 		goto error;
 	}
+	ret = clk_enable(sc->sc_ess_clk);
+	if (ret != 0) {
+		device_printf(dev, "%s: failed to enable clock (%d)\n",
+		    __func__, ret);
+		goto error;
+	}
 
 	// get reset
 	ret = hwreset_get_by_ofw_name(dev, 0, "ess_rst", &sc->sc_ess_rst);
