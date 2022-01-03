@@ -57,6 +57,7 @@
 struct ar40xx_softc {
 	struct mtx	sc_mtx;		/* serialize access to softc */
 	device_t	sc_dev;
+	uint32_t	sc_debug;
 
 	/* ess-switch memory resource */
 	struct resource	*sc_ess_mem_res;
