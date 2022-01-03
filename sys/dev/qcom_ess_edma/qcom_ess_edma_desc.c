@@ -152,6 +152,7 @@ qcom_ess_edma_desc_ring_setup(struct qcom_ess_edma_softc *sc,
 	    &ring->hw_desc_paddr, BUS_DMA_NOWAIT);
 	bus_dmamap_sync(ring->hw_ring_dma_tag, ring->hw_desc_map,
 	    BUS_DMASYNC_PREWRITE);
+	device_printf(sc->sc_dev, "%s: PADDR=0x%08lx\n", __func__, ring->hw_desc_paddr);
 
 	/*
 	 * All done, initialise state.
@@ -256,9 +257,9 @@ qcom_ess_edma_desc_ring_get_hw_desc(struct qcom_ess_edma_softc *sc,
 	if (index >= ring->ring_count)
 		return (NULL);
 
-	p = (char *) ring->sw_desc;
+	p = (char *) ring->hw_desc;
 
-	return (void *) (p + (ring->sw_entry_size * index));
+	return (void *) (p + (ring->hw_entry_size * index));
 }
 
 /*
