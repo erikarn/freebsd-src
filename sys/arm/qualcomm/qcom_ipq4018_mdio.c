@@ -239,14 +239,14 @@ qcom_ipq4018_mdio_writereg(device_t dev, int phy, int reg, int value)
 	/* Set phy/reg values */
 	qcom_ipq4018_mdio_set_phy_reg_addr(sc, phy, reg);
 
+	/* Write command */
+	MDIO_WRITE(sc, QCOM_IPQ4018_MDIO_REG_WRITE, value);
+	MDIO_BARRIER_WRITE(sc);
+
 	/* Issue write command */
 	MDIO_WRITE(sc, QCOM_IPQ4018_MDIO_REG_CMD,
 	    QCOM_IPQ4018_MDIO_REG_CMD_ACCESS_START |
 	    QCOM_IPQ4018_MDIO_REG_CMD_ACCESS_CODE_WRITE);
-	MDIO_BARRIER_WRITE(sc);
-
-	/* Write command */
-	MDIO_WRITE(sc, QCOM_IPQ4018_MDIO_REG_WRITE, value);
 	MDIO_BARRIER_WRITE(sc);
 
 	/* Wait for completion */
