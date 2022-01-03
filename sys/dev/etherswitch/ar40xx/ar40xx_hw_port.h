@@ -31,6 +31,9 @@
 
 extern	int ar40xx_hw_port_init(struct ar40xx_softc *sc, int port);
 extern	int ar40xx_hw_port_cpuport_setup(struct ar40xx_softc *sc);
+extern	int ar40xx_hw_port_link_up(struct ar40xx_softc *sc, int port);
+extern	int ar40xx_hw_port_link_down(struct ar40xx_softc *sc, int port);
+
 extern	int ar40xx_hw_port_setup(struct ar40xx_softc *sc, int port,
 	    uint32_t members);
 
