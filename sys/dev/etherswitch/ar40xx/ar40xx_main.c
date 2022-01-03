@@ -68,6 +68,7 @@
 #include <dev/etherswitch/ar40xx/ar40xx_hw.h>
 #include <dev/etherswitch/ar40xx/ar40xx_hw_psgmii.h>
 #include <dev/etherswitch/ar40xx/ar40xx_hw_port.h>
+#include <dev/etherswitch/ar40xx/ar40xx_hw_mib.h>
 
 #include "mdio_if.h"
 #include "miibus_if.h"
@@ -123,6 +124,91 @@ ar40xx_writephy(device_t dev, int phy, int reg, int val)
 	struct ar40xx_softc *sc = device_get_softc(dev);
 
 	return MDIO_WRITEREG(sc->sc_mdio_dev, phy, reg, val);
+}
+
+static int
+ar40xx_sysctl_dump_port_state(SYSCTL_HANDLER_ARGS)
+{
+	struct ar40xx_softc *sc = arg1;
+	int val = 0;
+	int error;
+	int i;
+
+	(void) i; (void) sc;
+
+	error = sysctl_handle_int(oidp, &val, 0, req);
+	if (error || !req->newptr)
+		return (error);
+
+	if (val < 0 || val > 5) {
+		return (EINVAL);
+	}
+
+	AR40XX_LOCK(sc);
+
+	device_printf(sc->sc_dev, "port %d: PORT_STATUS=0x%08x\n", val, AR40XX_REG_READ(sc, AR40XX_REG_PORT_STATUS(val)));
+	device_printf(sc->sc_dev, "port %d: PORT_HEADER=0x%08x\n", val, AR40XX_REG_READ(sc, AR40XX_REG_PORT_HEADER(val)));
+	device_printf(sc->sc_dev, "port %d: PORT_VLAN0=0x%08x\n", val, AR40XX_REG_READ(sc, AR40XX_REG_PORT_VLAN0(val)));
+	device_printf(sc->sc_dev, "port %d: PORT_VLAN1=0x%08x\n", val, AR40XX_REG_READ(sc, AR40XX_REG_PORT_VLAN1(val)));
+	device_printf(sc->sc_dev, "port %d: PORT_LOOKUP=0x%08x\n", val, AR40XX_REG_READ(sc, AR40XX_REG_PORT_LOOKUP(val)));
+	device_printf(sc->sc_dev, "port %d: PORT_HOL_CTRL1=0x%08x\n", val, AR40XX_REG_READ(sc, AR40XX_REG_PORT_HOL_CTRL1(val)));
+	device_printf(sc->sc_dev, "port %d: PORT_FLOWCTRL_THRESH=0x%08x\n", val, AR40XX_REG_READ(sc, AR40XX_REG_PORT_FLOWCTRL_THRESH(val)));
+
+
+	AR40XX_UNLOCK(sc);
+
+	return (0);
+}
+
+static int
+ar40xx_sysctl_dump_port_mibstats(SYSCTL_HANDLER_ARGS)
+{
+	struct ar40xx_softc *sc = arg1;
+	int val = 0;
+	int error;
+	int i;
+
+	(void) i; (void) sc;
+
+	error = sysctl_handle_int(oidp, &val, 0, req);
+	if (error || !req->newptr)
+		return (error);
+
+	if (val < 0 || val > 5) {
+		return (EINVAL);
+	}
+
+	AR40XX_LOCK(sc);
+
+	/* Yes, this snapshots all ports */
+	(void) ar40xx_hw_mib_capture(sc);
+	(void) ar40xx_hw_mib_fetch(sc, val);
+
+	AR40XX_UNLOCK(sc);
+
+	return (0);
+}
+
+
+static int
+ar40xx_sysctl_attach(struct ar40xx_softc *sc)
+{
+	struct sysctl_ctx_list *ctx = device_get_sysctl_ctx(sc->sc_dev);
+	struct sysctl_oid *tree = device_get_sysctl_tree(sc->sc_dev);
+
+	SYSCTL_ADD_INT(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
+	    "debug", CTLFLAG_RW, &sc->sc_debug, 0,
+	    "debugging flags");
+
+	SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
+	    "port_state", CTLTYPE_INT | CTLFLAG_RW, sc,
+	    0, ar40xx_sysctl_dump_port_state, "I", "");
+
+	SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
+	    "port_mibstats", CTLTYPE_INT | CTLFLAG_RW, sc,
+	    0, ar40xx_sysctl_dump_port_mibstats, "I", "");
+
+	return (0);
 }
 
 static int
@@ -307,6 +393,8 @@ ar40xx_attach(device_t dev)
 	AR40XX_LOCK(sc);
 	ar40xx_tick(sc);
 	AR40XX_UNLOCK(sc);
+
+	ar40xx_sysctl_attach(sc);
 
 	return (0);
 error:
