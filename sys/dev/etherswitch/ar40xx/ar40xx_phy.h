@@ -31,6 +31,7 @@
 
 extern	int ar40xx_phy_tick(struct ar40xx_softc *sc);
 extern	int ar40xx_attach_phys(struct ar40xx_softc *sc);
+extern	int ar40xx_hw_phy_get_ids(struct ar40xx_softc *sc);
 
 #endif	/* __AR40XX_PHY_H__ */
 

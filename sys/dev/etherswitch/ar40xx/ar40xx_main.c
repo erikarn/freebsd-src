@@ -255,8 +255,14 @@ ar40xx_attach(device_t dev)
 
 	AR40XX_LOCK(sc);
 
+	// Initial PSGMII/RGMII port configuration
+	ret = ar40xx_hw_psgmii_init_config(sc);
+
 	// ess reset
 	ret = ar40xx_hw_ess_reset(sc);
+
+	// check the PHY IDs for each of the PHYs from 0..4.
+	ret = ar40xx_hw_phy_get_ids(sc);
 
 	// psgmii_self_test
 	ret = ar40xx_hw_psgmii_self_test(sc);

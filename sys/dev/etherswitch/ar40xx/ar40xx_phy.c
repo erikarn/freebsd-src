@@ -190,3 +190,19 @@ ar40xx_attach_phys(struct ar40xx_softc *sc)
 	}
 	return (0);
 }
+
+int
+ar40xx_hw_phy_get_ids(struct ar40xx_softc *sc)
+{
+	int phy;
+	uint32_t id1, id2;
+
+	for (phy = 0; phy < AR40XX_NUM_PHYS; phy++) {
+		id1 = MDIO_READREG(sc->sc_mdio_dev, phy, 2);
+		id2 = MDIO_READREG(sc->sc_mdio_dev, phy, 3);
+		device_printf(sc->sc_dev, "%s: PHY %d: ID1=0x%04x, ID2=0x%04x\n",
+		    __func__, phy, id1, id2);
+	}
+
+	return (0);
+}

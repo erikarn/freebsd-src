@@ -65,6 +65,7 @@
 #include <dev/etherswitch/ar40xx/ar40xx_var.h>
 #include <dev/etherswitch/ar40xx/ar40xx_reg.h>
 #include <dev/etherswitch/ar40xx/ar40xx_hw.h>
+#include <dev/etherswitch/ar40xx/ar40xx_phy.h>
 #include <dev/etherswitch/ar40xx/ar40xx_hw_mdio.h>
 #include <dev/etherswitch/ar40xx/ar40xx_hw_psgmii.h>
 
@@ -323,6 +324,9 @@ ar40xx_hw_psgmii_self_test(struct ar40xx_softc *sc)
 
 	ar40xx_hw_malibu_psgmii_ess_reset(sc);
 
+	// check the PHY IDs for each of the PHYs from 0..4.
+	(void) ar40xx_hw_phy_get_ids(sc);
+
 	/* switch to access MII reg for copper */
 	MDIO_WRITEREG(sc->sc_mdio_dev, 4, 0x1f, 0x8500);
 	for (phy = 0; phy < AR40XX_NUM_PORTS - 1; phy++) {
@@ -406,6 +410,28 @@ ar40xx_hw_psgmii_self_test_clean(struct ar40xx_softc *sc)
 
 	/* clear fdb entry */
 	ar40xx_hw_atu_flush(sc);
+
+	return (0);
+}
+
+int
+ar40xx_hw_psgmii_init_config(struct ar40xx_softc *sc)
+{
+	uint32_t reg;
+
+	/*
+	 * This is based on what I found in uboot - it configures
+	 * the initial ESS interconnect to either be PSGMII
+	 * or RGMII.
+	 */
+	
+	/* For now, just assume PSGMII and fix it in post. */
+	reg = ar40xx_hw_psgmii_reg_read(sc, 0x78c); // PSGMIIPHY_PLL_VCO_RELATED_CTRL
+	device_printf(sc->sc_dev, "%s: PSGMIIPHY_PLL_VCO_RELATED_CTRL=0x%08x\n", __func__, reg);
+	reg = ar40xx_hw_psgmii_reg_read(sc, 0x09c); // PSGMIIPHY_VCO_CALIBRATION_CTRL
+	device_printf(sc->sc_dev, "%s: PSGMIIPHY_VCO_CALIBRATION_CTRL=0x%08x\n", __func__, reg);
+
+	/* XXX TODO: actually program in the PSGMII/RGMII stuff? */
 
 	return (0);
 }
