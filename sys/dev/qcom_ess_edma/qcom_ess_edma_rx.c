@@ -42,6 +42,8 @@ __FBSDID("$FreeBSD$");
 #include <sys/mbuf.h>
 #include <sys/endian.h>
 
+#include <net/ethernet.h>
+
 #include <machine/bus.h>
 #include <machine/resource.h>
 

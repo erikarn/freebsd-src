@@ -42,6 +42,8 @@ __FBSDID("$FreeBSD$");
 #include <sys/gpio.h>
 #include <sys/mbuf.h>
 
+#include <net/ethernet.h>
+
 #include <machine/bus.h>
 #include <machine/resource.h>
 #include <dev/gpio/gpiobusvar.h>
@@ -56,6 +58,7 @@ __FBSDID("$FreeBSD$");
 #include <dev/qcom_ess_edma/qcom_ess_edma_desc.h>
 #include <dev/qcom_ess_edma/qcom_ess_edma_rx.h>
 #include <dev/qcom_ess_edma/qcom_ess_edma_debug.h>
+#include <dev/qcom_ess_edma/qcom_ess_edma_gmac.h>
 
 static int
 qcom_ess_edma_probe(device_t dev)
@@ -303,7 +306,6 @@ qcom_ess_edma_attach_sysctl(struct qcom_ess_edma_softc *sc)
 	    0, qcom_ess_edma_sysctl_dump_state, "I", "");
 
 	return (0);
-
 }
 
 static int
@@ -381,6 +383,36 @@ qcom_ess_edma_attach(device_t dev)
 	sc->sc_state.wol_intr_mask = 0;
 	sc->sc_state.intr_sw_idx_w = EDMA_INTR_SW_IDX_W_TYPE;
 
+	/*
+	 * Parse out the gmac count so we can start parsing out
+	 * the gmac list and create us some ifnets.
+	 */
+	if (OF_getencprop(ofw_bus_get_node(dev), "qcom,num_gmac",
+	    &sc->sc_config.num_gmac, sizeof(uint32_t)) > 0) {
+		device_printf(sc->sc_dev, "Creating %d GMACs\n",
+		    sc->sc_config.num_gmac);
+	} else {
+		device_printf(sc->sc_dev, "Defaulting to 1 GMAC\n");
+		sc->sc_config.num_gmac = 1;
+	}
+	if (sc->sc_config.num_gmac > QCOM_ESS_EDMA_MAX_NUM_GMACS) {
+		device_printf(sc->sc_dev, "Capping GMACs to %d\n",
+		    QCOM_ESS_EDMA_MAX_NUM_GMACS);
+		sc->sc_config.num_gmac = QCOM_ESS_EDMA_MAX_NUM_GMACS;
+	}
+
+	/*
+	 * And now, create some gmac entries here; we'll create the
+	 * ifnet's once this is all done.
+	 */
+	for (i = 0; i < sc->sc_config.num_gmac; i++) {
+		ret = qcom_ess_edma_gmac_parse(sc, i);
+		if (ret != 0) {
+			device_printf(sc->sc_dev,
+			    "Failed to parse gmac%d\n", i);
+			goto error;
+		}
+	}
 
 	/* allocate tx rings */
 	for (i = 0; i < QCOM_ESS_EDMA_NUM_TX_RINGS; i++) {
@@ -403,6 +435,17 @@ qcom_ess_edma_attach(device_t dev)
 		if (qcom_ess_edma_rx_ring_setup(sc, &sc->sc_rx_ring[i]) != 0)
 			goto error;
 	}
+
+	/* Create ifnets */
+	for (i = 0; i < sc->sc_config.num_gmac; i++) {
+		ret = qcom_ess_edma_gmac_create_ifnet(sc, i);
+		if (ret != 0) {
+			device_printf(sc->sc_dev,
+			    "Failed to create ifnet for gmac%d\n", i);
+			goto error;
+		}
+	}
+
 
 	/*
 	 * (if there's no ess-switch / we're a single phy, we
@@ -459,7 +502,6 @@ qcom_ess_edma_attach(device_t dev)
 
 	EDMA_UNLOCK(sc);
 
-	device_printf(dev, "%s: Ready\n", __func__);
 	return (0);
 
 error_locked:

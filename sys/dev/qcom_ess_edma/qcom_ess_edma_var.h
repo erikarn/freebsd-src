@@ -76,6 +76,8 @@
 #define	EDMA_TX_RING_SIZE		128
 #define	EDMA_RX_RING_SIZE		128
 
+#define	QCOM_ESS_EDMA_MAX_NUM_GMACS	5
+
 struct qcom_ess_edma_softc;
 
 /*
@@ -135,6 +137,20 @@ struct qcom_ess_edma_sw_desc_rx {
 	bus_addr_t		m_physaddr;
 };
 
+struct qcom_ess_edma_gmac {
+	struct qcom_ess_edma_softc	*sc;
+	int				id;
+	bool				enabled;
+	/* Native VLAN ID */
+	int				vlan_id;
+	/* Switch portmask for this instance */
+	int				port_mask;
+	/* MAC address for this ifnet (from device tree) */
+	struct ether_addr		eaddr;
+	/* ifnet interface! */
+	struct ifnet			*ifp;
+};
+
 struct qcom_ess_edma_softc {
 	device_t		sc_dev;
 	struct mtx		sc_mtx;
@@ -148,6 +164,8 @@ struct qcom_ess_edma_softc {
 
 	struct qcom_ess_edma_desc_ring sc_tx_ring[QCOM_ESS_EDMA_NUM_TX_RINGS];
 	struct qcom_ess_edma_desc_ring sc_rx_ring[QCOM_ESS_EDMA_NUM_RX_RINGS];
+
+	struct qcom_ess_edma_gmac	sc_gmac[QCOM_ESS_EDMA_MAX_NUM_GMACS];
 
 	struct {
 		uint32_t num_gmac;

@@ -1,0 +1,240 @@
+/*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
+ * Copyright (c) 2021 Adrian Chadd <adrian@FreeBSD.org>
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice unmodified, this list of conditions, and the following
+ *    disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
+
+#include <sys/cdefs.h>
+__FBSDID("$FreeBSD$");
+
+#include <sys/param.h>
+#include <sys/systm.h>
+#include <sys/bus.h>
+
+#include <sys/kernel.h>
+#include <sys/module.h>
+#include <sys/rman.h>
+#include <sys/lock.h>
+#include <sys/malloc.h>
+#include <sys/mutex.h>
+#include <sys/gpio.h>
+#include <sys/mbuf.h>
+#include <sys/socket.h>
+#include <sys/sockio.h>
+
+#include <net/if.h>
+#include <net/if_var.h>
+#include <net/if_media.h>
+#include <net/ethernet.h>
+#include <net/if_types.h>
+
+#include <machine/bus.h>
+#include <machine/resource.h>
+#include <dev/gpio/gpiobusvar.h>
+
+#include <dev/fdt/fdt_common.h>
+#include <dev/ofw/ofw_bus.h>
+#include <dev/ofw/ofw_bus_subr.h>
+
+#include <dev/qcom_ess_edma/qcom_ess_edma_var.h>
+#include <dev/qcom_ess_edma/qcom_ess_edma_reg.h>
+#include <dev/qcom_ess_edma/qcom_ess_edma_hw.h>
+#include <dev/qcom_ess_edma/qcom_ess_edma_desc.h>
+#include <dev/qcom_ess_edma/qcom_ess_edma_rx.h>
+#include <dev/qcom_ess_edma/qcom_ess_edma_debug.h>
+#include <dev/qcom_ess_edma/qcom_ess_edma_gmac.h>
+
+static int
+qcom_ess_edma_gmac_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
+{
+	struct qcom_ess_edma_gmac *gmac = ifp->if_softc;
+	struct qcom_ess_edma_softc *sc = gmac->sc;
+	int error;
+
+	/* XXX TODO */
+	switch (command) {
+	case SIOCSIFFLAGS:
+		if ((ifp->if_flags & IFF_UP) != 0) {
+			/* up */
+			device_printf(sc->sc_dev, "%s: gmac%d: IFF_UP\n",
+			    __func__,
+			    gmac->id);
+		} else if ((ifp->if_drv_flags & IFF_DRV_RUNNING) != 0) {
+			/* down */
+			ifp->if_drv_flags &= ~IFF_DRV_RUNNING;
+			device_printf(sc->sc_dev, "%s: gmac%d: IF down\n",
+			    __func__,
+			    gmac->id);
+		}
+		error = 0;
+		break;
+	default:
+		error = ether_ioctl(ifp, command, data);
+		break;
+	}
+
+	return (error);
+}
+
+static void
+qcom_ess_edma_gmac_init(void *arg)
+{
+	struct qcom_ess_edma_gmac *gmac = arg;
+	struct qcom_ess_edma_softc *sc = gmac->sc;
+
+	/* XXX TODO */
+	device_printf(sc->sc_dev, "%s: gmac%d: called\n",
+	    __func__,
+	    gmac->id);
+}
+
+static int
+qcom_ess_edma_gmac_transmit(struct ifnet *ifp, struct mbuf *m)
+{
+	struct qcom_ess_edma_gmac *gmac = ifp->if_softc;
+	struct qcom_ess_edma_softc *sc = gmac->sc;
+
+	device_printf(sc->sc_dev, "%s: gmac%d: called\n",
+	    __func__,
+	    gmac->id);
+
+	m_free(m);
+	return (0);
+}
+
+static void
+qcom_ess_edma_gmac_qflush(struct ifnet *ifp)
+{
+	struct qcom_ess_edma_gmac *gmac = ifp->if_softc;
+	struct qcom_ess_edma_softc *sc = gmac->sc;
+
+	device_printf(sc->sc_dev, "%s: gmac%d: called\n",
+	    __func__,
+	    gmac->id);
+}
+
+int
+qcom_ess_edma_gmac_parse(struct qcom_ess_edma_softc *sc, int gmac_id)
+{
+	struct qcom_ess_edma_gmac *gmac;
+	char gmac_name[10];
+	uint32_t vlan_tag[2];
+	phandle_t p;
+	int len;
+
+	sprintf(gmac_name, "gmac%d", gmac_id);
+
+	gmac = &sc->sc_gmac[gmac_id];
+
+	/* Find our sub-device */
+	p = ofw_bus_find_child(ofw_bus_get_node(sc->sc_dev), gmac_name);
+	if (p <= 0) {
+		device_printf(sc->sc_dev,
+		    "%s: couldn't find %s\n", __func__,
+		    gmac_name);
+		return (ENOENT);
+	}
+
+	/* XXX TODO: local-mac-address */
+
+	/* vlan-tag - <id portmask> tuple */
+	len = OF_getproplen(p, "vlan_tag");
+	if (len != sizeof(vlan_tag)) {
+		device_printf(sc->sc_dev,
+		    "gmac%d: no vlan_tag field or invalid size/values\n",
+		    gmac_id);
+		return (EINVAL);
+	}
+	len = OF_getencprop(p, "vlan_tag", (void *) &vlan_tag,
+	    sizeof(vlan_tag));
+	if (len != sizeof(vlan_tag)) {
+		device_printf(sc->sc_dev,
+		    "gmac%d: couldn't parse vlan_tag field\n", gmac_id);
+		return (EINVAL);
+	}
+
+	/*
+	 * Setup the given gmac entry.
+	 */
+	gmac->sc = sc;
+	gmac->id = gmac_id;
+	gmac->enabled = true;
+	gmac->vlan_id = vlan_tag[0];
+	gmac->port_mask = vlan_tag[1];
+
+	/* random mac address for now */
+	arc4rand(&gmac->eaddr, sizeof(gmac->eaddr), 0);
+	/* Unicast */
+	gmac->eaddr.octet[0] &= 0xFE;
+	/* Locally administered. */
+	gmac->eaddr.octet[0] |= 0x02;
+
+	device_printf(sc->sc_dev,
+	    "gmac%d: MAC=%6D, vlan id=%d, port_mask=0x%04x\n",
+	    gmac_id,
+	    &gmac->eaddr, ":",
+	    gmac->vlan_id,
+	    gmac->port_mask);
+
+	return (0);
+}
+
+int
+qcom_ess_edma_gmac_create_ifnet(struct qcom_ess_edma_softc *sc, int gmac_id)
+{
+	struct qcom_ess_edma_gmac *gmac;
+	char gmac_name[10];
+
+	sprintf(gmac_name, "gmac%d", gmac_id);
+
+	gmac = &sc->sc_gmac[gmac_id];
+
+	/* Skip non-setup gmacs */
+	if (gmac->enabled == false)
+		return (0);
+
+	gmac->ifp = if_alloc(IFT_ETHER);
+	if (gmac->ifp == NULL) {
+		device_printf(sc->sc_dev, "gmac%d: couldn't allocate ifnet\n",
+		    gmac_id);
+		return (ENOSPC);
+	}
+
+	gmac->ifp->if_softc = gmac;
+
+	if_initname(gmac->ifp, "gmac", gmac_id);
+	gmac->ifp->if_flags = IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST;
+
+	gmac->ifp->if_ioctl = qcom_ess_edma_gmac_ioctl;
+	gmac->ifp->if_init = qcom_ess_edma_gmac_init;
+	gmac->ifp->if_transmit = qcom_ess_edma_gmac_transmit;
+	gmac->ifp->if_qflush = qcom_ess_edma_gmac_qflush;
+
+	gmac->ifp->if_capabilities |= IFCAP_VLAN_MTU;
+
+	ether_ifattach(gmac->ifp, (char *) &gmac->eaddr);
+
+	return (0);
+}
