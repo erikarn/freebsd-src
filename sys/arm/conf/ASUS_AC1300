@@ -61,6 +61,6 @@ device		w25n
 
 # 4 megabyte rootfs
 options 	MD_ROOT
-options 	MD_ROOT_SIZE=4096
+options 	MD_ROOT_SIZE=10000
 options 	ROOTDEVNAME=\"ufs:md0.uzip\"
 makeoptions 	MFS_IMAGE=/tftpboot/mfs-arm.uzip
