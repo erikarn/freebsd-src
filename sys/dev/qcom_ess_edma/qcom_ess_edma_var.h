@@ -86,6 +86,10 @@ struct qcom_ess_edma_intr {
 	struct resource			*irq_res;
 	int				irq_rid;
 	void				*irq_intr;
+
+	struct {
+		uint64_t	num_intr;
+	} stats;
 };
 
 /*
@@ -109,6 +113,12 @@ struct qcom_ess_edma_desc_ring {
 	uint16_t		next_to_fill;
 	uint16_t		next_to_clean;
 	uint16_t		pending_fill;
+
+	struct {
+		uint64_t	num_added;
+		uint64_t	num_cleaned;
+		uint64_t	num_dropped;
+	} stats;
 };
 
 /*

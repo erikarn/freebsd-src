@@ -52,6 +52,7 @@ __FBSDID("$FreeBSD$");
 #include <dev/qcom_ess_edma/qcom_ess_edma_var.h>
 #include <dev/qcom_ess_edma/qcom_ess_edma_reg.h>
 #include <dev/qcom_ess_edma/qcom_ess_edma_hw.h>
+#include <dev/qcom_ess_edma/qcom_ess_edma_debug.h>
 
 /*
  * Reset the ESS EDMA core.
@@ -360,16 +361,19 @@ qcom_ess_edma_hw_rfd_prod_index_update(struct qcom_ess_edma_softc *sc,
 
 	EDMA_LOCK_ASSERT(sc);
 
-	device_printf(sc->sc_dev, "%s: called; q=%d idx=0x%x\n",
+	QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_RX_RING_MGMT,
+	    "%s: called; q=%d idx=0x%x\n",
 	    __func__, queue, idx);
 
 	EDMA_REG_BARRIER_READ(sc);
 	reg = EDMA_REG_READ(sc, EDMA_REG_RFD_IDX_Q(queue));
-	device_printf(sc->sc_dev, "%s: q=%d reg was 0x%08x\n", __func__, queue, reg);
+	QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_RX_RING_MGMT,
+	    "%s: q=%d reg was 0x%08x\n", __func__, queue, reg);
 	reg &= ~EDMA_RFD_PROD_IDX_BITS;
 	reg |= idx;
 	EDMA_REG_WRITE(sc, EDMA_REG_RFD_IDX_Q(queue), reg);
-	device_printf(sc->sc_dev, "%s: q=%d reg now 0x%08x\n", __func__, queue, reg);
+	QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_RX_RING_MGMT,
+	    "%s: q=%d reg now 0x%08x\n", __func__, queue, reg);
 	EDMA_REG_BARRIER_WRITE(sc);
 
 	return (0);
@@ -481,7 +485,7 @@ qcom_ess_edma_hw_setup_rx(struct qcom_ess_edma_softc *sc)
 }
 
 /*
- * Note: this particular routine is a bit big and likely should be split
+ * XXX TODO: this particular routine is a bit big and likely should be split
  * across main, hw, desc, rx and tx.  But to expedite initial bring-up,
  * let's just commit the sins here and get receive up and going.
  */
@@ -498,7 +502,8 @@ qcom_ess_edma_hw_setup_txrx_desc_rings(struct qcom_ess_edma_softc *sc)
 	 */
 	for (i = 0; i < QCOM_ESS_EDMA_NUM_TX_RINGS; i++) {
 		/* Descriptor ring based address */
-		device_printf(sc->sc_dev, "TXQ[%d]: ring paddr=0x%08lx\n",
+		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_RING_MGMT,
+		    "TXQ[%d]: ring paddr=0x%08lx\n",
 		    i, sc->sc_tx_ring[i].hw_desc_paddr);
 		EDMA_REG_WRITE(sc, EDMA_REG_TPD_BASE_ADDR_Q(i),
 		    sc->sc_tx_ring[i].hw_desc_paddr);
@@ -524,7 +529,8 @@ qcom_ess_edma_hw_setup_txrx_desc_rings(struct qcom_ess_edma_softc *sc)
 
 	/* Set base addresses for each RFD ring */
 	for (i = 0; i < QCOM_ESS_EDMA_NUM_RX_RINGS; i++) {
-		device_printf(sc->sc_dev, "RXQ[%d]: ring paddr=0x%08lx\n",
+		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_RX_RING_MGMT,
+		    "RXQ[%d]: ring paddr=0x%08lx\n",
 		    i, sc->sc_rx_ring[i].hw_desc_paddr);
 		EDMA_REG_WRITE(sc, EDMA_REG_RFD_BASE_ADDR_Q(i),
 		    sc->sc_rx_ring[i].hw_desc_paddr);

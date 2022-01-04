@@ -50,6 +50,7 @@ __FBSDID("$FreeBSD$");
 #include <dev/qcom_ess_edma/qcom_ess_edma_hw.h>
 #include <dev/qcom_ess_edma/qcom_ess_edma_desc.h>
 #include <dev/qcom_ess_edma/qcom_ess_edma_rx.h>
+#include <dev/qcom_ess_edma/qcom_ess_edma_debug.h>
 
 int
 qcom_ess_edma_rx_ring_setup(struct qcom_ess_edma_softc *sc,
@@ -156,6 +157,8 @@ qcom_ess_edma_rx_buf_alloc(struct qcom_ess_edma_softc *sc,
 
 	ds->addr = htole32(segs[0].ds_addr);
 
+	ring->stats.num_added++;
+
 	return (0);
 }
 
@@ -187,7 +190,8 @@ qcom_ess_edma_rx_buf_clean(struct qcom_ess_edma_softc *sc,
 		return (NULL);
 	}
 
-	device_printf(sc->sc_dev, "%s: idx=%u, rxd=%p, ds=0x%p, maddr=0x%08x/0x%08lx\n",
+	QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_RX_RING,
+	    "%s: idx=%u, rxd=%p, ds=0x%p, maddr=0x%08x/0x%08lx\n",
 	    __func__, idx, rxd, ds, ds->addr, rxd->m_physaddr);
 
 	/* No mbuf? return null; it's fine */
@@ -210,6 +214,8 @@ qcom_ess_edma_rx_buf_clean(struct qcom_ess_edma_softc *sc,
 	 * VERY SLOW!  Once this is working it should just be removed.
 	 */
 	ds->addr = 0;
+
+	ring->stats.num_cleaned++;
 
 	return (m);
 }
@@ -269,7 +275,8 @@ qcom_ess_edma_rx_ring_fill(struct qcom_ess_edma_softc *sc,
 		prod_index = idx - 1;
 	(void) qcom_ess_edma_hw_rfd_prod_index_update(sc, queue, prod_index);
 
-	device_printf(sc->sc_dev, "%s: queue %d: added %d bufs, prod_idx=%u\n",
+	QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_RX_RING,
+	    "%s: queue %d: added %d bufs, prod_idx=%u\n",
 	    __func__, queue, n, prod_index);
 
 	return (0);
@@ -341,13 +348,18 @@ qcom_ess_edma_rx_ring_complete(struct qcom_ess_edma_softc *sc, int queue,
 		if (rrd->rrd7 & EDMA_RRD_DESC_VALID) {
 			len = rrd->rrd6 & EDMA_RRD_PKT_SIZE_MASK;
 			num_rfds = rrd->rrd1 & EDMA_RRD_NUM_RFD_MASK;;
-			port_id = (rrd->rrd1 >> EDMA_PORT_ID_SHIFT) & EDMA_PORT_ID_MASK;
-			priority = (rrd->rrd1 >> EDMA_RRD_PRIORITY_SHIFT) & EDMA_RRD_PRIORITY_MASK;
+			port_id = (rrd->rrd1 >> EDMA_PORT_ID_SHIFT)
+			    & EDMA_PORT_ID_MASK;
+			priority = (rrd->rrd1 >> EDMA_RRD_PRIORITY_SHIFT)
+			    & EDMA_RRD_PRIORITY_MASK;
 			hash_type = (rrd->rrd5 >> EDMA_HASH_TYPE_SHIFT);
 			hash_val = rrd->rrd2;
 			flow_cookie = rrd->rrd3 & EDMA_RRD_FLOW_COOKIE_MASK;
 			vlan = rrd->rrd4;
-			device_printf(sc->sc_dev, "%s: len=%d, num_rfds=%d, port_id=%d, priority=%d, hash_type=%d, hash_val=%d, flow_cookie=%d, vlan=%d\n",
+			QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_RX_FRAME,
+			    "%s: len=%d, num_rfds=%d, port_id=%d,"
+			    " priority=%d, hash_type=%d, hash_val=%d,"
+			    " flow_cookie=%d, vlan=%d\n",
 			    __func__,
 			    len,
 			    num_rfds,
@@ -357,7 +369,9 @@ qcom_ess_edma_rx_ring_complete(struct qcom_ess_edma_softc *sc, int queue,
 			    hash_val,
 			    flow_cookie,
 			    vlan);
-			device_printf(sc->sc_dev, "%s:   flags: L4 checksum fail=%d, 802.1q vlan=%d, 802.1ad vlan=%d\n",
+			QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_RX_FRAME,
+			    "%s:   flags: L4 checksum"
+			    " fail=%d, 802.1q vlan=%d, 802.1ad vlan=%d\n",
 			    __func__,
 			    !! (rrd->rrd6 & EDMA_RRD_CSUM_FAIL_MASK),
 			    !! (rrd->rrd7 & EDMA_RRD_CVLAN),
@@ -384,7 +398,8 @@ qcom_ess_edma_rx_ring_complete(struct qcom_ess_edma_softc *sc, int queue,
 
 	/* Refill ring if needed */
 	if (cleaned_count > 0) {
-		device_printf(sc->sc_dev, "%s: ring=%d, cleaned=%d\n",
+		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_RX_RING,
+		    "%s: ring=%d, cleaned=%d\n",
 		    __func__, queue, cleaned_count);
 		(void) qcom_ess_edma_rx_ring_fill(sc, queue, cleaned_count);
 		(void) qcom_ess_edma_hw_rfd_sw_cons_index_update(sc, queue,

@@ -53,6 +53,7 @@ __FBSDID("$FreeBSD$");
 #include <dev/qcom_ess_edma/qcom_ess_edma_reg.h>
 #include <dev/qcom_ess_edma/qcom_ess_edma_hw.h>
 #include <dev/qcom_ess_edma/qcom_ess_edma_desc.h>
+#include <dev/qcom_ess_edma/qcom_ess_edma_debug.h>
 
 static void
 qcom_ess_edma_desc_map_addr(void *arg, bus_dma_segment_t *segs, int nsegs,
@@ -152,7 +153,8 @@ qcom_ess_edma_desc_ring_setup(struct qcom_ess_edma_softc *sc,
 	    &ring->hw_desc_paddr, BUS_DMA_NOWAIT);
 	bus_dmamap_sync(ring->hw_ring_dma_tag, ring->hw_desc_map,
 	    BUS_DMASYNC_PREWRITE);
-	device_printf(sc->sc_dev, "%s: PADDR=0x%08lx\n", __func__, ring->hw_desc_paddr);
+	QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_DESCRIPTOR_SETUP,
+	    "%s: PADDR=0x%08lx\n", __func__, ring->hw_desc_paddr);
 
 	/*
 	 * All done, initialise state.

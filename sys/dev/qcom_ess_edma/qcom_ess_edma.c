@@ -55,6 +55,7 @@ __FBSDID("$FreeBSD$");
 #include <dev/qcom_ess_edma/qcom_ess_edma_hw.h>
 #include <dev/qcom_ess_edma/qcom_ess_edma_desc.h>
 #include <dev/qcom_ess_edma/qcom_ess_edma_rx.h>
+#include <dev/qcom_ess_edma/qcom_ess_edma_debug.h>
 
 static int
 qcom_ess_edma_probe(device_t dev)
@@ -146,8 +147,11 @@ qcom_ess_edma_intr(void *arg)
 	struct qcom_ess_edma_intr *intr = arg;
 	struct qcom_ess_edma_softc *sc = intr->sc;
 
-	device_printf(sc->sc_dev, "%s: called; rid=%d\n", __func__,
+	QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_INTERRUPT,
+	    "%s: called; rid=%d\n", __func__,
 	    intr->irq_rid);
+
+	intr->stats.num_intr++;
 
 	/*
 	 * The RX queue in question starts at QCOM_ESS_EDMA_NUM_TX_IRQS.
@@ -166,7 +170,8 @@ qcom_ess_edma_intr(void *arg)
 
 		rx_queue = intr->irq_rid - QCOM_ESS_EDMA_NUM_TX_IRQS;
 		/* Receive queue */
-		device_printf(sc->sc_dev, "%s: called; RX queue %d\n",
+		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_INTERRUPT,
+		    "%s: called; RX queue %d\n",
 		    __func__, rx_queue);
 
 		EDMA_LOCK(sc);
@@ -209,7 +214,8 @@ qcom_ess_edma_setup_intr(struct qcom_ess_edma_softc *sc,
     struct qcom_ess_edma_intr *intr, int rid)
 {
 
-	device_printf(sc->sc_dev, "%s: setting up interrupt id %d\n", __func__, rid);
+	QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_INTERRUPT,
+	    "%s: setting up interrupt id %d\n", __func__, rid);
 	intr->sc = sc;
 	intr->irq_rid = rid;
 	intr->irq_res = bus_alloc_resource_any(sc->sc_dev,
@@ -257,6 +263,16 @@ qcom_ess_edma_sysctl_dump_state(SYSCTL_HANDLER_ARGS)
 		    EDMA_REG_READ(sc, EDMA_REG_RFD_IDX_Q(i)) & EDMA_RFD_PROD_IDX_BITS,
 		    qcom_ess_edma_hw_rfd_get_cons_index(sc, i),
 		    EDMA_REG_READ(sc, EDMA_REG_RX_SW_CONS_IDX_Q(i)));
+		device_printf(sc->sc_dev, "RXQ[%d]: num_added=%llu, num_cleaned=%llu\n",
+		    i,
+		    sc->sc_rx_ring[i].stats.num_added,
+		    sc->sc_rx_ring[i].stats.num_cleaned);
+	}
+
+	for (i = 0; i < QCOM_ESS_EDMA_NUM_RX_IRQS; i++) {
+		device_printf(sc->sc_dev, "INTR_RXQ[%d]: num_intr=%llu\n",
+		    i,
+		    sc->sc_rx_irq[i].stats.num_intr);
 	}
 
 	device_printf(sc->sc_dev, "EDMA_REG_TXQ_CTRL=0x%08x\n", EDMA_REG_READ(sc, EDMA_REG_TXQ_CTRL));
