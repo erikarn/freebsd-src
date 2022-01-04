@@ -156,6 +156,8 @@ struct qcom_ess_edma_gmac {
 	struct ether_addr		eaddr;
 	/* ifnet interface! */
 	struct ifnet			*ifp;
+	/* media interface */
+	struct ifmedia			ifm;
 };
 
 struct qcom_ess_edma_softc {

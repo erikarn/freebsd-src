@@ -41,7 +41,12 @@ __FBSDID("$FreeBSD$");
 #include <sys/mutex.h>
 #include <sys/mbuf.h>
 #include <sys/endian.h>
+#include <sys/socket.h>
+#include <sys/sockio.h>
 
+#include <net/if.h>
+#include <net/if_var.h>
+#include <net/if_media.h>
 #include <net/ethernet.h>
 
 #include <machine/bus.h>

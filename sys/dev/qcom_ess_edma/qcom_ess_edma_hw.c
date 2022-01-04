@@ -39,12 +39,16 @@ __FBSDID("$FreeBSD$");
 #include <sys/lock.h>
 #include <sys/malloc.h>
 #include <sys/mutex.h>
+#include <sys/socket.h>
+#include <sys/sockio.h>
 
+#include <net/if.h>
+#include <net/if_var.h>
+#include <net/if_media.h>
 #include <net/ethernet.h>
 
 #include <machine/bus.h>
 #include <machine/resource.h>
-#include <dev/gpio/gpiobusvar.h>
 
 #include <dev/fdt/fdt_common.h>
 #include <dev/ofw/ofw_bus.h>

@@ -67,10 +67,43 @@ __FBSDID("$FreeBSD$");
 #include <dev/qcom_ess_edma/qcom_ess_edma_gmac.h>
 
 static int
+qcom_ess_edma_gmac_mediachange(struct ifnet *ifp)
+{
+	struct qcom_ess_edma_gmac *gmac = ifp->if_softc;
+	struct qcom_ess_edma_softc *sc = gmac->sc;
+	struct ifmedia *ifm = &gmac->ifm;
+	struct ifmedia_entry *ife = ifm->ifm_cur;
+
+	if (IFM_TYPE(ifm->ifm_media) != IFM_ETHER)
+	return (EINVAL);
+
+	if (IFM_SUBTYPE(ife->ifm_media) == IFM_AUTO) {
+		device_printf(sc->sc_dev,
+		    "AUTO is not supported this MAC");
+		return (EINVAL);
+	}
+
+	/*
+	 * Ignore everything
+	 */
+	return (0);
+}
+
+static void
+qcom_ess_edma_gmac_mediastatus(struct ifnet *ifp, struct ifmediareq *ifmr)
+{
+
+	ifmr->ifm_status = IFM_AVALID | IFM_ACTIVE;
+	ifmr->ifm_active = IFM_ETHER | IFM_1000_T | IFM_FDX;
+}
+
+
+static int
 qcom_ess_edma_gmac_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 {
 	struct qcom_ess_edma_gmac *gmac = ifp->if_softc;
 	struct qcom_ess_edma_softc *sc = gmac->sc;
+	struct ifreq *ifr = (struct ifreq *) data;
 	int error;
 
 	/* XXX TODO */
@@ -81,6 +114,9 @@ qcom_ess_edma_gmac_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 			device_printf(sc->sc_dev, "%s: gmac%d: IFF_UP\n",
 			    __func__,
 			    gmac->id);
+			ifp->if_drv_flags |= IFF_DRV_RUNNING;
+			ifp->if_drv_flags &= ~IFF_DRV_OACTIVE;
+
 		} else if ((ifp->if_drv_flags & IFF_DRV_RUNNING) != 0) {
 			/* down */
 			ifp->if_drv_flags &= ~IFF_DRV_RUNNING;
@@ -89,6 +125,10 @@ qcom_ess_edma_gmac_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 			    gmac->id);
 		}
 		error = 0;
+		break;
+	case SIOCGIFMEDIA:
+	case SIOCSIFMEDIA:
+		error = ifmedia_ioctl(ifp, ifr, &gmac->ifm, command);
 		break;
 	default:
 		error = ether_ioctl(ifp, command, data);
@@ -233,6 +273,12 @@ qcom_ess_edma_gmac_create_ifnet(struct qcom_ess_edma_softc *sc, int gmac_id)
 	gmac->ifp->if_qflush = qcom_ess_edma_gmac_qflush;
 
 	gmac->ifp->if_capabilities |= IFCAP_VLAN_MTU;
+
+	/* Configure a hard-coded media */
+	ifmedia_init(&gmac->ifm, 0, qcom_ess_edma_gmac_mediachange,
+	    qcom_ess_edma_gmac_mediastatus);
+	ifmedia_add(&gmac->ifm, IFM_ETHER | IFM_1000_T | IFM_FDX, 0, NULL);
+	ifmedia_set(&gmac->ifm, IFM_ETHER | IFM_1000_T | IFM_FDX);
 
 	ether_ifattach(gmac->ifp, (char *) &gmac->eaddr);
 
