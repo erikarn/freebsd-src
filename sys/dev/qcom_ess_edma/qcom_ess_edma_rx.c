@@ -51,6 +51,42 @@ __FBSDID("$FreeBSD$");
 #include <dev/qcom_ess_edma/qcom_ess_edma_desc.h>
 #include <dev/qcom_ess_edma/qcom_ess_edma_rx.h>
 
+int
+qcom_ess_edma_rx_ring_setup(struct qcom_ess_edma_softc *sc,
+    struct qcom_ess_edma_desc_ring *ring)
+{
+	struct qcom_ess_edma_sw_desc_rx *rxd;
+	int i, ret;
+
+	for (i = 0; i < EDMA_RX_RING_SIZE; i++) {
+		rxd = qcom_ess_edma_desc_ring_get_sw_desc(sc, ring, i);
+		if (rxd == NULL) {
+			device_printf(sc->sc_dev,
+			    "ERROR; couldn't get sw desc (idx %d)\n", i);
+			return (EINVAL);
+		}
+		rxd->m = NULL;
+		ret = bus_dmamap_create(ring->buffer_dma_tag,
+		    BUS_DMA_NOWAIT,
+		    &rxd->m_dmamap);
+		if (ret != 0) {
+			device_printf(sc->sc_dev,
+			    "%s: failed to create dmamap (%d)\n",
+			    __func__, ret);
+		}
+	}
+
+	return (0);
+}
+
+int
+qcom_ess_edma_rx_ring_clean(struct qcom_ess_edma_softc *sc,
+    struct qcom_ess_edma_desc_ring *ring)
+{
+	device_printf(sc->sc_dev, "%s: TODO\n", __func__);
+	return (0);
+}
+
 /*
  * Allocate a receive buffer for the given ring/index, setup DMA.
  *
@@ -104,11 +140,12 @@ qcom_ess_edma_rx_buf_alloc(struct qcom_ess_edma_softc *sc,
 
 	/* Load dma map, get physical memory address of mbuf */
 	nsegs = 1;
+	m->m_pkthdr.len = m->m_len = sc->sc_config.rx_buf_size;
 	error = bus_dmamap_load_mbuf_sg(ring->buffer_dma_tag, rxd->m_dmamap,
 	    m, segs, &nsegs, 0);
-	if (error != 0) {
+	if (error != 0 || nsegs != 1) {
 		device_printf(sc->sc_dev,
-		    "ERROR: couldn't load mbuf dmamap (%d)\n", error);
+		    "ERROR: couldn't load mbuf dmamap (%d) (nsegs=%d)\n", error, nsegs);
 		m_free(m);
 		return (error);
 	}
@@ -144,11 +181,14 @@ qcom_ess_edma_rx_buf_clean(struct qcom_ess_edma_softc *sc,
 		return (NULL);
 	}
 	ds = qcom_ess_edma_desc_ring_get_hw_desc(sc, ring, idx);
-	if (rxd == NULL) {
+	if (ds == NULL) {
 		device_printf(sc->sc_dev,
 		    "ERROR; couldn't get hw desc (idx %d)\n", idx);
 		return (NULL);
 	}
+
+	device_printf(sc->sc_dev, "%s: idx=%u, rxd=%p, ds=0x%p, maddr=0x%08x/0x%08lx\n",
+	    __func__, idx, rxd, ds, ds->addr, rxd->m_physaddr);
 
 	/* No mbuf? return null; it's fine */
 	if (rxd->m == NULL) {
@@ -157,7 +197,7 @@ qcom_ess_edma_rx_buf_clean(struct qcom_ess_edma_softc *sc,
 
 	/* Flush mbuf */
 	bus_dmamap_sync(ring->buffer_dma_tag, rxd->m_dmamap,
-	    BUS_DMASYNC_POSTREAD);
+	    BUS_DMASYNC_POSTREAD | BUS_DMASYNC_POSTWRITE);
 
 	/* Unload */
 	bus_dmamap_unload(ring->buffer_dma_tag, rxd->m_dmamap);
@@ -231,6 +271,105 @@ qcom_ess_edma_rx_ring_fill(struct qcom_ess_edma_softc *sc,
 
 	device_printf(sc->sc_dev, "%s: queue %d: added %d bufs, prod_idx=%u\n",
 	    __func__, queue, n, prod_index);
+
+	return (0);
+}
+
+/*
+ * fetch, unmap the given mbuf
+ *
+struct mbuf *
+qcom_ess_edma_rx_buf_clean(struct qcom_ess_edma_softc *sc,
+    struct qcom_ess_edma_desc_ring *ring, int idx)
+*/
+
+
+/*
+ * Run through the RX ring, complete frames.
+ *
+ * For now they're simply freed and the ring is re-filled.
+ * Once that logic is working soundly we'll want to populate an
+ * mbuf list for the caller with completed mbufs so they can be
+ * dispatched up to the network stack.
+ */
+int
+qcom_ess_edma_rx_ring_complete(struct qcom_ess_edma_softc *sc, int queue,
+    struct mbufq *mq)
+{
+	struct qcom_ess_edma_desc_ring *ring;
+	struct qcom_ess_edma_sw_desc_rx *rxd;
+	int n, cleaned_count, len;
+	uint16_t sw_next_to_clean, hw_next_to_clean;
+	struct mbuf *m;
+	char *rrd;
+
+	EDMA_LOCK_ASSERT(sc);
+
+	ring = &sc->sc_rx_ring[queue];
+
+	qcom_ess_edma_desc_ring_flush_postupdate(sc, ring);
+
+	sw_next_to_clean = ring->next_to_clean;
+	hw_next_to_clean = 0;
+	cleaned_count = 0;
+
+	for (n = 0; n < EDMA_RX_RING_SIZE - 1; n++) {
+		rxd = qcom_ess_edma_desc_ring_get_sw_desc(sc, ring,
+		    sw_next_to_clean);
+		if (rxd == NULL) {
+			device_printf(sc->sc_dev,
+			    "ERROR; couldn't get sw desc (idx %d)\n",
+			        sw_next_to_clean);
+			return (EINVAL);
+		}
+
+		hw_next_to_clean = qcom_ess_edma_hw_rfd_get_cons_index(sc,
+		    queue);
+		if (hw_next_to_clean == sw_next_to_clean)
+			break;
+
+		/* Unmap the mbuf at this index */
+		m = qcom_ess_edma_rx_buf_clean(sc, ring, sw_next_to_clean);
+		sw_next_to_clean = (sw_next_to_clean + 1) % ring->ring_count;
+		cleaned_count++;
+
+		m->m_len = m->m_pkthdr.len = 16;
+//		m_print(m, 16);
+
+		/* Get the RFD header */
+		/*
+		 * XXX TODO: this is terrible; it should use the field defs;
+		 * it should handle fragmented receive frames, etc.
+		 */
+		rrd = mtod(m, char *);
+		if (rrd[15] & 0x80) {
+			len = ((rrd[13] & 0x3f) << 8) | rrd[12];
+		} else {
+			len = 0;
+		}
+
+		/* Payload starts after the RFD header */
+		m_adj(m, 16);
+
+		/* Set mbuf length now */
+		m->m_len = m->m_pkthdr.len = len;
+//		m_print(m, -1);
+
+		if (mbufq_enqueue(mq, m) != 0) {
+			/* XXX error count */
+			m_free(m);
+		}
+	}
+	ring->next_to_clean = sw_next_to_clean;
+
+	/* Refill ring if needed */
+	if (cleaned_count > 0) {
+		device_printf(sc->sc_dev, "%s: ring=%d, cleaned=%d\n",
+		    __func__, queue, cleaned_count);
+		(void) qcom_ess_edma_rx_ring_fill(sc, queue, cleaned_count);
+		(void) qcom_ess_edma_hw_rfd_sw_cons_index_update(sc, queue,
+		    ring->next_to_clean);
+	}
 
 	return (0);
 }

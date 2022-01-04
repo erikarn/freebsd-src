@@ -40,6 +40,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/malloc.h>
 #include <sys/mutex.h>
 #include <sys/gpio.h>
+#include <sys/mbuf.h>
 
 #include <machine/bus.h>
 #include <machine/resource.h>
@@ -105,6 +106,7 @@ qcom_ess_edma_detach(device_t dev)
 	}
 
 	for (i = 0; i < QCOM_ESS_EDMA_NUM_RX_RINGS; i++) {
+		(void) qcom_ess_edma_rx_ring_clean(sc, &sc->sc_rx_ring[i]);
 		(void) qcom_ess_edma_desc_ring_free(sc, &sc->sc_rx_ring[i]);
 	}
 
@@ -127,12 +129,15 @@ qcom_ess_edma_filter(void *arg)
 	struct qcom_ess_edma_intr *intr = arg;
 	struct qcom_ess_edma_softc *sc = intr->sc;
 
-	/* XXX TODO */
+	(void) sc;
 
+	/* XXX TODO */
+#if 0
 	device_printf(sc->sc_dev, "%s: called; rid=%d\n", __func__,
 	    intr->irq_rid);
+#endif
 
-	return (FILTER_HANDLED);
+	return (FILTER_SCHEDULE_THREAD);
 }
 
 static void
@@ -141,10 +146,62 @@ qcom_ess_edma_intr(void *arg)
 	struct qcom_ess_edma_intr *intr = arg;
 	struct qcom_ess_edma_softc *sc = intr->sc;
 
-	/* XXX TODO */
-
 	device_printf(sc->sc_dev, "%s: called; rid=%d\n", __func__,
 	    intr->irq_rid);
+
+	/*
+	 * The RX queue in question starts at QCOM_ESS_EDMA_NUM_TX_IRQS.
+	 * (eg if it's 16 then rid 16 == RX queue 0.)
+	 */
+	if (intr->irq_rid < QCOM_ESS_EDMA_NUM_TX_IRQS) {
+		/* Transmit queue */
+		device_printf(sc->sc_dev, "%s: called; TX queue %d, TODO\n",
+		    __func__, intr->irq_rid);
+		/* XXX TODO */
+	} else {
+		struct mbufq mq;
+		int rx_queue;
+
+		mbufq_init(&mq, EDMA_RX_RING_SIZE);
+
+		rx_queue = intr->irq_rid - QCOM_ESS_EDMA_NUM_TX_IRQS;
+		/* Receive queue */
+		device_printf(sc->sc_dev, "%s: called; RX queue %d\n",
+		    __func__, rx_queue);
+
+		EDMA_LOCK(sc);
+		/*
+		 * XXX TODO: should put this in the edma filter routine?
+		 *
+		 * Disable the interrupt for this ring.
+		 */
+		(void) qcom_ess_edma_hw_intr_rx_intr_set_enable(sc, rx_queue,
+		    false);
+
+		/*
+		 * Do receive work, get completed mbufs.
+		 */
+		(void) qcom_ess_edma_rx_ring_complete(sc, rx_queue, &mq);
+
+		/*
+		 * ACK the interrupt.
+		 */
+		(void) qcom_ess_edma_hw_intr_rx_ack(sc, rx_queue);
+
+		/*
+		 * Re-enable interrupt for this ring.
+		 */
+		(void) qcom_ess_edma_hw_intr_rx_intr_set_enable(sc, rx_queue,
+		    true);
+
+		EDMA_UNLOCK(sc);
+
+		/*
+		 * XXX TODO: push frames up into networking stack.
+		 * (XXX TODO: maybe defer this?)
+		 */
+		mbufq_drain(&mq);
+	}
 }
 
 static int
@@ -166,7 +223,8 @@ qcom_ess_edma_setup_intr(struct qcom_ess_edma_softc *sc,
 
 	if ((bus_setup_intr(sc->sc_dev, intr->irq_res,
 	    INTR_TYPE_NET | INTR_MPSAFE,
-	    qcom_ess_edma_filter, qcom_ess_edma_intr, sc, &intr->irq_intr))) {
+	    qcom_ess_edma_filter, qcom_ess_edma_intr, intr,
+	        &intr->irq_intr))) {
 		device_printf(sc->sc_dev,
 		    "ERROR: unable to register interrupt handler for"
 		    " IRQ %d\n", rid);
@@ -192,12 +250,13 @@ qcom_ess_edma_sysctl_dump_state(SYSCTL_HANDLER_ARGS)
 
 	EDMA_LOCK(sc);
 	for (i = 0; i < QCOM_ESS_EDMA_NUM_RX_RINGS; i++) {
-		device_printf(sc->sc_dev, "RXQ[%d]: prod=%u, cons=%u, hw prod=%u, hw cons=%u\n",
+		device_printf(sc->sc_dev, "RXQ[%d]: prod=%u, cons=%u, hw prod=%u, hw cons=%u, REG_SW_CONS_IDX=0x%08x\n",
 		    i,
 		    sc->sc_rx_ring[i].next_to_fill,
 		    sc->sc_rx_ring[i].next_to_clean,
 		    EDMA_REG_READ(sc, EDMA_REG_RFD_IDX_Q(i)) & EDMA_RFD_PROD_IDX_BITS,
-		    qcom_ess_edma_hw_rfd_get_cons_index(sc, i));
+		    qcom_ess_edma_hw_rfd_get_cons_index(sc, i),
+		    EDMA_REG_READ(sc, EDMA_REG_RX_SW_CONS_IDX_Q(i)));
 	}
 
 	device_printf(sc->sc_dev, "EDMA_REG_TXQ_CTRL=0x%08x\n", EDMA_REG_READ(sc, EDMA_REG_TXQ_CTRL));
@@ -324,6 +383,8 @@ qcom_ess_edma_attach(device_t dev)
 		    sizeof(struct qcom_ess_edma_sw_desc_rx),
 		    sizeof(struct qcom_ess_edma_rx_free_desc),
 		    ESS_EDMA_RX_BUFFER_ALIGN) != 0)
+			goto error;
+		if (qcom_ess_edma_rx_ring_setup(sc, &sc->sc_rx_ring[i]) != 0)
 			goto error;
 	}
 

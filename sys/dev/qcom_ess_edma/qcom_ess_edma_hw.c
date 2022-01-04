@@ -171,6 +171,22 @@ qcom_ess_edma_hw_intr_disable(struct qcom_ess_edma_softc *sc)
 }
 
 /*
+ * Enable/disable the given RX ring interrupt.
+ */
+int
+qcom_ess_edma_hw_intr_rx_intr_set_enable(struct qcom_ess_edma_softc *sc,
+    int rxq, bool state)
+{
+
+	EDMA_LOCK_ASSERT(sc);
+
+	EDMA_REG_WRITE(sc, EDMA_REG_RX_INT_MASK_Q(rxq), state ? 1 : 0);
+	EDMA_REG_BARRIER_WRITE(sc);
+
+	return (0);
+}
+
+/*
  * Enable interrupts.
  */
 int
@@ -215,6 +231,20 @@ qcom_ess_edma_hw_intr_status_clear(struct qcom_ess_edma_softc *sc)
 
 	return (0);
 }
+
+/*
+ * ACK the given RX queue ISR.
+ */
+int
+qcom_ess_edma_hw_intr_rx_ack(struct qcom_ess_edma_softc *sc, int rx_queue)
+{
+
+	EDMA_REG_WRITE(sc, EDMA_REG_RX_ISR, (1U << rx_queue));
+	(void) EDMA_REG_READ(sc, EDMA_REG_RX_ISR);
+
+	return (0);
+}
+
 
 /*
  * Configure the default RSS indirection table.
@@ -330,11 +360,16 @@ qcom_ess_edma_hw_rfd_prod_index_update(struct qcom_ess_edma_softc *sc,
 
 	EDMA_LOCK_ASSERT(sc);
 
+	device_printf(sc->sc_dev, "%s: called; q=%d idx=0x%x\n",
+	    __func__, queue, idx);
+
 	EDMA_REG_BARRIER_READ(sc);
 	reg = EDMA_REG_READ(sc, EDMA_REG_RFD_IDX_Q(queue));
+	device_printf(sc->sc_dev, "%s: q=%d reg was 0x%08x\n", __func__, queue, reg);
 	reg &= ~EDMA_RFD_PROD_IDX_BITS;
 	reg |= idx;
 	EDMA_REG_WRITE(sc, EDMA_REG_RFD_IDX_Q(queue), reg);
+	device_printf(sc->sc_dev, "%s: q=%d reg now 0x%08x\n", __func__, queue, reg);
 	EDMA_REG_BARRIER_WRITE(sc);
 
 	return (0);
