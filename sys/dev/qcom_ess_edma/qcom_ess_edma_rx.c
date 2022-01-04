@@ -301,7 +301,8 @@ qcom_ess_edma_rx_ring_complete(struct qcom_ess_edma_softc *sc, int queue,
 	int n, cleaned_count, len;
 	uint16_t sw_next_to_clean, hw_next_to_clean;
 	struct mbuf *m;
-	char *rrd;
+	struct qcom_edma_rx_return_desc *rrd;
+	int num_rfds, port_id, priority, hash_type, hash_val, flow_cookie, vlan;
 
 	EDMA_LOCK_ASSERT(sc);
 
@@ -334,16 +335,36 @@ qcom_ess_edma_rx_ring_complete(struct qcom_ess_edma_softc *sc, int queue,
 		cleaned_count++;
 
 		m->m_len = m->m_pkthdr.len = 16;
-//		m_print(m, 16);
 
-		/* Get the RFD header */
-		/*
-		 * XXX TODO: this is terrible; it should use the field defs;
-		 * it should handle fragmented receive frames, etc.
-		 */
-		rrd = mtod(m, char *);
-		if (rrd[15] & 0x80) {
-			len = ((rrd[13] & 0x3f) << 8) | rrd[12];
+		/* Get the RRD header */
+		rrd = mtod(m, struct qcom_edma_rx_return_desc *);
+		if (rrd->rrd7 & EDMA_RRD_DESC_VALID) {
+			len = rrd->rrd6 & EDMA_RRD_PKT_SIZE_MASK;
+			num_rfds = rrd->rrd1 & EDMA_RRD_NUM_RFD_MASK;;
+			port_id = (rrd->rrd1 >> EDMA_PORT_ID_SHIFT) & EDMA_PORT_ID_MASK;
+			priority = (rrd->rrd1 >> EDMA_RRD_PRIORITY_SHIFT) & EDMA_RRD_PRIORITY_MASK;
+			hash_type = (rrd->rrd5 >> EDMA_HASH_TYPE_SHIFT);
+			hash_val = rrd->rrd2;
+			flow_cookie = rrd->rrd3 & EDMA_RRD_FLOW_COOKIE_MASK;
+			vlan = rrd->rrd4;
+			device_printf(sc->sc_dev, "%s: len=%d, num_rfds=%d, port_id=%d, priority=%d, hash_type=%d, hash_val=%d, flow_cookie=%d, vlan=%d\n",
+			    __func__,
+			    len,
+			    num_rfds,
+			    port_id,
+			    priority,
+			    hash_type,
+			    hash_val,
+			    flow_cookie,
+			    vlan);
+			device_printf(sc->sc_dev, "%s:   flags: L4 checksum fail=%d, 802.1q vlan=%d, 802.1ad vlan=%d\n",
+			    __func__,
+			    !! (rrd->rrd6 & EDMA_RRD_CSUM_FAIL_MASK),
+			    !! (rrd->rrd7 & EDMA_RRD_CVLAN),
+			    !! (rrd->rrd1 & EDMA_RRD_SVLAN));
+			/* rrd->rrd6 & EDMA_RRD_CSUM_FAIL_MASK - L4 checksum fail? */
+			/* rrd->rrd7 & EDMA_RRD_CVLAN - 802.1q vlan */
+			/* rrd->rrd1 & EDMA_RRD_SVLAN - 802.1ad vlan */
 		} else {
 			len = 0;
 		}
@@ -353,7 +374,6 @@ qcom_ess_edma_rx_ring_complete(struct qcom_ess_edma_softc *sc, int queue,
 
 		/* Set mbuf length now */
 		m->m_len = m->m_pkthdr.len = len;
-//		m_print(m, -1);
 
 		if (mbufq_enqueue(mq, m) != 0) {
 			/* XXX error count */

@@ -376,7 +376,21 @@ struct qcom_ess_edma_tx_desc {
 #define	EDMA_RRD_PORT_TYPE_SHIFT 7
 #define	EDMA_RRD_PORT_TYPE_MASK 0x1F
 
+#define	EDMA_PORT_ID_SHIFT 12
+#define	EDMA_PORT_ID_MASK 0x7
+
 /* RX RRD descriptor */
+struct qcom_edma_rx_return_desc {
+	uint16_t rrd0;
+	uint16_t rrd1;
+	uint16_t rrd2;
+	uint16_t rrd3;
+	uint16_t rrd4;
+	uint16_t rrd5;
+	uint16_t rrd6;
+	uint16_t rrd7;
+} __packed;
+
 
 /* RX RFD descriptor - little endian */
 struct qcom_ess_edma_rx_free_desc {
