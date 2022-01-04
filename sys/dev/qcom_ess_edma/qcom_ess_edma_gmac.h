@@ -36,5 +36,11 @@ extern	int qcom_ess_edma_gmac_parse(struct qcom_ess_edma_softc *sc,
 	    int gmac_id);
 extern	int qcom_ess_edma_gmac_create_ifnet(struct qcom_ess_edma_softc *sc,
 	    int gmac_id);
+extern	int qcom_ess_edma_gmac_setup_port_mapping(
+	    struct qcom_ess_edma_softc *sc, int gmac_id);
+
+extern	int qcom_ess_edma_gmac_receive_frames(struct qcom_ess_edma_softc *sc,
+	    int rx_queue,
+	    struct mbufq *mq);
 
 #endif	/* __QCOM_ESS_EDMA_GMAC_H__ */

@@ -238,3 +238,71 @@ qcom_ess_edma_gmac_create_ifnet(struct qcom_ess_edma_softc *sc, int gmac_id)
 
 	return (0);
 }
+
+/*
+ * Setup the port mapping for the given GMAC.
+ *
+ * This populates sc->sc_gmac_port_map[] to point the given port
+ * entry to this gmac index.  The receive path code can then use
+ * this to figure out which gmac ifp to push a receive frame into.
+ */
+int
+qcom_ess_edma_gmac_setup_port_mapping(struct qcom_ess_edma_softc *sc,
+    int gmac_id)
+{
+	struct qcom_ess_edma_gmac *gmac;
+	int i;
+
+	gmac = &sc->sc_gmac[gmac_id];
+
+	/* Skip non-setup gmacs */
+	if (gmac->enabled == false)
+		return (0);
+
+	for (i = 0; i < QCOM_ESS_EDMA_MAX_NUM_PORTS; i++) {
+		if ((gmac->port_mask & (1U << i)) == 0)
+			continue;
+		if (sc->sc_gmac_port_map[i] != -1) {
+			device_printf(sc->sc_dev,
+			    "DUPLICATE GMAC port map (port %d)\n",
+			    i);
+			return (ENXIO);
+		}
+
+		sc->sc_gmac_port_map[i] = gmac_id;
+
+		if (bootverbose)
+			device_printf(sc->sc_dev,
+			    "ESS port %d maps to gmac%d\n",
+			    i, gmac_id);
+	}
+
+	return (0);
+}
+
+int
+qcom_ess_edma_gmac_receive_frames(struct qcom_ess_edma_softc *sc,
+    int rx_queue, struct mbufq *mq)
+{
+	struct qcom_ess_edma_desc_ring *ring;
+	struct epoch_tracker et;
+	struct mbuf *m;
+	struct ifnet *ifp;
+
+	ring = &sc->sc_rx_ring[rx_queue];
+
+	NET_EPOCH_ENTER(et);
+	while ((m = mbufq_dequeue(mq)) != NULL) {
+		if (m->m_pkthdr.rcvif == NULL) {
+			ring->stats.num_rx_no_gmac++;
+			m_free(m);
+		} else {
+			ring->stats.num_rx_ok++;
+			ifp = m->m_pkthdr.rcvif;
+			ifp->if_input(ifp, m);
+		}
+	}
+	NET_EPOCH_EXIT(et);
+	return (0);
+}
+

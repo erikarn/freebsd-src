@@ -76,7 +76,11 @@
 #define	EDMA_TX_RING_SIZE		128
 #define	EDMA_RX_RING_SIZE		128
 
+/* Maximum number of GMAC instances */
 #define	QCOM_ESS_EDMA_MAX_NUM_GMACS	5
+
+/* Maximum number of ports to support mapping to GMACs */
+#define	QCOM_ESS_EDMA_MAX_NUM_PORTS	6
 
 struct qcom_ess_edma_softc;
 
@@ -120,6 +124,9 @@ struct qcom_ess_edma_desc_ring {
 		uint64_t	num_added;
 		uint64_t	num_cleaned;
 		uint64_t	num_dropped;
+		uint64_t	num_enqueue_full;
+		uint64_t	num_rx_no_gmac;
+		uint64_t	num_rx_ok;
 	} stats;
 };
 
@@ -166,6 +173,8 @@ struct qcom_ess_edma_softc {
 	struct qcom_ess_edma_desc_ring sc_rx_ring[QCOM_ESS_EDMA_NUM_RX_RINGS];
 
 	struct qcom_ess_edma_gmac	sc_gmac[QCOM_ESS_EDMA_MAX_NUM_GMACS];
+
+	int			sc_gmac_port_map[QCOM_ESS_EDMA_MAX_NUM_PORTS];
 
 	struct {
 		uint32_t num_gmac;

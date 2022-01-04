@@ -385,14 +385,31 @@ qcom_ess_edma_rx_ring_complete(struct qcom_ess_edma_softc *sc, int queue,
 			len = 0;
 		}
 
-		/* Payload starts after the RFD header */
+		/* Payload starts after the RRD header */
 		m_adj(m, 16);
 
 		/* Set mbuf length now */
 		m->m_len = m->m_pkthdr.len = len;
 
+		/*
+		 * Set rcvif to the relevant GMAC ifp; GMAC receive will
+		 * check the field to receive it to the right place, or
+		 * if it's NULL it'll drop it for us.
+		 */
+		m->m_pkthdr.rcvif = NULL;
+		if (sc->sc_gmac_port_map[port_id] != -1) {
+			struct qcom_ess_edma_gmac *gmac;
+			gmac = &sc->sc_gmac[sc->sc_gmac_port_map[port_id]];
+			if (gmac->enabled == true)
+				m->m_pkthdr.rcvif = gmac->ifp;
+		}
+
+		/* XXX TODO: handle multi-frame packets (ie, jumbos!) */
+		/* XXX TODO: add vlan header / tag offload fields */
+		/* XXX TODO: add flow, checksum offload, etc */
+
 		if (mbufq_enqueue(mq, m) != 0) {
-			/* XXX error count */
+			ring->stats.num_enqueue_full++;
 			m_free(m);
 		}
 	}

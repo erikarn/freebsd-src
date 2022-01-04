@@ -204,11 +204,8 @@ qcom_ess_edma_intr(void *arg)
 
 		EDMA_UNLOCK(sc);
 
-		/*
-		 * XXX TODO: push frames up into networking stack.
-		 * (XXX TODO: maybe defer this?)
-		 */
-		mbufq_drain(&mq);
+		/* Push frames into networking stack */
+		(void) qcom_ess_edma_gmac_receive_frames(sc, rx_queue, &mq);
 	}
 }
 
@@ -259,17 +256,27 @@ qcom_ess_edma_sysctl_dump_state(SYSCTL_HANDLER_ARGS)
 
 	EDMA_LOCK(sc);
 	for (i = 0; i < QCOM_ESS_EDMA_NUM_RX_RINGS; i++) {
-		device_printf(sc->sc_dev, "RXQ[%d]: prod=%u, cons=%u, hw prod=%u, hw cons=%u, REG_SW_CONS_IDX=0x%08x\n",
+		device_printf(sc->sc_dev,
+		    "RXQ[%d]: prod=%u, cons=%u, hw prod=%u, hw cons=%u,"
+		    " REG_SW_CONS_IDX=0x%08x\n",
 		    i,
 		    sc->sc_rx_ring[i].next_to_fill,
 		    sc->sc_rx_ring[i].next_to_clean,
-		    EDMA_REG_READ(sc, EDMA_REG_RFD_IDX_Q(i)) & EDMA_RFD_PROD_IDX_BITS,
+		    EDMA_REG_READ(sc,
+		        EDMA_REG_RFD_IDX_Q(i)) & EDMA_RFD_PROD_IDX_BITS,
 		    qcom_ess_edma_hw_rfd_get_cons_index(sc, i),
 		    EDMA_REG_READ(sc, EDMA_REG_RX_SW_CONS_IDX_Q(i)));
-		device_printf(sc->sc_dev, "RXQ[%d]: num_added=%llu, num_cleaned=%llu\n",
+		device_printf(sc->sc_dev,
+		    "RXQ[%d]: num_added=%llu, num_cleaned=%llu,"
+		    " num_dropped=%llu, num_enqueue_full=%llu,"
+		    " num_rx_no_gmac=%llu, num_rx_ok=%llu\n",
 		    i,
 		    sc->sc_rx_ring[i].stats.num_added,
-		    sc->sc_rx_ring[i].stats.num_cleaned);
+		    sc->sc_rx_ring[i].stats.num_cleaned,
+		    sc->sc_rx_ring[i].stats.num_dropped,
+		    sc->sc_rx_ring[i].stats.num_enqueue_full,
+		    sc->sc_rx_ring[i].stats.num_rx_no_gmac,
+		    sc->sc_rx_ring[i].stats.num_rx_ok);
 	}
 
 	for (i = 0; i < QCOM_ESS_EDMA_NUM_RX_IRQS; i++) {
@@ -278,14 +285,23 @@ qcom_ess_edma_sysctl_dump_state(SYSCTL_HANDLER_ARGS)
 		    sc->sc_rx_irq[i].stats.num_intr);
 	}
 
-	device_printf(sc->sc_dev, "EDMA_REG_TXQ_CTRL=0x%08x\n", EDMA_REG_READ(sc, EDMA_REG_TXQ_CTRL));
-	device_printf(sc->sc_dev, "EDMA_REG_RXQ_CTRL=0x%08x\n", EDMA_REG_READ(sc, EDMA_REG_RXQ_CTRL));
-	device_printf(sc->sc_dev, "EDMA_REG_RX_DESC0=0x%08x\n", EDMA_REG_READ(sc, EDMA_REG_RX_DESC0));
-	device_printf(sc->sc_dev, "EDMA_REG_RX_DESC1=0x%08x\n", EDMA_REG_READ(sc, EDMA_REG_RX_DESC1));
-	device_printf(sc->sc_dev, "EDMA_REG_RX_ISR=0x%08x\n", EDMA_REG_READ(sc, EDMA_REG_RX_ISR));
-	device_printf(sc->sc_dev, "EDMA_REG_TX_ISR=0x%08x\n", EDMA_REG_READ(sc, EDMA_REG_TX_ISR));
-	device_printf(sc->sc_dev, "EDMA_REG_MISC_ISR=0x%08x\n", EDMA_REG_READ(sc, EDMA_REG_MISC_ISR));
-	device_printf(sc->sc_dev, "EDMA_REG_WOL_ISR=0x%08x\n", EDMA_REG_READ(sc, EDMA_REG_WOL_ISR));
+	device_printf(sc->sc_dev, "EDMA_REG_TXQ_CTRL=0x%08x\n",
+	    EDMA_REG_READ(sc, EDMA_REG_TXQ_CTRL));
+	device_printf(sc->sc_dev, "EDMA_REG_RXQ_CTRL=0x%08x\n",
+	    EDMA_REG_READ(sc, EDMA_REG_RXQ_CTRL));
+	device_printf(sc->sc_dev, "EDMA_REG_RX_DESC0=0x%08x\n",
+	    EDMA_REG_READ(sc, EDMA_REG_RX_DESC0));
+	device_printf(sc->sc_dev, "EDMA_REG_RX_DESC1=0x%08x\n",
+	    EDMA_REG_READ(sc, EDMA_REG_RX_DESC1));
+	device_printf(sc->sc_dev, "EDMA_REG_RX_ISR=0x%08x\n",
+	    EDMA_REG_READ(sc, EDMA_REG_RX_ISR));
+	device_printf(sc->sc_dev, "EDMA_REG_TX_ISR=0x%08x\n",
+	    EDMA_REG_READ(sc, EDMA_REG_TX_ISR));
+	device_printf(sc->sc_dev, "EDMA_REG_MISC_ISR=0x%08x\n",
+	    EDMA_REG_READ(sc, EDMA_REG_MISC_ISR));
+	device_printf(sc->sc_dev, "EDMA_REG_WOL_ISR=0x%08x\n",
+	    EDMA_REG_READ(sc, EDMA_REG_WOL_ISR));
+
 	EDMA_UNLOCK(sc);
 
 	return (0);
@@ -436,6 +452,22 @@ qcom_ess_edma_attach(device_t dev)
 			goto error;
 	}
 
+	/*
+	 * map the gmac instances <-> port masks, so incoming frames know
+	 * where they need to be forwarded to.
+	 */
+	for (i = 0; i < QCOM_ESS_EDMA_MAX_NUM_PORTS; i++)
+		sc->sc_gmac_port_map[i] = -1;
+	for (i = 0; i < sc->sc_config.num_gmac; i++) {
+		ret = qcom_ess_edma_gmac_setup_port_mapping(sc, i);
+		if (ret != 0) {
+			device_printf(sc->sc_dev,
+			    "Failed to setup port mpapping for gmac%d\n", i);
+			goto error;
+		}
+	}
+
+
 	/* Create ifnets */
 	for (i = 0; i < sc->sc_config.num_gmac; i++) {
 		ret = qcom_ess_edma_gmac_create_ifnet(sc, i);
@@ -445,7 +477,6 @@ qcom_ess_edma_attach(device_t dev)
 			goto error;
 		}
 	}
-
 
 	/*
 	 * (if there's no ess-switch / we're a single phy, we
