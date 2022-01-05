@@ -124,7 +124,7 @@ qcom_ess_edma_rx_buf_alloc(struct qcom_ess_edma_softc *sc,
 		return (EINVAL);
 	}
 	ds = qcom_ess_edma_desc_ring_get_hw_desc(sc, ring, idx);
-	if (rxd == NULL) {
+	if (ds == NULL) {
 		device_printf(sc->sc_dev,
 		    "ERROR; couldn't get hw desc (idx %d)\n", idx);
 		return (EINVAL);
