@@ -59,6 +59,11 @@ device		mx25l
 # SPI NAND flash
 device		w25n
 
+# USB storage
+device 		scbus
+device 		umass
+device 		da
+
 # 4 megabyte rootfs
 options 	MD_ROOT
 options 	MD_ROOT_SIZE=10000
