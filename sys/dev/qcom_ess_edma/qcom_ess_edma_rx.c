@@ -348,8 +348,6 @@ qcom_ess_edma_rx_ring_complete(struct qcom_ess_edma_softc *sc, int queue,
 		sw_next_to_clean = (sw_next_to_clean + 1) % ring->ring_count;
 		cleaned_count++;
 
-		m->m_len = m->m_pkthdr.len = 16;
-
 		/* Get the RRD header */
 		rrd = mtod(m, struct qcom_edma_rx_return_desc *);
 		if (rrd->rrd7 & EDMA_RRD_DESC_VALID) {
@@ -405,6 +403,9 @@ qcom_ess_edma_rx_ring_complete(struct qcom_ess_edma_softc *sc, int queue,
 		if (sc->sc_gmac_port_map[port_id] != -1) {
 			struct qcom_ess_edma_gmac *gmac;
 			gmac = &sc->sc_gmac[sc->sc_gmac_port_map[port_id]];
+			QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_RX_FRAME,
+			    "%s:  port_id=%d gmac=%d\n", __func__,
+			    port_id, gmac->id);
 			if (gmac->enabled == true)
 				m->m_pkthdr.rcvif = gmac->ifp;
 		}
