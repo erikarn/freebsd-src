@@ -116,6 +116,7 @@ qcom_ess_edma_gmac_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 			    gmac->id);
 			ifp->if_drv_flags |= IFF_DRV_RUNNING;
 			ifp->if_drv_flags &= ~IFF_DRV_OACTIVE;
+			if_link_state_change(ifp, LINK_STATE_UP);
 
 		} else if ((ifp->if_drv_flags & IFF_DRV_RUNNING) != 0) {
 			/* down */
@@ -123,6 +124,7 @@ qcom_ess_edma_gmac_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 			device_printf(sc->sc_dev, "%s: gmac%d: IF down\n",
 			    __func__,
 			    gmac->id);
+			if_link_state_change(ifp, LINK_STATE_DOWN);
 		}
 		error = 0;
 		break;
@@ -148,6 +150,10 @@ qcom_ess_edma_gmac_init(void *arg)
 	device_printf(sc->sc_dev, "%s: gmac%d: called\n",
 	    __func__,
 	    gmac->id);
+
+	gmac->ifp->if_drv_flags |= IFF_DRV_RUNNING;
+	gmac->ifp->if_drv_flags &= ~IFF_DRV_OACTIVE;
+	if_link_state_change(gmac->ifp, LINK_STATE_UP);
 }
 
 static int
