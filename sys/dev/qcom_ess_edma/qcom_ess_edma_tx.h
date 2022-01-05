@@ -29,34 +29,17 @@
  *
  */
 
-#ifndef	__QCOM_ESS_EDMA_DESC_H__
-#define	__QCOM_ESS_EDMA_DESC_H__
+#ifndef	__QCOM_ESS_EDMA_TX_H__
+#define	__QCOM_ESS_EDMA_TX_H__
 
-extern	int qcom_ess_edma_desc_ring_setup(struct qcom_ess_edma_softc *sc,
-	    struct qcom_ess_edma_desc_ring *ring,
-	    int count,
-	    int sw_desc_size,
-	    int hw_desc_size,
-	    int num_segments,
-	    int buffer_alignment);
-extern	int qcom_ess_edma_desc_ring_free(struct qcom_ess_edma_softc *sc,
-	    struct qcom_ess_edma_desc_ring *ring);
-extern	void * qcom_ess_edma_desc_ring_get_sw_desc(
-	    struct qcom_ess_edma_softc *sc,
-	    struct qcom_ess_edma_desc_ring *ring,
-	    uint16_t index);
-extern	void * qcom_ess_edma_desc_ring_get_hw_desc(
-	    struct qcom_ess_edma_softc *sc,
-	    struct qcom_ess_edma_desc_ring *ring,
-	    uint16_t index);
-extern	int qcom_ess_edma_desc_ring_flush_preupdate(
-	    struct qcom_ess_edma_softc *sc,
-	    struct qcom_ess_edma_desc_ring *ring);
-extern	int qcom_ess_edma_desc_ring_flush_postupdate(
-	    struct qcom_ess_edma_softc *sc,
-	    struct qcom_ess_edma_desc_ring *ring);
-extern	int qcom_ess_edma_desc_ring_get_num_available(
-	    struct qcom_ess_edma_softc *sc,
-	    struct qcom_ess_edma_desc_ring *ring);
 
-#endif	/* __QCOM_ESS_EDMA_DESC_H__ */
+extern	int qcom_ess_edma_tx_ring_setup(struct qcom_ess_edma_softc *sc,
+    struct qcom_ess_edma_desc_ring *ring);
+extern	int qcom_ess_edma_tx_ring_clean(struct qcom_ess_edma_softc *sc,
+    struct qcom_ess_edma_desc_ring *ring);
+extern	int qcom_ess_edma_tx_ring_complete(struct qcom_ess_edma_softc *sc,
+	    int queue);
+extern	int qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc,
+	    int queue, struct mbuf *m, uint16_t port_bitmap, int default_vlan);
+
+#endif	/* __QCOM_ESS_EDMA_TX_H__ */

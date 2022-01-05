@@ -60,6 +60,7 @@ __FBSDID("$FreeBSD$");
 #include <dev/qcom_ess_edma/qcom_ess_edma_hw.h>
 #include <dev/qcom_ess_edma/qcom_ess_edma_desc.h>
 #include <dev/qcom_ess_edma/qcom_ess_edma_rx.h>
+#include <dev/qcom_ess_edma/qcom_ess_edma_tx.h>
 #include <dev/qcom_ess_edma/qcom_ess_edma_debug.h>
 #include <dev/qcom_ess_edma/qcom_ess_edma_gmac.h>
 
@@ -109,6 +110,7 @@ qcom_ess_edma_detach(device_t dev)
 	}
 
 	for (i = 0; i < QCOM_ESS_EDMA_NUM_TX_RINGS; i++) {
+		(void) qcom_ess_edma_tx_ring_clean(sc, &sc->sc_rx_ring[i]);
 		(void) qcom_ess_edma_desc_ring_free(sc, &sc->sc_tx_ring[i]);
 	}
 
@@ -164,10 +166,39 @@ qcom_ess_edma_intr(void *arg)
 	 * (eg if it's 16 then rid 16 == RX queue 0.)
 	 */
 	if (intr->irq_rid < QCOM_ESS_EDMA_NUM_TX_IRQS) {
+		int tx_queue = intr->irq_rid;
+
 		/* Transmit queue */
-		device_printf(sc->sc_dev, "%s: called; TX queue %d, TODO\n",
-		    __func__, intr->irq_rid);
-		/* XXX TODO */
+		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_INTERRUPT,
+		    "%s: called; TX queue %d\n", __func__, intr->irq_rid);
+
+		EDMA_LOCK(sc);
+		/*
+		 * XXX TODO: should put this in the edma filter routine?
+		 *
+		 * Disable the interrupt for this ring.
+		 */
+		(void) qcom_ess_edma_hw_intr_tx_intr_set_enable(sc, tx_queue,
+		    false);
+
+		/*
+		 * Complete/free tx mbufs.
+		 */
+		(void) qcom_ess_edma_tx_ring_complete(sc, tx_queue);
+
+		/*
+		 * ACK the interrupt.
+		 */
+		(void) qcom_ess_edma_hw_intr_tx_ack(sc, tx_queue);
+
+		/*
+		 * Re-enable the interrupt.
+		 */
+		(void) qcom_ess_edma_hw_intr_tx_intr_set_enable(sc, tx_queue,
+		    true);
+
+		EDMA_UNLOCK(sc);
+
 	} else {
 		struct mbufq mq;
 		int rx_queue;
@@ -439,7 +470,10 @@ qcom_ess_edma_attach(device_t dev)
 		    sc->sc_config.tx_ring_count,
 		    sizeof(struct qcom_ess_edma_sw_desc_tx),
 		    sizeof(struct qcom_ess_edma_tx_desc),
+		    QCOM_ESS_EDMA_MAX_TXFRAGS,
 		    ESS_EDMA_TX_BUFFER_ALIGN) != 0)
+			goto error;
+		if (qcom_ess_edma_tx_ring_setup(sc, &sc->sc_tx_ring[i]) != 0)
 			goto error;
 	}
 
@@ -449,6 +483,7 @@ qcom_ess_edma_attach(device_t dev)
 		    sc->sc_config.rx_ring_count,
 		    sizeof(struct qcom_ess_edma_sw_desc_rx),
 		    sizeof(struct qcom_ess_edma_rx_free_desc),
+		    1,
 		    ESS_EDMA_RX_BUFFER_ALIGN) != 0)
 			goto error;
 		if (qcom_ess_edma_rx_ring_setup(sc, &sc->sc_rx_ring[i]) != 0)

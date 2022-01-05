@@ -193,6 +193,22 @@ qcom_ess_edma_hw_intr_rx_intr_set_enable(struct qcom_ess_edma_softc *sc,
 }
 
 /*
+ * Enable/disable the given TX ring interrupt.
+ */
+int
+qcom_ess_edma_hw_intr_tx_intr_set_enable(struct qcom_ess_edma_softc *sc,
+    int txq, bool state)
+{
+
+	EDMA_LOCK_ASSERT(sc);
+
+	EDMA_REG_WRITE(sc, EDMA_REG_TX_INT_MASK_Q(txq), state ? 1 : 0);
+	EDMA_REG_BARRIER_WRITE(sc);
+
+	return (0);
+}
+
+/*
  * Enable interrupts.
  */
 int
@@ -251,6 +267,18 @@ qcom_ess_edma_hw_intr_rx_ack(struct qcom_ess_edma_softc *sc, int rx_queue)
 	return (0);
 }
 
+/*
+ * ACK the given TX queue ISR.
+ */
+int
+qcom_ess_edma_hw_intr_tx_ack(struct qcom_ess_edma_softc *sc, int tx_queue)
+{
+
+	EDMA_REG_WRITE(sc, EDMA_REG_TX_ISR, (1U << tx_queue));
+	(void) EDMA_REG_READ(sc, EDMA_REG_TX_ISR);
+
+	return (0);
+}
 
 /*
  * Configure the default RSS indirection table.

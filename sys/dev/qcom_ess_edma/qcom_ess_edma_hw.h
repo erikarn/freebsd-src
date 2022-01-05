@@ -40,11 +40,15 @@ extern	int qcom_ess_edma_hw_set_rx_intr_moderation(
 extern	int qcom_ess_edma_hw_intr_disable(struct qcom_ess_edma_softc *sc);
 extern	int qcom_ess_edma_hw_intr_rx_intr_set_enable(
 	    struct qcom_ess_edma_softc *sc, int rxq, bool state);
+extern	int qcom_ess_edma_hw_intr_tx_intr_set_enable(
+	    struct qcom_ess_edma_softc *sc, int txq, bool state);
 extern	int qcom_ess_edma_hw_intr_enable(struct qcom_ess_edma_softc *sc);
 extern	int qcom_ess_edma_hw_intr_status_clear(
 	    struct qcom_ess_edma_softc *sc);
 extern	int qcom_ess_edma_hw_intr_rx_ack(struct qcom_ess_edma_softc *sc,
 	    int rx_queue);
+extern	int qcom_ess_edma_hw_intr_tx_ack(struct qcom_ess_edma_softc *sc,
+	    int tx_queue);
 extern	int qcom_ess_edma_hw_configure_rss_table(
 	    struct qcom_ess_edma_softc *sc);
 extern	int qcom_ess_edma_hw_configure_load_balance_table(

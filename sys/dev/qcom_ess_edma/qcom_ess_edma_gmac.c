@@ -63,6 +63,7 @@ __FBSDID("$FreeBSD$");
 #include <dev/qcom_ess_edma/qcom_ess_edma_hw.h>
 #include <dev/qcom_ess_edma/qcom_ess_edma_desc.h>
 #include <dev/qcom_ess_edma/qcom_ess_edma_rx.h>
+#include <dev/qcom_ess_edma/qcom_ess_edma_tx.h>
 #include <dev/qcom_ess_edma/qcom_ess_edma_debug.h>
 #include <dev/qcom_ess_edma/qcom_ess_edma_gmac.h>
 
@@ -161,13 +162,31 @@ qcom_ess_edma_gmac_transmit(struct ifnet *ifp, struct mbuf *m)
 {
 	struct qcom_ess_edma_gmac *gmac = ifp->if_softc;
 	struct qcom_ess_edma_softc *sc = gmac->sc;
+	int ret;
+	int q;
 
-	device_printf(sc->sc_dev, "%s: gmac%d: called\n",
-	    __func__,
-	    gmac->id);
+	/*
+	 * For now just use curcpu; we'll spread it out a bit better
+	 * and take the mbuf flowid/hash stuff into account later.
+	 * (And yes, technically we should cpu pin during transmit..)
+	 */
+	q = curcpu % QCOM_ESS_EDMA_NUM_TX_RINGS;
 
-	m_free(m);
-	return (0);
+	EDMA_LOCK(sc);
+
+	/*
+	 * For now we don't support vlans /at all/. Just transmit
+	 * using the default port mask and vlan for the given gmac
+	 * and the tx_ring_frame routine will mark it as the default
+	 * vlan.
+	 *
+	 * Figure out the rest once this is done and working.
+	 */
+	ret = qcom_ess_edma_tx_ring_frame(sc, q, m, gmac->port_mask,
+	    gmac->vlan_id);
+	EDMA_UNLOCK(sc);
+	/* Don't consume mbuf; if_transmit caller will if needed */
+	return (ret);
 }
 
 static void

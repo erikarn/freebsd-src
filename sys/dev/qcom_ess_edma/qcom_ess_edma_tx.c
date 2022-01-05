@@ -1,0 +1,353 @@
+/*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
+ * Copyright (c) 2021 Adrian Chadd <adrian@FreeBSD.org>
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice unmodified, this list of conditions, and the following
+ *    disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
+
+#include <sys/cdefs.h>
+__FBSDID("$FreeBSD$");
+
+#include <sys/param.h>
+#include <sys/systm.h>
+#include <sys/bus.h>
+
+#include <sys/kernel.h>
+#include <sys/module.h>
+#include <sys/rman.h>
+#include <sys/lock.h>
+#include <sys/malloc.h>
+#include <sys/mutex.h>
+#include <sys/mbuf.h>
+#include <sys/endian.h>
+#include <sys/socket.h>
+#include <sys/sockio.h>
+
+#include <net/if.h>
+#include <net/if_var.h>
+#include <net/if_media.h>
+#include <net/ethernet.h>
+
+#include <machine/bus.h>
+#include <machine/resource.h>
+
+#include <dev/qcom_ess_edma/qcom_ess_edma_var.h>
+#include <dev/qcom_ess_edma/qcom_ess_edma_reg.h>
+#include <dev/qcom_ess_edma/qcom_ess_edma_hw.h>
+#include <dev/qcom_ess_edma/qcom_ess_edma_desc.h>
+#include <dev/qcom_ess_edma/qcom_ess_edma_tx.h>
+#include <dev/qcom_ess_edma/qcom_ess_edma_debug.h>
+
+int
+qcom_ess_edma_tx_ring_setup(struct qcom_ess_edma_softc *sc,
+    struct qcom_ess_edma_desc_ring *ring)
+{
+	struct qcom_ess_edma_sw_desc_tx *txd;
+	int i, ret;
+
+	for (i = 0; i < EDMA_TX_RING_SIZE; i++) {
+		txd = qcom_ess_edma_desc_ring_get_sw_desc(sc, ring, i);
+		if (txd == NULL) {
+			device_printf(sc->sc_dev,
+			    "ERROR; couldn't get sw desc (idx %d)\n", i);
+			return (EINVAL);
+		}
+		txd->m = NULL;
+		ret = bus_dmamap_create(ring->buffer_dma_tag,
+		    BUS_DMA_NOWAIT,
+		    &txd->m_dmamap);
+		if (ret != 0) {
+			device_printf(sc->sc_dev,
+			    "%s: failed to create dmamap (%d)\n",
+			    __func__, ret);
+		}
+	}
+
+	return (0);
+}
+
+int
+qcom_ess_edma_tx_ring_clean(struct qcom_ess_edma_softc *sc,
+    struct qcom_ess_edma_desc_ring *ring)
+{
+	device_printf(sc->sc_dev, "%s: TODO\n", __func__);
+	return (0);
+}
+
+/*
+ * Clear the sw/hw descriptor entries, unmap/free the mbuf chain that's
+ * part of this.
+ */
+static int
+qcom_ess_edma_tx_unmap_and_clean(struct qcom_ess_edma_softc *sc,
+    struct qcom_ess_edma_desc_ring *ring, uint16_t idx)
+{
+	struct qcom_ess_edma_sw_desc_tx *txd;
+	struct qcom_ess_edma_tx_desc *ds;
+
+	/* Get the software/hardware descriptors we're going to update */
+	txd = qcom_ess_edma_desc_ring_get_sw_desc(sc, ring, idx);
+	if (txd == NULL) {
+		device_printf(sc->sc_dev,
+		    "ERROR; couldn't get sw desc (idx %d)\n", idx);
+		return (EINVAL);
+	}
+
+	ds = qcom_ess_edma_desc_ring_get_hw_desc(sc, ring, idx);
+	if (ds == NULL) {
+		device_printf(sc->sc_dev,
+		    "ERROR; couldn't get hw desc (idx %d)\n", idx);
+		return (EINVAL);
+	}
+
+	if (txd->m != NULL) {
+		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_RING,
+		    "%s:   idx %d, unmap/free\n", __func__, idx);
+		bus_dmamap_unload(ring->buffer_dma_tag, txd->m_dmamap);
+		m_free(txd->m);
+		txd->m = NULL;
+		txd->is_first = txd->is_last = 0;
+	}
+
+	/* This is purely for debugging/testing right now; it's slow! */
+	memset(ds, 0, sizeof(struct qcom_ess_edma_tx_desc));
+
+	return (0);
+}
+
+/*
+ * Run through the TX ring, complete/free frames.
+ */
+int
+qcom_ess_edma_tx_ring_complete(struct qcom_ess_edma_softc *sc, int queue)
+{
+	struct qcom_ess_edma_desc_ring *ring;
+	uint32_t reg, n;
+	uint16_t sw_next_to_clean, hw_next_to_clean;
+
+	EDMA_LOCK_ASSERT(sc);
+
+	ring = &sc->sc_tx_ring[queue];
+
+	qcom_ess_edma_desc_ring_flush_postupdate(sc, ring);
+
+	sw_next_to_clean = ring->next_to_clean;
+	hw_next_to_clean = 0;
+	n = 0;
+
+	/* XXX TODO: move these to routines in hw.c */
+	EDMA_REG_BARRIER_READ(sc);
+	reg = EDMA_REG_READ(sc, EDMA_REG_TPD_IDX_Q(queue));
+	hw_next_to_clean = (reg >> EDMA_TPD_CONS_IDX_SHIFT) & EDMA_TPD_CONS_IDX_MASK;
+
+	QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_RING,
+	    "%s: called; sw=%d, hw=%d\n", __func__,
+	    sw_next_to_clean, hw_next_to_clean);
+
+	/* clean the buffer chain and descriptor(s) here */
+	while (sw_next_to_clean != hw_next_to_clean) {
+		qcom_ess_edma_tx_unmap_and_clean(sc, ring, sw_next_to_clean);
+		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_RING,
+		    "%s  cleaning %d\n", __func__, sw_next_to_clean);
+		sw_next_to_clean++;
+		if (sw_next_to_clean >= ring->ring_count)
+			sw_next_to_clean = 0;
+		n++;
+	}
+
+	ring->next_to_clean = sw_next_to_clean;
+
+	/* update the TPD consumer index register */
+	/* XXX TODO: move these to routines in hw.c */
+	EDMA_REG_WRITE(sc, EDMA_REG_TX_SW_CONS_IDX_Q(queue),
+	    sw_next_to_clean);
+	EDMA_REG_BARRIER_WRITE(sc);
+
+	QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_RING,
+	    "%s: cleaned %d descriptors\n", __func__, n);
+
+	return (0);
+}
+
+/*
+ * Attempt to enqueue a single frame.
+ *
+ * This is (hopefully) the MVP required to send a single ethernet
+ * mbuf / mbuf chain.  TSO and other optimisations are currently not
+ * supported.
+ *
+ * TODO: the Linux driver makes a point of commenting on putting the
+ * skb in the last descriptor in a list, but it doesn't seem to do it.
+ * So I'm not sure if the hardware will incrementally complete fragments
+ * or whether it'll complete /all/ of the fragments for a frame at once.
+ */
+int
+qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
+    struct mbuf *m, uint16_t port_bitmap, int default_vlan)
+{
+	struct qcom_ess_edma_desc_ring *ring;
+	struct qcom_ess_edma_sw_desc_tx *txd;
+	struct qcom_ess_edma_tx_desc *ds;
+	bus_dma_segment_t txsegs[QCOM_ESS_EDMA_MAX_TXFRAGS];
+	uint32_t reg;
+	int num_left, ret, nsegs, i;
+	uint16_t next_to_fill;
+	uint16_t svlan_tag;
+	uint32_t word1, word3;
+	uint32_t eop;
+
+	EDMA_LOCK_ASSERT(sc);
+
+	ring = &sc->sc_tx_ring[queue];
+
+#if 0
+        uint16_t len; /* full packet including CRC */
+        uint16_t svlan_tag; /* vlan tag */
+        uint32_t word1; /* byte 4-7 */
+        uint32_t addr; /* address of buffer */
+        uint32_t word3; /* byte 12 */
+#endif
+
+	/*
+	 * Do we have ANY space? If not, return ENOBUFS, let the
+	 * caller decide what to do with the mbuf.
+	 */
+	num_left = qcom_ess_edma_desc_ring_get_num_available(sc, ring);
+	if (num_left < 2) {
+		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_FRAME,
+		    "%s: num_left=%d\n", __func__, num_left);
+		ring->stats.num_enqueue_full++;
+		return (ENOSPC);
+	}
+
+	/*
+	 * Get the current sw/hw descriptor offset; we'll store
+	 * the mbuf and dmamap for said mbuf in here.
+	 */
+	next_to_fill = ring->next_to_fill;
+	txd = qcom_ess_edma_desc_ring_get_sw_desc(sc, ring, next_to_fill);
+	QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_FRAME,
+	    "%s: starting at idx %d\n", __func__, next_to_fill);
+
+	/*
+	 * Do the initial mbuf load; see how many fragments we
+	 * have.  If we don't have enough descriptors available
+	 * then immediately unmap and return an error.
+	 */
+	ret = bus_dmamap_load_mbuf_sg(ring->buffer_dma_tag,
+	    txd->m_dmamap,
+	    m,
+	    txsegs,
+	    &nsegs,
+	    BUS_DMA_NOWAIT);
+	if (ret != 0) {
+		ring->stats.num_tx_mapfail++;
+		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_FRAME,
+		    "%s: map failed\n", __func__);
+		return (ENOSPC);
+	}
+	if (nsegs == 0) {
+		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_FRAME,
+		    "%s: too many segs\n", __func__);
+		ring->stats.num_tx_maxfrags++;
+		return (ENOSPC);
+	}
+
+	bus_dmamap_sync(ring->buffer_dma_tag, txd->m_dmamap,
+	    BUS_DMASYNC_PREWRITE);
+
+	/*
+	 * At this point we're committed to sending the frame.
+	 *
+	 * Configure up the various header fields that are shared
+	 * between descriptors.
+	 */
+	svlan_tag = 0; /* 802.3ad tag? */
+	/* word1 - tx checksum, v4/v6 TSO, pppoe, 802.3ad vlan flag */
+	word1 = 0;
+	/*
+	 * word3 - insert default vlan; vlan tag/flag, CPU/STP/RSTP stuff,
+	 * port map
+	 */
+	word3 = 0;
+	word3 |= (port_bitmap << EDMA_TPD_PORT_BITMAP_SHIFT);
+	/* Set default vlan as 802.1q, as the switch config needs it */
+	/*
+	 * yes, later on this'll need to change for proper 802.1q / 802.1ad
+	 * offload.
+	 */
+	word3 |= (1U << EDMA_TX_INS_CVLAN);
+	word3 |= (default_vlan << EDMA_TX_CVLAN_TAG_SHIFT);
+	eop = 0;
+
+	/*
+	 * Walk the mbuf segment list, and allocate descriptor
+	 * entries.
+	 */
+	for (i = 0; i < nsegs; i++) {
+		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_FRAME,
+		    "%s:   filling idx %d\n", __func__, next_to_fill);
+		txd = qcom_ess_edma_desc_ring_get_sw_desc(sc, ring, next_to_fill);
+		ds = qcom_ess_edma_desc_ring_get_hw_desc(sc, ring, next_to_fill);
+		if (i == 0)
+			txd->is_first = 1;
+		if (i == (nsegs - 1)) {
+			txd->is_last = 1;
+			eop = EDMA_TPD_EOP;
+		}
+		if (i != 0)
+			txd->m = NULL;
+		ds->word1 = word1 | eop;
+		ds->word3 = word3;
+		ds->svlan_tag = svlan_tag;
+		ds->addr = htole32(txsegs[i].ds_addr);
+		ds->len = htole16(txsegs[i].ds_len);
+
+		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_FRAME,
+		    "%s:   addr=0x%lx len=%ld eop=0x%x\n",
+		    __func__,
+		    txsegs[i].ds_addr,
+		    txsegs[i].ds_len,
+		    eop);
+
+		next_to_fill++;
+		if (next_to_fill >= ring->ring_count)
+			next_to_fill = 0;
+	}
+
+	/* Finish, update ring tracking, poke hardware */
+	ring->next_to_fill = next_to_fill;
+	qcom_ess_edma_desc_ring_flush_preupdate(sc, ring);
+
+	/* XXX TODO: put in hw.c */
+	EDMA_REG_BARRIER_READ(sc);
+	reg = EDMA_REG_READ(sc, EDMA_REG_TPD_IDX_Q(queue));
+	reg &= ~EDMA_TPD_PROD_IDX_BITS;
+	reg |= (next_to_fill & EDMA_TPD_PROD_IDX_MASK)
+	    << EDMA_TPD_PROD_IDX_SHIFT;
+	EDMA_REG_WRITE(sc, EDMA_REG_TPD_IDX_Q(queue), reg);
+	EDMA_REG_BARRIER_WRITE(sc);
+
+	return (0);
+}

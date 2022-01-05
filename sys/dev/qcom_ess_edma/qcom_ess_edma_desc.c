@@ -79,6 +79,7 @@ qcom_ess_edma_desc_ring_setup(struct qcom_ess_edma_softc *sc,
     int count,
     int sw_desc_size,
     int hw_desc_size,
+    int num_segments,
     int buffer_align)
 {
 	int error;
@@ -115,8 +116,8 @@ qcom_ess_edma_desc_ring_setup(struct qcom_ess_edma_softc *sc,
 	    BUS_SPACE_MAXADDR,		/* lowaddr */
 	    BUS_SPACE_MAXADDR,		/* highaddr */
 	    NULL, NULL,			/* filter, filterarg */
-	    EDMA_DESC_MAX_BUFFER_SIZE,	/* maxsize */
-	    1,				/* nsegments */
+	    EDMA_DESC_MAX_BUFFER_SIZE * num_segments,	/* maxsize */
+	    num_segments,			/* nsegments */
 	    EDMA_DESC_MAX_BUFFER_SIZE,	/* maxsegsize */
 	    0,				/* flags */
 	    NULL, NULL,			/* lockfunc, lockarg */
@@ -298,4 +299,26 @@ qcom_ess_edma_desc_ring_flush_postupdate(struct qcom_ess_edma_softc *sc,
 	    BUS_DMASYNC_POSTREAD | BUS_DMASYNC_POSTWRITE);
 
 	return (0);
+}
+
+/*
+ * Get how many descriptor slots are available.
+ */
+int
+qcom_ess_edma_desc_ring_get_num_available(struct qcom_ess_edma_softc *sc,
+    struct qcom_ess_edma_desc_ring *ring)
+{
+	uint16_t sw_next_to_fill;
+	uint16_t sw_next_to_clean;
+	uint16_t count = 0;
+
+	/* XXX TODO: redo this; it seems overly complicated! */
+
+	sw_next_to_clean = ring->next_to_clean;
+	sw_next_to_fill = ring->next_to_fill;
+
+	if (sw_next_to_clean <= sw_next_to_fill)
+		count = ring->ring_count;
+
+	return (count + sw_next_to_clean - sw_next_to_fill - 1);
 }

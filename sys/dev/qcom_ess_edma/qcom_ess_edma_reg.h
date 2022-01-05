@@ -56,7 +56,7 @@
 #define	EDMA_DESC_MAX_BUFFER_SIZE	4096
 
 /* XXX TODO: not sure about these yet? Whether HW or performance based */
-#define	ESS_EDMA_TX_BUFFER_ALIGN	128
+#define	ESS_EDMA_TX_BUFFER_ALIGN	1
 #define	ESS_EDMA_RX_BUFFER_ALIGN	128
 
 /* register definition */
@@ -351,6 +351,12 @@
 #define	EDMA_TPD_MSS_MASK 0x1FFF
 #define	EDMA_TPD_MSS_SHIFT 18
 #define	EDMA_TPD_CUSTOM_CSUM_SHIFT 18
+#define	EDMA_TPD_EOP	0x80000000
+
+/* word3 */
+#define	EDMA_TPD_PORT_BITMAP_SHIFT 18
+#define	EDMA_TPD_FROM_CPU_SHIFT 25
+#define	EDMA_FROM_CPU_MASK 0x80
 
 /* TX descriptor - little endian */
 struct qcom_ess_edma_tx_desc {
@@ -364,7 +370,7 @@ struct qcom_ess_edma_tx_desc {
 /* RRD descriptor fields */
 #define	EDMA_RRD_NUM_RFD_MASK 0x000F
 #define	EDMA_RRD_SVLAN 0x8000
-#define	EDMA_RRD_FLOW_COOKIE_MASK 0x07FF;
+#define	EDMA_RRD_FLOW_COOKIE_MASK 0x07FF
 
 #define	EDMA_RRD_PKT_SIZE_MASK 0x3FFF
 #define	EDMA_RRD_CSUM_FAIL_MASK 0xC000
