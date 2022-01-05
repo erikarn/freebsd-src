@@ -34,6 +34,7 @@
 
 extern	int qcom_ess_edma_desc_ring_setup(struct qcom_ess_edma_softc *sc,
 	    struct qcom_ess_edma_desc_ring *ring,
+	    char *label,
 	    int count,
 	    int sw_desc_size,
 	    int hw_desc_size,

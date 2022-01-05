@@ -146,9 +146,9 @@ qcom_ess_edma_tx_ring_complete(struct qcom_ess_edma_softc *sc, int queue)
 	uint32_t reg, n;
 	uint16_t sw_next_to_clean, hw_next_to_clean;
 
-	EDMA_LOCK_ASSERT(sc);
-
 	ring = &sc->sc_tx_ring[queue];
+
+	EDMA_RING_LOCK_ASSERT(ring);
 
 	qcom_ess_edma_desc_ring_flush_postupdate(sc, ring);
 
@@ -217,17 +217,9 @@ qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
 	uint32_t word1, word3;
 	uint32_t eop;
 
-	EDMA_LOCK_ASSERT(sc);
-
 	ring = &sc->sc_tx_ring[queue];
 
-#if 0
-        uint16_t len; /* full packet including CRC */
-        uint16_t svlan_tag; /* vlan tag */
-        uint32_t word1; /* byte 4-7 */
-        uint32_t addr; /* address of buffer */
-        uint32_t word3; /* byte 12 */
-#endif
+	EDMA_RING_LOCK_ASSERT(ring);
 
 	/*
 	 * Do we have ANY space? If not, return ENOBUFS, let the

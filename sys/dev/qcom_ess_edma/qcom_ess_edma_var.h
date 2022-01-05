@@ -36,6 +36,10 @@
 #define	EDMA_UNLOCK(_sc)	mtx_unlock(&(_sc)->sc_mtx)
 #define	EDMA_LOCK_ASSERT(_sc)	mtx_assert(&(_sc)->sc_mtx, MA_OWNED)
 
+#define	EDMA_RING_LOCK(_ring)		mtx_lock(&(_ring)->mtx)
+#define	EDMA_RING_UNLOCK(_ring)		mtx_unlock(&(_ring)->mtx)
+#define	EDMA_RING_LOCK_ASSERT(_ring)	mtx_assert(&(_ring)->mtx, MA_OWNED)
+
 /*
  * register space access macros
  */
@@ -106,6 +110,9 @@ struct qcom_ess_edma_intr {
 struct qcom_ess_edma_desc_ring {
 	bus_dma_tag_t		hw_ring_dma_tag; /* tag for hw ring */
 	bus_dma_tag_t		buffer_dma_tag; /* tag for mbufs */
+	char			*label;
+
+	struct mtx		mtx;
 
 	bus_dmamap_t		hw_desc_map;
 	bus_addr_t		hw_desc_paddr;

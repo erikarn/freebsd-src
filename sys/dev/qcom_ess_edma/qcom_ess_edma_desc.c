@@ -76,6 +76,7 @@ qcom_ess_edma_desc_map_addr(void *arg, bus_dma_segment_t *segs, int nsegs,
 int
 qcom_ess_edma_desc_ring_setup(struct qcom_ess_edma_softc *sc,
     struct qcom_ess_edma_desc_ring *ring,
+    char *label,
     int count,
     int sw_desc_size,
     int hw_desc_size,
@@ -83,6 +84,17 @@ qcom_ess_edma_desc_ring_setup(struct qcom_ess_edma_softc *sc,
     int buffer_align)
 {
 	int error;
+
+
+	ring->label = strdup(label, M_TEMP);
+	if (ring->label == NULL) {
+		device_printf(sc->sc_dev,
+		    "ERROR: failed to strdup label\n");
+		error = ENOMEM;
+		goto error;
+	}
+
+	mtx_init(&ring->mtx, ring->label, NULL, MTX_DEF);
 
 	/*
 	 * For now set it to 4 byte alignment, no max size.
@@ -171,6 +183,9 @@ qcom_ess_edma_desc_ring_setup(struct qcom_ess_edma_softc *sc,
 
 	return (0);
 error:
+	mtx_destroy(&ring->mtx);
+	if (ring->label != NULL)
+		free(ring->label, M_TEMP);
 	if (ring->hw_desc != NULL) {
 		bus_dmamap_sync(ring->hw_ring_dma_tag, ring->hw_desc_map,
 		    BUS_DMASYNC_POSTREAD | BUS_DMASYNC_POSTWRITE);
@@ -205,6 +220,10 @@ int
 qcom_ess_edma_desc_ring_free(struct qcom_ess_edma_softc *sc,
     struct qcom_ess_edma_desc_ring *ring)
 {
+
+	mtx_destroy(&ring->mtx);
+	if (ring->label != NULL)
+		free(ring->label, M_TEMP);
 
 	if (ring->hw_desc != NULL) {
 		bus_dmamap_sync(ring->hw_ring_dma_tag, ring->hw_desc_map,

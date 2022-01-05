@@ -172,7 +172,7 @@ qcom_ess_edma_intr(void *arg)
 		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_INTERRUPT,
 		    "%s: called; TX queue %d\n", __func__, intr->irq_rid);
 
-		EDMA_LOCK(sc);
+		EDMA_RING_LOCK(&sc->sc_tx_ring[tx_queue]);
 		/*
 		 * XXX TODO: should put this in the edma filter routine?
 		 *
@@ -197,8 +197,7 @@ qcom_ess_edma_intr(void *arg)
 		(void) qcom_ess_edma_hw_intr_tx_intr_set_enable(sc, tx_queue,
 		    true);
 
-		EDMA_UNLOCK(sc);
-
+		EDMA_RING_UNLOCK(&sc->sc_tx_ring[tx_queue]);
 	} else {
 		struct mbufq mq;
 		int rx_queue;
@@ -211,7 +210,8 @@ qcom_ess_edma_intr(void *arg)
 		    "%s: called; RX queue %d\n",
 		    __func__, rx_queue);
 
-		EDMA_LOCK(sc);
+		EDMA_RING_LOCK(&sc->sc_rx_ring[rx_queue]);
+
 		/*
 		 * XXX TODO: should put this in the edma filter routine?
 		 *
@@ -236,7 +236,7 @@ qcom_ess_edma_intr(void *arg)
 		(void) qcom_ess_edma_hw_intr_rx_intr_set_enable(sc, rx_queue,
 		    true);
 
-		EDMA_UNLOCK(sc);
+		EDMA_RING_UNLOCK(&sc->sc_rx_ring[rx_queue]);
 
 		/* Push frames into networking stack */
 		(void) qcom_ess_edma_gmac_receive_frames(sc, rx_queue, &mq);
@@ -466,7 +466,11 @@ qcom_ess_edma_attach(device_t dev)
 
 	/* allocate tx rings */
 	for (i = 0; i < QCOM_ESS_EDMA_NUM_TX_RINGS; i++) {
+		char label[16];
+
+		snprintf(label, 16, "tx_ring%d", i);
 		if (qcom_ess_edma_desc_ring_setup(sc, &sc->sc_tx_ring[i],
+		    label,
 		    sc->sc_config.tx_ring_count,
 		    sizeof(struct qcom_ess_edma_sw_desc_tx),
 		    sizeof(struct qcom_ess_edma_tx_desc),
@@ -479,7 +483,11 @@ qcom_ess_edma_attach(device_t dev)
 
 	/* allocate rx rings */
 	for (i = 0; i < QCOM_ESS_EDMA_NUM_RX_RINGS; i++) {
+		char label[16];
+
+		snprintf(label, 16, "rx_ring%d", i);
 		if (qcom_ess_edma_desc_ring_setup(sc, &sc->sc_rx_ring[i],
+		    label,
 		    sc->sc_config.rx_ring_count,
 		    sizeof(struct qcom_ess_edma_sw_desc_rx),
 		    sizeof(struct qcom_ess_edma_rx_free_desc),
@@ -538,8 +546,10 @@ qcom_ess_edma_attach(device_t dev)
 
 	/* fill RX ring here, explicitly */
 	for (i = 0; i < QCOM_ESS_EDMA_NUM_RX_RINGS; i++) {
+		EDMA_RING_LOCK(&sc->sc_rx_ring[i]);
 		(void) qcom_ess_edma_rx_ring_fill(sc, i,
 		    sc->sc_config.rx_ring_count);
+		EDMA_RING_UNLOCK(&sc->sc_rx_ring[i]);
 	}
 
 	/* configure TX/RX rings; RSS config; initial interrupt rates, etc */

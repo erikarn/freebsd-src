@@ -244,9 +244,10 @@ qcom_ess_edma_rx_ring_fill(struct qcom_ess_edma_softc *sc,
 	int prod_index;
 	int n = 0;
 
-	EDMA_LOCK_ASSERT(sc);
 
 	ring = &sc->sc_rx_ring[queue];
+
+	EDMA_RING_LOCK_ASSERT(ring);
 
 	num_fill = num;
 	if (num_fill > ring->ring_count)
@@ -318,9 +319,9 @@ qcom_ess_edma_rx_ring_complete(struct qcom_ess_edma_softc *sc, int queue,
 	struct qcom_edma_rx_return_desc *rrd;
 	int num_rfds, port_id, priority, hash_type, hash_val, flow_cookie, vlan;
 
-	EDMA_LOCK_ASSERT(sc);
-
 	ring = &sc->sc_rx_ring[queue];
+
+	EDMA_RING_LOCK_ASSERT(ring);
 
 	qcom_ess_edma_desc_ring_flush_postupdate(sc, ring);
 

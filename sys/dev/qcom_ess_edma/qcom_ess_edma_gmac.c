@@ -172,7 +172,7 @@ qcom_ess_edma_gmac_transmit(struct ifnet *ifp, struct mbuf *m)
 	 */
 	q = curcpu % QCOM_ESS_EDMA_NUM_TX_RINGS;
 
-	EDMA_LOCK(sc);
+	EDMA_RING_LOCK(&sc->sc_tx_ring[q]);
 
 	/*
 	 * For now we don't support vlans /at all/. Just transmit
@@ -184,7 +184,9 @@ qcom_ess_edma_gmac_transmit(struct ifnet *ifp, struct mbuf *m)
 	 */
 	ret = qcom_ess_edma_tx_ring_frame(sc, q, m, gmac->port_mask,
 	    gmac->vlan_id);
-	EDMA_UNLOCK(sc);
+
+	EDMA_RING_UNLOCK(&sc->sc_tx_ring[q]);
+
 	/* Don't consume mbuf; if_transmit caller will if needed */
 	return (ret);
 }

@@ -178,13 +178,14 @@ qcom_ess_edma_hw_intr_disable(struct qcom_ess_edma_softc *sc)
 
 /*
  * Enable/disable the given RX ring interrupt.
+ *
+ * Must be called with the RX ring lock held.
  */
 int
 qcom_ess_edma_hw_intr_rx_intr_set_enable(struct qcom_ess_edma_softc *sc,
     int rxq, bool state)
 {
-
-	EDMA_LOCK_ASSERT(sc);
+	// XXX TODO: ring lock assert
 
 	EDMA_REG_WRITE(sc, EDMA_REG_RX_INT_MASK_Q(rxq), state ? 1 : 0);
 	EDMA_REG_BARRIER_WRITE(sc);
@@ -194,13 +195,15 @@ qcom_ess_edma_hw_intr_rx_intr_set_enable(struct qcom_ess_edma_softc *sc,
 
 /*
  * Enable/disable the given TX ring interrupt.
+ *
+ * Must be called with the TX ring lock held.
  */
 int
 qcom_ess_edma_hw_intr_tx_intr_set_enable(struct qcom_ess_edma_softc *sc,
     int txq, bool state)
 {
 
-	EDMA_LOCK_ASSERT(sc);
+	// XXX TODO: ring lock assert
 
 	EDMA_REG_WRITE(sc, EDMA_REG_TX_INT_MASK_Q(txq), state ? 1 : 0);
 	EDMA_REG_BARRIER_WRITE(sc);
@@ -260,6 +263,7 @@ qcom_ess_edma_hw_intr_status_clear(struct qcom_ess_edma_softc *sc)
 int
 qcom_ess_edma_hw_intr_rx_ack(struct qcom_ess_edma_softc *sc, int rx_queue)
 {
+	// XXX TODO: ring lock assert
 
 	EDMA_REG_WRITE(sc, EDMA_REG_RX_ISR, (1U << rx_queue));
 	(void) EDMA_REG_READ(sc, EDMA_REG_RX_ISR);
@@ -273,6 +277,7 @@ qcom_ess_edma_hw_intr_rx_ack(struct qcom_ess_edma_softc *sc, int rx_queue)
 int
 qcom_ess_edma_hw_intr_tx_ack(struct qcom_ess_edma_softc *sc, int tx_queue)
 {
+	// XXX TODO: ring lock assert
 
 	EDMA_REG_WRITE(sc, EDMA_REG_TX_ISR, (1U << tx_queue));
 	(void) EDMA_REG_READ(sc, EDMA_REG_TX_ISR);
@@ -392,7 +397,7 @@ qcom_ess_edma_hw_rfd_prod_index_update(struct qcom_ess_edma_softc *sc,
 {
 	uint32_t reg;
 
-	EDMA_LOCK_ASSERT(sc);
+	// XXX TODO: ring lock assert
 
 	QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_RX_RING_MGMT,
 	    "%s: called; q=%d idx=0x%x\n",
@@ -420,7 +425,7 @@ qcom_ess_edma_hw_rfd_get_cons_index(struct qcom_ess_edma_softc *sc, int queue)
 {
 	uint32_t reg;
 
-	EDMA_LOCK_ASSERT(sc);
+	// XXX TODO: ring lock assert
 
 	EDMA_REG_BARRIER_READ(sc);
 	reg = EDMA_REG_READ(sc, EDMA_REG_RFD_IDX_Q(queue));
@@ -435,7 +440,7 @@ int
 qcom_ess_edma_hw_rfd_sw_cons_index_update(struct qcom_ess_edma_softc *sc,
     int queue, int idx)
 {
-	EDMA_LOCK_ASSERT(sc);
+	// XXX TODO: ring lock assert
 
 	EDMA_REG_WRITE(sc, EDMA_REG_RX_SW_CONS_IDX_Q(queue), idx);
 	EDMA_REG_BARRIER_WRITE(sc);
