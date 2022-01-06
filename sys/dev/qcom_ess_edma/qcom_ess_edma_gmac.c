@@ -235,7 +235,20 @@ qcom_ess_edma_gmac_parse(struct qcom_ess_edma_softc *sc, int gmac_id)
 		return (ENOENT);
 	}
 
-	/* XXX TODO: local-mac-address */
+	/* local-mac-address */
+	len = OF_getprop(p, "local-mac-address", (void *) &gmac->eaddr,
+	    sizeof(struct ether_addr));
+	if ((len != sizeof(struct ether_addr))
+	    || (ETHER_IS_ZERO(gmac->eaddr.octet))) {
+		device_printf(sc->sc_dev, "gmac%d: generating random MAC\n",
+		    gmac_id);
+		/* random mac address for now */
+		arc4rand(&gmac->eaddr, sizeof(gmac->eaddr), 0);
+		/* Unicast */
+		gmac->eaddr.octet[0] &= 0xFE;
+		/* Locally administered. */
+		gmac->eaddr.octet[0] |= 0x02;
+	}
 
 	/* vlan-tag - <id portmask> tuple */
 	len = OF_getproplen(p, "vlan_tag");
@@ -262,12 +275,6 @@ qcom_ess_edma_gmac_parse(struct qcom_ess_edma_softc *sc, int gmac_id)
 	gmac->vlan_id = vlan_tag[0];
 	gmac->port_mask = vlan_tag[1];
 
-	/* random mac address for now */
-	arc4rand(&gmac->eaddr, sizeof(gmac->eaddr), 0);
-	/* Unicast */
-	gmac->eaddr.octet[0] &= 0xFE;
-	/* Locally administered. */
-	gmac->eaddr.octet[0] |= 0x02;
 
 	device_printf(sc->sc_dev,
 	    "gmac%d: MAC=%6D, vlan id=%d, port_mask=0x%04x\n",
