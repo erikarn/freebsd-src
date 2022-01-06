@@ -318,6 +318,7 @@ qcom_ess_edma_rx_ring_complete(struct qcom_ess_edma_softc *sc, int queue,
 	struct mbuf *m;
 	struct qcom_edma_rx_return_desc *rrd;
 	int num_rfds, port_id, priority, hash_type, hash_val, flow_cookie, vlan;
+	bool rx_checksum = 1;
 
 	ring = &sc->sc_rx_ring[queue];
 
@@ -407,13 +408,34 @@ qcom_ess_edma_rx_ring_complete(struct qcom_ess_edma_softc *sc, int queue,
 			QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_RX_FRAME,
 			    "%s:  port_id=%d gmac=%d\n", __func__,
 			    port_id, gmac->id);
-			if (gmac->enabled == true)
+			if (gmac->enabled == true) {
 				m->m_pkthdr.rcvif = gmac->ifp;
+				if ((gmac->ifp->if_capenable & IFCAP_RXCSUM) != 0)
+					rx_checksum = true;
+			}
 		}
 
 		/* XXX TODO: handle multi-frame packets (ie, jumbos!) */
 		/* XXX TODO: add vlan header / tag offload fields */
-		/* XXX TODO: add flow, checksum offload, etc */
+		/* XXX TODO: add flow offload, etc */
+
+		/*
+		 * Check the RX checksum flag if the destination ifp
+		 * has the RXCSUM flag set.
+		 */
+		if (rx_checksum) {
+			if (rrd->rrd6 & EDMA_RRD_CSUM_FAIL_MASK) {
+				/* Fail */
+				ring->stats.num_rx_csum_fail++;
+			} else {
+				m->m_pkthdr.csum_flags |= CSUM_IP_CHECKED
+				    | CSUM_IP_VALID
+				    | CSUM_DATA_VALID
+				    | CSUM_PSEUDO_HDR;
+				m->m_pkthdr.csum_data = 0xffff;
+				ring->stats.num_rx_csum_ok++;
+			}
+		}
 
 		if (mbufq_enqueue(mq, m) != 0) {
 			ring->stats.num_enqueue_full++;

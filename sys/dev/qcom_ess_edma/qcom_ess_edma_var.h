@@ -139,6 +139,8 @@ struct qcom_ess_edma_desc_ring {
 		uint64_t	num_tx_ok;
 		uint64_t	num_tx_maxfrags;
 		uint64_t	num_tx_mapfail;
+		uint64_t	num_rx_csum_ok;
+		uint64_t	num_rx_csum_fail;
 	} stats;
 };
 

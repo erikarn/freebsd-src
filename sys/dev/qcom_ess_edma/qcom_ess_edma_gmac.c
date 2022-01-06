@@ -46,6 +46,7 @@ __FBSDID("$FreeBSD$");
 
 #include <net/if.h>
 #include <net/if_var.h>
+#include <net/if_vlan_var.h>
 #include <net/if_media.h>
 #include <net/ethernet.h>
 #include <net/if_types.h>
@@ -105,7 +106,7 @@ qcom_ess_edma_gmac_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 	struct qcom_ess_edma_gmac *gmac = ifp->if_softc;
 	struct qcom_ess_edma_softc *sc = gmac->sc;
 	struct ifreq *ifr = (struct ifreq *) data;
-	int error;
+	int error, mask;
 
 	/* XXX TODO */
 	switch (command) {
@@ -132,6 +133,16 @@ qcom_ess_edma_gmac_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 	case SIOCGIFMEDIA:
 	case SIOCSIFMEDIA:
 		error = ifmedia_ioctl(ifp, ifr, &gmac->ifm, command);
+		break;
+	case SIOCSIFCAP:
+		mask = ifr->ifr_reqcap ^ ifp->if_capenable;
+		error = 0;
+
+		if ((mask & IFCAP_RXCSUM) != 0 &&
+		    (ifp->if_capabilities & IFCAP_RXCSUM) != 0)
+			ifp->if_capenable ^= IFCAP_RXCSUM;
+
+		VLAN_CAPABILITIES(ifp);
 		break;
 	default:
 		error = ether_ioctl(ifp, command, data);
@@ -301,6 +312,10 @@ qcom_ess_edma_gmac_create_ifnet(struct qcom_ess_edma_softc *sc, int gmac_id)
 
 	gmac->ifp->if_capabilities |= IFCAP_VLAN_MTU;
 
+	gmac->ifp->if_capabilities |= IFCAP_RXCSUM;
+	gmac->ifp->if_hwassist = CSUM_TCP | CSUM_UDP;
+
+
 	/* Configure a hard-coded media */
 	ifmedia_init(&gmac->ifm, 0, qcom_ess_edma_gmac_mediachange,
 	    qcom_ess_edma_gmac_mediastatus);
@@ -308,6 +323,8 @@ qcom_ess_edma_gmac_create_ifnet(struct qcom_ess_edma_softc *sc, int gmac_id)
 	ifmedia_set(&gmac->ifm, IFM_ETHER | IFM_1000_T | IFM_FDX);
 
 	ether_ifattach(gmac->ifp, (char *) &gmac->eaddr);
+
+	gmac->ifp->if_capenable = gmac->ifp->if_capabilities;
 
 	return (0);
 }
@@ -372,6 +389,7 @@ qcom_ess_edma_gmac_receive_frames(struct qcom_ess_edma_softc *sc,
 		} else {
 			ring->stats.num_rx_ok++;
 			ifp = m->m_pkthdr.rcvif;
+			if_inc_counter(ifp, IFCOUNTER_IPACKETS, 1);
 			ifp->if_input(ifp, m);
 		}
 	}
