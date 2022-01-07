@@ -413,8 +413,9 @@ qcom_ess_edma_attach(device_t dev)
 			goto error;
 	}
 
-	/* Default receive frame size */
+	/* Default receive frame size - before ETHER_ALIGN hack */
 	sc->sc_config.rx_buf_size = 2048;
+	sc->sc_config.rx_buf_ether_align = true;
 
 	/* Default RSS paramters */
 	sc->sc_config.rss_type =

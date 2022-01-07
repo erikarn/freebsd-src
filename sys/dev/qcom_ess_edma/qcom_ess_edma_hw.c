@@ -531,6 +531,7 @@ int
 qcom_ess_edma_hw_setup_txrx_desc_rings(struct qcom_ess_edma_softc *sc)
 {
 	uint32_t reg, i, idx;
+	int len;
 
 	EDMA_LOCK_ASSERT(sc);
 
@@ -576,7 +577,10 @@ qcom_ess_edma_hw_setup_txrx_desc_rings(struct qcom_ess_edma_softc *sc)
 	EDMA_REG_BARRIER_WRITE(sc);
 
 	/* Configure RX buffer size */
-	reg = (sc->sc_config.rx_buf_size & EDMA_RX_BUF_SIZE_MASK)
+	len = sc->sc_config.rx_buf_size;
+	if (sc->sc_config.rx_buf_ether_align)
+		len -= ETHER_ALIGN;
+	reg = (len & EDMA_RX_BUF_SIZE_MASK)
 	    << EDMA_RX_BUF_SIZE_SHIFT;
 	/* .. and RFD ring size */
 	reg |= (sc->sc_config.rx_ring_count & EDMA_RFD_RING_SIZE_MASK)

@@ -202,6 +202,7 @@ struct qcom_ess_edma_softc {
 		uint32_t rss_type;
 
 		uint32_t rx_buf_size;
+		bool rx_buf_ether_align;
 
 		uint32_t tx_intr_mask;
 		uint32_t rx_intr_mask;

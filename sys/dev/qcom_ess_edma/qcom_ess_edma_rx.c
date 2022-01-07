@@ -149,6 +149,10 @@ qcom_ess_edma_rx_buf_alloc(struct qcom_ess_edma_softc *sc,
 	/* Load dma map, get physical memory address of mbuf */
 	nsegs = 1;
 	m->m_pkthdr.len = m->m_len = sc->sc_config.rx_buf_size;
+
+	/* ETHER_ALIGN hack */
+	if (sc->sc_config.rx_buf_ether_align)
+		m_adj(m, ETHER_ALIGN);
 	error = bus_dmamap_load_mbuf_sg(ring->buffer_dma_tag, rxd->m_dmamap,
 	    m, segs, &nsegs, 0);
 	if (error != 0 || nsegs != 1) {
