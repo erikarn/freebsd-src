@@ -320,8 +320,8 @@ qcom_ess_edma_gmac_create_ifnet(struct qcom_ess_edma_softc *sc, int gmac_id)
 	gmac->ifp->if_capabilities |= IFCAP_VLAN_MTU;
 
 	gmac->ifp->if_capabilities |= IFCAP_RXCSUM;
-	gmac->ifp->if_hwassist = CSUM_TCP | CSUM_UDP;
-
+//	gmac->ifp->if_hwassist = CSUM_TCP | CSUM_UDP;
+	gmac->ifp->if_hwassist = 0;
 
 	/* Configure a hard-coded media */
 	ifmedia_init(&gmac->ifm, 0, qcom_ess_edma_gmac_mediachange,
