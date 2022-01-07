@@ -230,7 +230,7 @@ qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
 		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_FRAME,
 		    "%s: num_left=%d\n", __func__, num_left);
 		ring->stats.num_enqueue_full++;
-		return (ENOSPC);
+		return (ENOBUFS);
 	}
 
 	/*
@@ -257,13 +257,13 @@ qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
 		ring->stats.num_tx_mapfail++;
 		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_FRAME,
 		    "%s: map failed\n", __func__);
-		return (ENOSPC);
+		return (ENOBUFS);
 	}
 	if (nsegs == 0) {
 		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_FRAME,
 		    "%s: too many segs\n", __func__);
 		ring->stats.num_tx_maxfrags++;
-		return (ENOSPC);
+		return (ENOBUFS);
 	}
 
 	bus_dmamap_sync(ring->buffer_dma_tag, txd->m_dmamap,
