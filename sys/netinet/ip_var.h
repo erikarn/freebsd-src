@@ -173,8 +173,12 @@ void	kmod_ipstat_dec(int statnum);
 
 #ifdef __NO_STRICT_ALIGNMENT
 #define IP_HDR_ALIGNED_P(ip)	1
+#define TCP_HDR_ALIGNED_P(ip)	1
+#define UDP_HDR_ALIGNED_P(ip)	1
 #else
 #define IP_HDR_ALIGNED_P(ip)	((((intptr_t) (ip)) & 3) == 0)
+#define TCP_HDR_ALIGNED_P(ip)	((((intptr_t) (ip)) & 3) == 0)
+#define UDP_HDR_ALIGNED_P(ip)	((((intptr_t) (ip)) & 3) == 0)
 #endif
 
 struct ip;

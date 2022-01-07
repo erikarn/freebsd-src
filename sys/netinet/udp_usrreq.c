@@ -366,6 +366,9 @@ udp_multi_match(const struct inpcb *inp, void *v)
 	struct ip *ip = v;
 	struct udphdr *uh = (struct udphdr *)(ip + 1);
 
+	KASSERT(IP_HDR_ALIGNED_P(ip), ("ip header aligned"));
+	KASSERT(UDP_HDR_ALIGNED_P(uh), ("udp header not aligned"));
+
 	if (inp->inp_lport != uh->uh_dport)
 		return (false);
 #ifdef INET6
@@ -398,6 +401,10 @@ udp_multi_input(struct mbuf *m, int proto, struct sockaddr_in *udp_in)
 	struct mbuf *n;
 	int appends = 0;
 
+	KASSERT(IP_HDR_ALIGNED_P(ip), ("ip header aligned"));
+#ifdef KDTRACE_HOOKS
+	KASSERT(UDP_HDR_ALIGNED_P(uh), ("udp header not aligned"));
+#endif
 	MPASS(ip->ip_hl == sizeof(struct ip) >> 2);
 
 	while ((inp = inp_next(&inpi)) != NULL) {
@@ -520,6 +527,10 @@ udp_input(struct mbuf **mp, int *offp, int proto)
 	}
 	ip = mtod(m, struct ip *);
 	uh = (struct udphdr *)((caddr_t)ip + iphlen);
+
+	KASSERT(IP_HDR_ALIGNED_P(ip), ("ip header aligned"));
+	KASSERT(UDP_HDR_ALIGNED_P(uh), ("udp header not aligned"));
+
 	cscov_partial = (proto == IPPROTO_UDPLITE) ? 1 : 0;
 
 	/*
@@ -765,7 +776,9 @@ udp_common_ctlinput(int cmd, struct sockaddr *sa, void *vip,
 	else if ((unsigned)cmd >= PRC_NCMDS || inetctlerrmap[cmd] == 0)
 		return;
 	if (ip != NULL) {
+		KASSERT(IP_HDR_ALIGNED_P(ip), ("ip header aligned"));
 		uh = (struct udphdr *)((caddr_t)ip + (ip->ip_hl << 2));
+		KASSERT(UDP_HDR_ALIGNED_P(uh), ("udp header not aligned"));
 		inp = in_pcblookup(pcbinfo, faddr, uh->uh_dport,
 		    ip->ip_src, uh->uh_sport, INPLOOKUP_WLOCKPCB, NULL);
 		if (inp != NULL) {

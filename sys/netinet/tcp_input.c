@@ -646,6 +646,9 @@ tcp_input_with_port(struct mbuf **mp, int *offp, int proto, uint16_t port)
 
 	NET_EPOCH_ASSERT();
 
+	KASSERT(IP_HDR_ALIGNED_P(mtod(m, struct ip *)),
+	    ("ip header not aligned"));
+
 #ifdef INET6
 	isipv6 = (mtod(m, struct ip *)->ip_v == 6) ? 1 : 0;
 #endif
@@ -659,8 +662,12 @@ tcp_input_with_port(struct mbuf **mp, int *offp, int proto, uint16_t port)
 #ifdef INET6
 	if (isipv6) {
 		ip6 = mtod(m, struct ip6_hdr *);
+		KASSERT(IP_HDR_ALIGNED_P(ip6), ("ipv6 header not aligned"));
 		th = (struct tcphdr *)((caddr_t)ip6 + off0);
 		tlen = sizeof(*ip6) + ntohs(ip6->ip6_plen) - off0;
+
+		KASSERT(TCP_HDR_ALIGNED_P(th), ("tcp header not aligned"));
+
 		if (port)
 			goto skip6_csum;
 		if (m->m_pkthdr.csum_flags & CSUM_DATA_VALID_IPV6) {
@@ -713,8 +720,12 @@ tcp_input_with_port(struct mbuf **mp, int *offp, int proto, uint16_t port)
 			}
 		}
 		ip = mtod(m, struct ip *);
+		KASSERT(IP_HDR_ALIGNED_P(ip), ("ip header not aligned"));
+
 		th = (struct tcphdr *)((caddr_t)ip + off0);
 		tlen = ntohs(ip->ip_len) - off0;
+
+		KASSERT(TCP_HDR_ALIGNED_P(th), ("tcp header not aligned"));
 
 		iptos = ip->ip_tos;
 		if (port)
@@ -777,7 +788,11 @@ tcp_input_with_port(struct mbuf **mp, int *offp, int proto, uint16_t port)
 				}
 			}
 			ip6 = mtod(m, struct ip6_hdr *);
+			KASSERT(IP_HDR_ALIGNED_P(ip6),
+			    ("ip6 header not aligned"));
 			th = (struct tcphdr *)((caddr_t)ip6 + off0);
+			KASSERT(TCP_HDR_ALIGNED_P(th),
+			    ("tcp header not aligned"));
 		}
 #endif
 #if defined(INET) && defined(INET6)
@@ -792,7 +807,11 @@ tcp_input_with_port(struct mbuf **mp, int *offp, int proto, uint16_t port)
 					return (IPPROTO_DONE);
 				}
 				ip = mtod(m, struct ip *);
+				KASSERT(IP_HDR_ALIGNED_P(ip6),
+				    ("ip header not aligned"));
 				th = (struct tcphdr *)((caddr_t)ip + off0);
+				KASSERT(TCP_HDR_ALIGNED_P(th),
+				    ("tcp header not aligned"));
 			}
 		}
 #endif
