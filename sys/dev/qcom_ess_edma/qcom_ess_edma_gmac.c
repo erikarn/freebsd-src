@@ -177,10 +177,21 @@ qcom_ess_edma_gmac_transmit(struct ifnet *ifp, struct mbuf *m)
 	int q;
 
 	/*
-	 * For now just use curcpu; we'll spread it out a bit better
-	 * and take the mbuf flowid/hash stuff into account later.
-	 * (And yes, technically we should cpu pin during transmit..)
+	 * Map flowid / curcpu to a given transmit queue.
+	 *
+	 * Since we're running on a platform with either two
+	 * or four CPUs, we want to distribute the load to a set
+	 * of TX queues that won't clash with any other CPU TX queue
+	 * use.  So for now, just use curcpu; later on this should
+	 * the flowid and map it to one of a set of TX queues that
+	 * is dedicated to this CPU.
 	 */
+#if 0
+	if (M_HASHTYPE_GET(m) != M_HASHTYPE_NONE)
+		q = m->m_pkthdr.flowid % QCOM_ESS_EDMA_NUM_TX_RINGS;
+	else
+		q = curcpu % QCOM_ESS_EDMA_NUM_TX_RINGS;
+#endif
 	q = curcpu % QCOM_ESS_EDMA_NUM_TX_RINGS;
 
 	EDMA_RING_LOCK(&sc->sc_tx_ring[q]);
