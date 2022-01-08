@@ -238,16 +238,11 @@ qcom_ess_edma_gmac_parse(struct qcom_ess_edma_softc *sc, int gmac_id)
 	/* local-mac-address */
 	len = OF_getprop(p, "local-mac-address", (void *) &gmac->eaddr,
 	    sizeof(struct ether_addr));
-	if ((len != sizeof(struct ether_addr))
-	    || (ETHER_IS_ZERO(gmac->eaddr.octet))) {
-		device_printf(sc->sc_dev, "gmac%d: generating random MAC\n",
+	if (len != sizeof(struct ether_addr)) {
+		device_printf(sc->sc_dev,
+		    "gmac%d: Couldn't parse local-mac-address\n",
 		    gmac_id);
-		/* random mac address for now */
-		arc4rand(&gmac->eaddr, sizeof(gmac->eaddr), 0);
-		/* Unicast */
-		gmac->eaddr.octet[0] &= 0xFE;
-		/* Locally administered. */
-		gmac->eaddr.octet[0] |= 0x02;
+		memset(&gmac->eaddr, 0, sizeof(gmac->eaddr));
 	}
 
 	/* vlan-tag - <id portmask> tuple */
@@ -310,6 +305,13 @@ qcom_ess_edma_gmac_create_ifnet(struct qcom_ess_edma_softc *sc, int gmac_id)
 	gmac->ifp->if_softc = gmac;
 
 	if_initname(gmac->ifp, "gmac", gmac_id);
+
+	if (ETHER_IS_ZERO(gmac->eaddr.octet)) {
+		device_printf(sc->sc_dev, "gmac%d: generating random MAC\n",
+		    gmac_id);
+		ether_gen_addr(gmac->ifp, (void *) &gmac->eaddr.octet);
+	}
+
 	gmac->ifp->if_flags = IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST;
 
 	gmac->ifp->if_ioctl = qcom_ess_edma_gmac_ioctl;
@@ -320,7 +322,7 @@ qcom_ess_edma_gmac_create_ifnet(struct qcom_ess_edma_softc *sc, int gmac_id)
 	gmac->ifp->if_capabilities |= IFCAP_VLAN_MTU;
 
 	gmac->ifp->if_capabilities |= IFCAP_RXCSUM;
-//	gmac->ifp->if_hwassist = CSUM_TCP | CSUM_UDP;
+	/* CSUM_TCP | CSUM_UDP for TX checksum offload */
 	gmac->ifp->if_hwassist = 0;
 
 	/* Configure a hard-coded media */
