@@ -34,6 +34,8 @@ extern	int ar40xx_hw_vtu_op(struct ar40xx_softc *sc, uint32_t op,
 extern	int ar40xx_hw_vtu_load_vlan(struct ar40xx_softc *sc, uint32_t vid,
 	    uint32_t port_mask);
 extern	int ar40xx_hw_vtu_flush(struct ar40xx_softc *sc);
+extern	int ar40xx_hw_vtu_get_vlan(struct ar40xx_softc *sc, int vid,
+	    uint32_t *ports, uint32_t *untagged_ports);
 
 #endif	/* __AR40XX_HW_VTU_H__ */
 

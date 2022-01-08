@@ -77,7 +77,7 @@ ar40xx_hw_vtu_op(struct ar40xx_softc *sc, uint32_t op, uint32_t val)
 {
 	int ret;
 
-	device_printf(sc->sc_dev, "%s: called; op=%d, val=%d\n",
+	device_printf(sc->sc_dev, "%s: called; op=0x%08x, val=0x%08x\n",
 	    __func__, op, val);
 
 	ret = (ar40xx_hw_wait_bit(sc, AR40XX_REG_VTU_FUNC1,
@@ -137,3 +137,43 @@ ar40xx_hw_vtu_flush(struct ar40xx_softc *sc)
 	ret = ar40xx_hw_vtu_op(sc, AR40XX_VTU_FUNC1_OP_FLUSH, 0);
 	return (ret);
 }
+
+int
+ar40xx_hw_vtu_get_vlan(struct ar40xx_softc *sc, int vid, uint32_t *ports,
+    uint32_t *untagged_ports)
+{
+	uint32_t op, reg, val;
+	int i, r;
+
+	op = AR40XX_VTU_FUNC1_OP_GET_ONE;
+
+	/* Filter out the vid flags; only grab the VLAN ID */
+	vid &= 0xfff;
+
+	/* XXX TODO: the VTU here stores egress mode - keep, tag, untagged, none */
+	op |= (vid << AR40XX_VTU_FUNC1_VID_S);
+	r = ar40xx_hw_vtu_op(sc, op, 0);
+	if (r != 0) {
+		device_printf(sc->sc_dev, "%s: %d: op failed\n", __func__, vid);
+		return (r);
+	}
+
+	AR40XX_REG_BARRIER_READ(sc);
+	reg = AR40XX_REG_READ(sc, AR40XX_REG_VTU_FUNC0);
+
+	*ports = 0;
+	for (i = 0; i < AR40XX_NUM_PORTS; i++) {
+		val = reg >> AR40XX_VTU_FUNC0_EG_MODE_S(i);
+		val = val & 0x3;
+		/* XXX KEEP (unmodified? For non-dot1q operation?) */
+		if (val == AR40XX_VTU_FUNC0_EG_MODE_TAG) {
+			*ports |= (1 << i);
+		} else if (val == AR40XX_VTU_FUNC0_EG_MODE_UNTAG) {
+			*ports |= (1 << i);
+			*untagged_ports |= (1 << i);
+		}
+	}
+
+	return (0);
+}
+

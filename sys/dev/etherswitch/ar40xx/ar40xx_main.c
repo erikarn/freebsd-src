@@ -69,6 +69,7 @@
 #include <dev/etherswitch/ar40xx/ar40xx_hw_psgmii.h>
 #include <dev/etherswitch/ar40xx/ar40xx_hw_port.h>
 #include <dev/etherswitch/ar40xx/ar40xx_hw_mib.h>
+#include <dev/etherswitch/ar40xx/ar40xx_hw_vtu.h>
 
 #include "mdio_if.h"
 #include "miibus_if.h"
@@ -240,7 +241,9 @@ ar40xx_attach(device_t dev)
 	sc->sc_mdio_phandle = mdio_p;
 	sc->sc_mdio_dev = OF_device_from_xref(OF_xref_from_node(mdio_p));
 	if (sc->sc_mdio_dev == NULL) {
-		device_printf(dev, "%s: couldn't get mdio device (mdio_p=%u)\n", __func__, mdio_p);
+		device_printf(dev,
+		    "%s: couldn't get mdio device (mdio_p=%u)\n",
+		    __func__, mdio_p);
 		goto error;
 	}
 
@@ -507,7 +510,11 @@ ar40xx_getport(device_t dev, etherswitch_port_t *p)
 	/* Fetch the current VLAN configuration for this port */
 	/* PVID */
 	ar40xx_hw_get_port_pvid(sc, p->es_port, &p->es_pvid);
-	/* XXX TODO: VLAN Flags */
+
+	/*
+	 * The VLAN egress aren't appropriate to the ports;
+	 * instead it's part of the VLAN group config.
+	 */
 
 	/* Get MII config */
 	mii = ar40xx_phy_miiforport(sc, p->es_port);
@@ -545,11 +552,50 @@ ar40xx_setport(device_t dev, etherswitch_port_t *p)
 }
 
 static int
-ar40xx_getvgroup(device_t dev, etherswitch_vlangroup_t *e)
+ar40xx_getvgroup(device_t dev, etherswitch_vlangroup_t *vg)
 {
 	struct ar40xx_softc *sc = device_get_softc(dev);
-	device_printf(sc->sc_dev, "%s: called\n", __func__);
-	return (ENXIO);
+	int vid, ret;
+
+	if (vg->es_vlangroup > sc->sc_info.es_nvlangroups)
+		return (EINVAL);
+
+	vg->es_untagged_ports = 0;
+	vg->es_member_ports = 0;
+	vg->es_fid = 0;
+
+	AR40XX_LOCK(sc);
+
+	/* Note: only supporting 802.1q VLAN config for now */
+	if (sc->sc_vlan.vlan != 1) {
+		vg->es_member_ports = 0;
+		vg->es_untagged_ports = 0;
+		AR40XX_UNLOCK(sc);
+		return (-1);
+	}
+
+	/*
+	 * For now, this driver assumes the vlan table == vlan id.
+	 * XXX TODO: should introduce a vlangroup <-> vlan_id mapping.
+	 */
+	vid = vg->es_vlangroup;
+	vg->es_vid = vid;
+	if (sc->sc_vlan.vlan_table[vid] == 0) {
+		/* No ports in it; treat it as not available for now */
+		AR40XX_UNLOCK(sc);
+		return (0);
+	}
+
+	ret = ar40xx_hw_vtu_get_vlan(sc, vid, &vg->es_member_ports,
+	    &vg->es_untagged_ports);
+
+	AR40XX_UNLOCK(sc);
+
+	if (ret == 0) {
+		vg->es_vid |= ETHERSWITCH_VID_VALID;
+	}
+
+	return (ret);
 }
 
 static int
