@@ -106,7 +106,6 @@ int
 ar40xx_hw_psgmii_set_mac_mode(struct ar40xx_softc *sc, uint32_t mac_mode)
 {
 	if (mac_mode == PORT_WRAPPER_PSGMII) {
-		device_printf(sc->sc_dev, "TODO: MAC_MODE=PSGMII\n");
 		ar40xx_hw_psgmii_reg_write(sc, AR40XX_PSGMII_MODE_CONTROL,
 		    0x2200);
 		ar40xx_hw_psgmii_reg_write(sc, AR40XX_PSGMIIPHY_TX_CONTROL,
@@ -175,7 +174,8 @@ ar40xx_hw_psgmii_single_phy_testing(struct ar40xx_softc *sc, int phy)
 		/* success */
 		sc->sc_psgmii.phy_t_status &= ~(1U << phy);
 	} else {
-		device_printf(sc->sc_dev, "TX_OK=%d, tx_error=%d RX_OK=%d rx_error=%d\n",
+		device_printf(sc->sc_dev, "TX_OK=%d, tx_error=%d RX_OK=%d"
+		    " rx_error=%d\n",
 		    tx_all_ok, tx_error, rx_all_ok, rx_error);
 		device_printf(sc->sc_dev,
 		    "PHY %d single test PSGMII issue happen!\n", phy);
@@ -324,9 +324,6 @@ ar40xx_hw_psgmii_self_test(struct ar40xx_softc *sc)
 
 	ar40xx_hw_malibu_psgmii_ess_reset(sc);
 
-	// check the PHY IDs for each of the PHYs from 0..4.
-	(void) ar40xx_hw_phy_get_ids(sc);
-
 	/* switch to access MII reg for copper */
 	MDIO_WRITEREG(sc->sc_mdio_dev, 4, 0x1f, 0x8500);
 	for (phy = 0; phy < AR40XX_NUM_PORTS - 1; phy++) {
@@ -337,12 +334,12 @@ ar40xx_hw_psgmii_self_test(struct ar40xx_softc *sc)
 	/* force no link by power down */
 	MDIO_WRITEREG(sc->sc_mdio_dev, 0x1f, 0x0, 0x1840);
 
-	/*packet number*/
+	/* packet number*/
 	ar40xx_hw_phy_mmd_write(sc, 0x1f, 7, 0x8021, 0x1000);
 	ar40xx_hw_phy_mmd_write(sc, 0x1f, 7, 0x8062, 0x05e0);
 
-	/*fix mdi status */
-	MDIO_WRITEREG(sc->sc_mdio_dev, 0x1f, 0x10, 0x6800); 
+	/* fix mdi status */
+	MDIO_WRITEREG(sc->sc_mdio_dev, 0x1f, 0x10, 0x6800);
 	for (i = 0; i < AR40XX_PSGMII_CALB_NUM; i++) {
 		sc->sc_psgmii.phy_t_status = 0;
 

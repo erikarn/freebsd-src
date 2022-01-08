@@ -340,24 +340,52 @@ ar40xx_attach(device_t dev)
 	 * Ok, at this point we have enough resources to do an initial
 	 * reset and configuration.
 	 */
-	device_printf(dev, "%s: begin startup\n", __func__);
 
 	AR40XX_LOCK(sc);
 
 	// Initial PSGMII/RGMII port configuration
 	ret = ar40xx_hw_psgmii_init_config(sc);
+	if (ret != 0) {
+		device_printf(sc->sc_dev,
+		    "ERROR: failed to init PSGMII (%d)\n", ret);
+		goto error_locked;
+	}
 
 	// ess reset
 	ret = ar40xx_hw_ess_reset(sc);
+	if (ret != 0) {
+		device_printf(sc->sc_dev,
+		    "ERROR: failed to reset ESS block (%d)\n", ret);
+		goto error_locked;
+	}
 
 	// check the PHY IDs for each of the PHYs from 0..4.
-	ret = ar40xx_hw_phy_get_ids(sc);
+	if (bootverbose) {
+		ret = ar40xx_hw_phy_get_ids(sc);
+		if (ret != 0) {
+			device_printf(sc->sc_dev,
+			    "ERROR: failed to check PHY IDs (%d)\n", ret);
+			goto error_locked;
+		}
+	}
 
-	// psgmii_self_test
+	/*
+	 * Do PSGMII PHY self-test; work-around issues.
+	 */
 	ret = ar40xx_hw_psgmii_self_test(sc);
+	if (ret != 0) {
+		device_printf(sc->sc_dev,
+		    "ERROR: failed to do PSGMII self-test (%d)\n", ret);
+		goto error_locked;
+	}
 
-	// psgmii_self_test_clean
+	/* Return port config to runtime state */
 	ret = ar40xx_hw_psgmii_self_test_clean(sc);
+	if (ret != 0) {
+		device_printf(sc->sc_dev,
+		    "ERROR: failed to do PSGMII runtime config (%d)\n", ret);
+		goto error_locked;
+	}
 
 	// mac_mode_init
 	ret = ar40xx_hw_psgmii_set_mac_mode(sc,
@@ -376,6 +404,8 @@ ar40xx_attach(device_t dev)
 
 	// cpuport setup
 	ret = ar40xx_hw_port_cpuport_setup(sc);
+
+	/* XXX TODO: setup default learning, ATU entry age, replacement policy, etc */
 
 	AR40XX_UNLOCK(sc);
 
@@ -414,6 +444,8 @@ ar40xx_attach(device_t dev)
 	ar40xx_sysctl_attach(sc);
 
 	return (0);
+error_locked:
+	AR40XX_UNLOCK(sc);
 error:
 	/* XXX TODO: free resources */
 	return (ENXIO);

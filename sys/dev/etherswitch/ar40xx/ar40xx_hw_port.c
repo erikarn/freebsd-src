@@ -64,6 +64,7 @@
 
 #include <dev/etherswitch/ar40xx/ar40xx_var.h>
 #include <dev/etherswitch/ar40xx/ar40xx_reg.h>
+#include <dev/etherswitch/ar40xx/ar40xx_debug.h>
 #include <dev/etherswitch/ar40xx/ar40xx_hw_port.h>
 
 #include "mdio_if.h"
@@ -76,7 +77,8 @@ ar40xx_hw_port_init(struct ar40xx_softc *sc, int port)
 {
 	uint32_t reg;
 
-	device_printf(sc->sc_dev, "%s: called; port %d\n", __func__, port);
+	AR40XX_DPRINTF(sc, AR40XX_DBG_HW_PORT_INIT,
+	    "%s: called; port %d\n", __func__, port);
 
 	AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_STATUS(port), 0);
 	AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_HEADER(port), 0);
@@ -116,23 +118,36 @@ ar40xx_hw_port_init(struct ar40xx_softc *sc, int port)
 	return (0);
 }
 
+/*
+ * Call when the link for a non-CPU port is down.
+ *
+ * This will turn off the MAC/forwarding path for this port.
+ */
 int
 ar40xx_hw_port_link_down(struct ar40xx_softc *sc, int port)
 {
-	device_printf(sc->sc_dev, "%s: called; port %d\n", __func__, port);
+
+	AR40XX_DPRINTF(sc, AR40XX_DBG_HW_PORT_INIT,
+	    "%s: called; port %d\n", __func__, port);
+
 	AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_STATUS(port), 0);
 
 	return (0);
 }
 
+/*
+ * Call when the link for a non-CPU port is up.
+ *
+ * This will turn on the default auto-link checking and
+ * eventually enable the TX/RX MAC.
+ */
 int
 ar40xx_hw_port_link_up(struct ar40xx_softc *sc, int port)
 {
 	uint32_t reg;
 
-	/* For now assume flow, duplex, 1gbit */
-	/* XXX auto link? dunno; should experiment */
-	device_printf(sc->sc_dev, "%s: called\n", __func__);
+	AR40XX_DPRINTF(sc, AR40XX_DBG_HW_PORT_INIT,
+	    "%s: called; port %d\n", __func__, port);
 
 	AR40XX_REG_BARRIER_READ(sc);
 	reg = AR40XX_REG_READ(sc, AR40XX_REG_PORT_STATUS(port));
@@ -140,27 +155,20 @@ ar40xx_hw_port_link_up(struct ar40xx_softc *sc, int port)
 	AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_STATUS(port), reg);
 	AR40XX_REG_BARRIER_WRITE(sc);
 
-#if 0
-	reg = AR40XX_PORT_STATUS_TXFLOW
-	    | AR40XX_PORT_STATUS_RXFLOW
-	    | AR40XX_PORT_TXHALF_FLOW
-	    | AR40XX_PORT_DUPLEX
-	    | AR40XX_PORT_SPEED_1000M;
-	AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_STATUS(port), reg);
-	DELAY(20);
-	reg |= AR40XX_PORT_TX_EN | AR40XX_PORT_RX_EN;
-        AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_STATUS(port), reg);
-	AR40XX_REG_BARRIER_WRITE(sc);
-#endif
 	return (0);
 }
 
+/*
+ * Setup the CPU facing port.  For this device it'll only
+ * be port 0.
+ */
 int
 ar40xx_hw_port_cpuport_setup(struct ar40xx_softc *sc)
 {
 	uint32_t reg;
 
-	device_printf(sc->sc_dev, "%s: called\n", __func__);
+	AR40XX_DPRINTF(sc, AR40XX_DBG_HW_PORT_INIT, "%s: called\n",
+	    __func__);
 
 	reg = AR40XX_PORT_STATUS_TXFLOW
 	    | AR40XX_PORT_STATUS_RXFLOW
@@ -177,6 +185,13 @@ ar40xx_hw_port_cpuport_setup(struct ar40xx_softc *sc)
 	return (0);
 }
 
+/*
+ * Fetch the port PVID.
+ *
+ * For 802.1q mode this is the default VLAN ID for the port.
+ * Frames without an 802.1q VLAN will assume this VLAN ID for
+ * transmit/receive.
+ */
 int
 ar40xx_hw_get_port_pvid(struct ar40xx_softc *sc, int port, int *pvid)
 {
@@ -194,6 +209,12 @@ ar40xx_hw_get_port_pvid(struct ar40xx_softc *sc, int port, int *pvid)
 	return (0);
 }
 
+/*
+ * Set the port PVID.
+ *
+ * For now, since double-tagged frames aren't currently supported,
+ * CVID=SVID here.
+ */
 int
 ar40xx_hw_set_port_pvid(struct ar40xx_softc *sc, int port, int pvid)
 {
@@ -209,6 +230,20 @@ ar40xx_hw_set_port_pvid(struct ar40xx_softc *sc, int port, int pvid)
 	return (0);
 }
 
+/*
+ * Setup the default port membership configuration.
+ *
+ * This configures the PVID for the port in the sc_vlan config,
+ * along with a set of ports that constitute the "membership"
+ * of this particular VID.
+ *
+ * For 802.1q mode the membership can be viewed as the default
+ * learning port group, but this can be added to via VLAN membership.
+ * (Eg you could in theory split two LAN ports into separate "member"
+ * groups and they'd not learn MAC addresses from each other even
+ * inside a VLAN; you'd then end up with the traffic being flooded to
+ * the CPU port.)
+ */
 int
 ar40xx_hw_port_setup(struct ar40xx_softc *sc, int port, uint32_t members)
 {

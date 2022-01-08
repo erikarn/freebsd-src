@@ -144,8 +144,16 @@ ar40xx_ifmedia_sts(struct ifnet *ifp, struct ifmediareq *ifmr)
 	if (mii == NULL)
 		return;
 	mii_pollstat(mii);
+
+	/*
+	 * XXX TODO: compare up/down status; configure the hw port
+	 * mode up or down; ATU flush for the given port upon
+	 * change.
+	 */
+
 	ifmr->ifm_active = mii->mii_media_active;
 	ifmr->ifm_status = mii->mii_media_status;
+
 }
 
 int

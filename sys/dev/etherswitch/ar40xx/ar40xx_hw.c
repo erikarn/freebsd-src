@@ -65,6 +65,7 @@
 #include <dev/etherswitch/ar40xx/ar40xx_var.h>
 #include <dev/etherswitch/ar40xx/ar40xx_reg.h>
 #include <dev/etherswitch/ar40xx/ar40xx_hw.h>
+#include <dev/etherswitch/ar40xx/ar40xx_debug.h>
 
 /*
  * XXX these are here for now; move the code using these
@@ -87,11 +88,22 @@ ar40xx_hw_ess_reset(struct ar40xx_softc *sc)
 {
 	int ret;
 
-	device_printf(sc->sc_dev, "%s: called\n", __func__);
+	AR40XX_DPRINTF(sc, AR40XX_DBG_HW_RESET, "%s: called\n", __func__);
 
 	ret = hwreset_assert(sc->sc_ess_rst);
+	if (ret != 0) {
+		device_printf(sc->sc_dev, "ERROR: failed to assert reset\n");
+		return ret;
+	}
 	DELAY(10*1000);
+
 	ret = hwreset_deassert(sc->sc_ess_rst);
+	if (ret != 0) {
+		device_printf(sc->sc_dev,
+		    "ERROR: failed to deassert reset\n");
+		return ret;
+	}
+
 	DELAY(10*1000);
 
 	return (0);
@@ -102,7 +114,7 @@ ar40xx_hw_init_globals(struct ar40xx_softc *sc)
 {
 	uint32_t reg;
 
-	device_printf(sc->sc_dev, "%s: called\n", __func__);
+	AR40XX_DPRINTF(sc, AR40XX_DBG_HW_INIT, "%s: called\n", __func__);
 
 	/* enable CPU port and disable mirror port */
 	reg = AR40XX_FWD_CTRL0_CPU_PORT_EN
@@ -144,7 +156,7 @@ ar40xx_hw_vlan_init(struct ar40xx_softc *sc)
 {
 	int i;
 
-	device_printf(sc->sc_dev, "%s: called\n", __func__);
+	AR40XX_DPRINTF(sc, AR40XX_DBG_HW_INIT, "%s: called\n", __func__);
 
 	/* Enable VLANs by default */
 	sc->sc_vlan.vlan = 1;
@@ -179,7 +191,7 @@ ar40xx_hw_sw_hw_apply(struct ar40xx_softc *sc)
 	uint8_t portmask[AR40XX_NUM_PORTS];
 	int i, j, ret;
 
-	device_printf(sc->sc_dev, "%s: called\n", __func__);
+	AR40XX_DPRINTF(sc, AR40XX_DBG_HW_INIT, "%s: called\n", __func__);
 
 	/*
 	 * Flush the VTU configuration.
@@ -258,7 +270,7 @@ ar40xx_hw_reset_switch(struct ar40xx_softc *sc)
 {
 	int ret, i;
 
-	device_printf(sc->sc_dev, "%s: called\n", __func__);
+	AR40XX_DPRINTF(sc, AR40XX_DBG_HW_INIT, "%s: called\n", __func__);
 
 	/* vlan blank */
 	memset(&sc->sc_vlan, 0, sizeof(sc->sc_vlan));
@@ -308,12 +320,15 @@ ar40xx_hw_wait_bit(struct ar40xx_softc *sc, int reg, uint32_t mask,
 	return (ETIMEDOUT);
 }
 
+/*
+ * XXX TODO: move into an atu.c file; add other ATU ops as appropriate.
+ */
 int
 ar40xx_hw_atu_flush(struct ar40xx_softc *sc)
 {
 	int ret;
 
-	device_printf(sc->sc_dev, "%s: called\n", __func__);
+	AR40XX_DPRINTF(sc, AR40XX_DBG_HW_INIT, "%s: called\n", __func__);
 
 	ret = ar40xx_hw_wait_bit(sc, AR40XX_REG_ATU_FUNC,
 	    AR40XX_ATU_FUNC_BUSY, 0);

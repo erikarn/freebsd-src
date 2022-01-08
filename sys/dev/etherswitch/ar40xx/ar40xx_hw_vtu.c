@@ -66,6 +66,7 @@
 #include <dev/etherswitch/ar40xx/ar40xx_reg.h>
 #include <dev/etherswitch/ar40xx/ar40xx_hw.h>
 #include <dev/etherswitch/ar40xx/ar40xx_hw_vtu.h>
+#include <dev/etherswitch/ar40xx/ar40xx_debug.h>
 
 #include "mdio_if.h"
 #include "miibus_if.h"
@@ -77,7 +78,8 @@ ar40xx_hw_vtu_op(struct ar40xx_softc *sc, uint32_t op, uint32_t val)
 {
 	int ret;
 
-	device_printf(sc->sc_dev, "%s: called; op=0x%08x, val=0x%08x\n",
+	AR40XX_DPRINTF(sc, AR40XX_DBG_VTU_OP,
+	    "%s: called; op=0x%08x, val=0x%08x\n",
 	    __func__, op, val);
 
 	ret = (ar40xx_hw_wait_bit(sc, AR40XX_REG_VTU_FUNC1,
@@ -105,7 +107,8 @@ ar40xx_hw_vtu_load_vlan(struct ar40xx_softc *sc, uint32_t vid,
 	uint32_t op, val, mode;
 	int i, ret;
 
-	device_printf(sc->sc_dev, "%s: called; vid=%d port_mask=0x%08x\n",
+	AR40XX_DPRINTF(sc, AR40XX_DBG_VTU_OP,
+	    "%s: called; vid=%d port_mask=0x%08x\n",
 	    __func__, vid, port_mask);
 
 	op = AR40XX_VTU_FUNC1_OP_LOAD | (vid << AR40XX_VTU_FUNC1_VID_S);
@@ -132,7 +135,7 @@ ar40xx_hw_vtu_flush(struct ar40xx_softc *sc)
 {
 	int ret;
 
-	device_printf(sc->sc_dev, "%s: called\n", __func__);
+	AR40XX_DPRINTF(sc, AR40XX_DBG_VTU_OP, "%s: called\n", __func__);
 
 	ret = ar40xx_hw_vtu_op(sc, AR40XX_VTU_FUNC1_OP_FLUSH, 0);
 	return (ret);
