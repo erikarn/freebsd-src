@@ -220,7 +220,7 @@ ar40xx_attach(device_t dev)
 	int ret, i;
 
 	sc->sc_dev = dev;
-	mtx_init(&sc->sc_mtx, "ar40xx", NULL, MTX_DEF);
+	mtx_init(&sc->sc_mtx, "ar40xx_switch", NULL, MTX_DEF);
 
 	psgmii_p = OF_finddevice("/soc/ess-psgmii");
 	if (psgmii_p == -1) {
@@ -734,7 +734,7 @@ static device_method_t ar40xx_methods[] = {
 	DEVMETHOD_END
 };
 
-DEFINE_CLASS_0(ar40xx, ar40xx_driver, ar40xx_methods,
+DEFINE_CLASS_0(ar40xx_switch, ar40xx_driver, ar40xx_methods,
     sizeof(struct ar40xx_softc));
 static devclass_t ar40xx_devclass;
 
