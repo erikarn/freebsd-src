@@ -698,6 +698,9 @@ usage(struct cfg *cfg __unused, char *argv[] __unused)
 	fprintf(stderr, "\tetherswitchcfg [-f control file] vlangroupX "
 	    "command parameter\n");
 	fprintf(stderr, "\t\tvlangroup commands: vlan, members\n");
+	fprintf(stderr, "\tetherswitchcfg [-f control file] atu "
+	    "command parameter\n");
+	fprintf(stderr, "\t\tatu commands: flush (all|port <x>), dump\n");
 	exit(EX_USAGE);
 }
 
