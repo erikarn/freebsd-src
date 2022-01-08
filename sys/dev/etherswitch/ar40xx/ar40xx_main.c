@@ -70,6 +70,7 @@
 #include <dev/etherswitch/ar40xx/ar40xx_hw_port.h>
 #include <dev/etherswitch/ar40xx/ar40xx_hw_mib.h>
 #include <dev/etherswitch/ar40xx/ar40xx_hw_vtu.h>
+#include <dev/etherswitch/ar40xx/ar40xx_hw_atu.h>
 
 #include "mdio_if.h"
 #include "miibus_if.h"
@@ -665,32 +666,71 @@ static int
 ar40xx_atu_flush_all(device_t dev)
 {
 	struct ar40xx_softc *sc = device_get_softc(dev);
-	device_printf(sc->sc_dev, "%s: called\n", __func__);
-	return (ENXIO);
+	int ret;
+
+	ret = ar40xx_hw_atu_flush_all(sc);
+	return (ret);
 }
 
 static int
 ar40xx_atu_flush_port(device_t dev, int port)
 {
 	struct ar40xx_softc *sc = device_get_softc(dev);
-	device_printf(sc->sc_dev, "%s: called\n", __func__);
-	return (ENXIO);
+	int ret;
+
+	ret = ar40xx_hw_atu_flush_port(sc, port);
+	return (ret);
 }
 
 static int
 ar40xx_atu_fetch_table(device_t dev, etherswitch_atu_table_t *table)
 {
 	struct ar40xx_softc *sc = device_get_softc(dev);
-	device_printf(sc->sc_dev, "%s: called\n", __func__);
-	return (ENXIO);
+	int err, nitems;
+
+	memset(&sc->atu.entries, 0, sizeof(sc->atu.entries));
+
+	table->es_nitems = 0;
+	nitems = 0;
+
+	AR40XX_LOCK(sc);
+	sc->atu.count = 0;
+	err = ar40xx_hw_atu_fetch_entry(sc, NULL, 0);
+	if (err != 0)
+		goto done;
+
+	while (nitems < AR40XX_NUM_ATU_ENTRIES) {
+		err = ar40xx_hw_atu_fetch_entry(sc,
+		    &sc->atu.entries[nitems], 1);
+		if (err != 0)
+			goto done;
+		sc->atu.entries[nitems].id = nitems;
+		nitems++;
+	}
+done:
+	sc->atu.count = nitems;
+	table->es_nitems = nitems;
+	AR40XX_UNLOCK(sc);
+
+	return (0);
 }
 
 static int
 ar40xx_atu_fetch_table_entry(device_t dev, etherswitch_atu_entry_t *e)
 {
 	struct ar40xx_softc *sc = device_get_softc(dev);
-	device_printf(sc->sc_dev, "%s: called\n", __func__);
-	return (ENXIO);
+	int id, err = 0;
+
+	id = e->id;
+	AR40XX_LOCK(sc);
+	if (id > sc->atu.count) {
+		err = ENOENT;
+		goto done;
+	}
+	memcpy(e, &sc->atu.entries[id], sizeof(*e));
+done:
+	AR40XX_UNLOCK(sc);
+	return (err);
 }
 
 static device_method_t ar40xx_methods[] = {
@@ -734,7 +774,7 @@ static device_method_t ar40xx_methods[] = {
 	DEVMETHOD_END
 };
 
-DEFINE_CLASS_0(ar40xx_switch, ar40xx_driver, ar40xx_methods,
+DEFINE_CLASS_0(ar40xx, ar40xx_driver, ar40xx_methods,
     sizeof(struct ar40xx_softc));
 static devclass_t ar40xx_devclass;
 

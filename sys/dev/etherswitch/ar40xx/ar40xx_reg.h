@@ -16,8 +16,16 @@
 #ifndef	__AR40XX_REG_H__
 #define	__AR40XX_REG_H__
 
-#define	BITS(_s, _n)	(((1UL << (_n)) - 1) << _s)
-#define	BIT(_n)		(1UL << (_n))
+/*
+ * Register manipulation macros that expect bit field defines
+ * to follow the convention that an _S suffix is appended for
+ * a shift count, while the field mask has no suffix.
+ */
+#define	SM(_v, _f)		(((_v) << _f##_S) & (_f))
+#define	MS(_v, _f)		(((_v) & (_f)) >> _f##_S)
+
+#define	BITS(_s, _n)		(((1UL << (_n)) - 1) << _s)
+#define	BIT(_n)			(1UL << (_n))
 
 #define	AR40XX_PORT_LINK_UP 1
 #define	AR40XX_PORT_LINK_DOWN 0
@@ -141,6 +149,58 @@ struct ar40xx_mib_desc {
 #define		AR40XX_PORT_VLAN1_OUT_MODE_TAG		2
 #define		AR40XX_PORT_VLAN1_OUT_MODE_UNTOUCH	3
 
+#define	AR40XX_REG_ATU_DATA0			0x600
+#define		AR40XX_ATU_DATA0_MAC_ADDR3              BITS(0, 8)
+#define		AR40XX_ATU_DATA0_MAC_ADDR3_S            0
+#define		AR40XX_ATU_DATA0_MAC_ADDR2              BITS(8, 8)
+#define		AR40XX_ATU_DATA0_MAC_ADDR2_S            8
+#define		AR40XX_ATU_DATA0_MAC_ADDR1              BITS(16, 8)
+#define		AR40XX_ATU_DATA0_MAC_ADDR1_S            16
+#define		AR40XX_ATU_DATA0_MAC_ADDR0              BITS(24, 8)
+#define		AR40XX_ATU_DATA0_MAC_ADDR0_S            24
+
+#define	AR40XX_REG_ATU_DATA1			0x604
+#define		AR40XX_ATU_DATA1_MAC_ADDR4              BITS(0, 8)
+#define		AR40XX_ATU_DATA1_MAC_ADDR4_S            0
+#define		AR40XX_ATU_DATA1_MAC_ADDR5              BITS(8, 8)
+#define		AR40XX_ATU_DATA1_MAC_ADDR5_S            8
+#define		AR40XX_ATU_DATA1_DEST_PORT              BITS(16, 7)
+#define		AR40XX_ATU_DATA1_DEST_PORT_S            16
+#define		AR40XX_ATU_DATA1_CROSS_PORT_STATE_EN    BIT(23)
+#define		AR40XX_ATU_DATA1_PRI                    BITS(24, 3)
+#define		AR40XX_ATU_DATA1_SVL_ENTRY              BIT(27)
+#define		AR40XX_ATU_DATA1_PRI_OVER_EN            BIT(28)
+#define		AR40XX_ATU_DATA1_MIRROR_EN              BIT(29)
+#define		AR40XX_ATU_DATA1_SA_DROP_EN             BIT(30)
+#define		AR40XX_ATU_DATA1_HASH_HIGH_ADDR         BIT(31)
+
+#define	AR40XX_REG_ATU_DATA2			0x608
+#define		AR40XX_ATU_FUNC_DATA2_STATUS            BITS(0, 4)
+#define		AR40XX_ATU_FUNC_DATA2_STATUS_S          0
+#define		AR40XX_ATU_FUNC_DATA2_VLAN_LEAKY_EN     BIT(4)
+#define		AR40XX_ATU_FUNC_DATA2_REDIRECT_TO_CPU   BIT(5)
+#define		AR40XX_ATU_FUNC_DATA2_COPY_TO_CPU       BIT(6)
+#define		AR40XX_ATU_FUNC_DATA2_SHORT_LOOP        BIT(7)
+#define		AR40XX_ATU_FUNC_DATA2_ATU_VID           BITS(8, 12)
+#define		AR40XX_ATU_FUNC_DATA2_ATU_VID_S         8
+
+#define	AR40XX_REG_ATU_FUNC			0x60c
+#define		AR40XX_ATU_FUNC_OP			BITS(0, 4)
+#define		AR40XX_ATU_FUNC_OP_NOOP		0x0
+#define		AR40XX_ATU_FUNC_OP_FLUSH		0x1
+#define		AR40XX_ATU_FUNC_OP_LOAD		0x2
+#define		AR40XX_ATU_FUNC_OP_PURGE		0x3
+#define		AR40XX_ATU_FUNC_OP_FLUSH_LOCKED	0x4
+#define		AR40XX_ATU_FUNC_OP_FLUSH_UNICAST	0x5
+#define		AR40XX_ATU_FUNC_OP_GET_NEXT		0x6
+#define		AR40XX_ATU_FUNC_OP_SEARCH_MAC		0x7
+#define		AR40XX_ATU_FUNC_OP_CHANGE_TRUNK	0x8
+#define		AR40XX_ATU_FUNC_PORT_NUM		BITS(8, 4)
+#define		AR40XX_ATU_FUNC_PORT_NUM_S		8
+#define		AR40XX_ATU_FUNC_BUSY			BIT(31)
+
+
+
 #define	AR40XX_REG_VTU_FUNC0			0x0610
 #define		AR40XX_VTU_FUNC0_EG_MODE		BITS(4, 14)
 #define		AR40XX_VTU_FUNC0_EG_MODE_S(_i)		(4 + (_i) * 2)
@@ -191,19 +251,6 @@ struct ar40xx_mib_desc {
 #define		AR40XX_PORT_LOOKUP_LEARN		BIT(20)
 #define		AR40XX_PORT_LOOKUP_LOOPBACK		BIT(21)
 #define		AR40XX_PORT_LOOKUP_ING_MIRROR_EN	BIT(25)
-
-#define	AR40XX_REG_ATU_FUNC			0x60c
-#define		AR40XX_ATU_FUNC_OP			BITS(0, 4)
-#define		AR40XX_ATU_FUNC_OP_NOOP		0x0
-#define		AR40XX_ATU_FUNC_OP_FLUSH		0x1
-#define		AR40XX_ATU_FUNC_OP_LOAD		0x2
-#define		AR40XX_ATU_FUNC_OP_PURGE		0x3
-#define		AR40XX_ATU_FUNC_OP_FLUSH_LOCKED	0x4
-#define		AR40XX_ATU_FUNC_OP_FLUSH_UNICAST	0x5
-#define		AR40XX_ATU_FUNC_OP_GET_NEXT		0x6
-#define		AR40XX_ATU_FUNC_OP_SEARCH_MAC		0x7
-#define		AR40XX_ATU_FUNC_OP_CHANGE_TRUNK	0x8
-#define		AR40XX_ATU_FUNC_BUSY			BIT(31)
 
 #define	AR40XX_REG_QM_DEBUG_ADDR		0x820
 #define	AR40XX_REG_QM_DEBUG_VALUE		0x824

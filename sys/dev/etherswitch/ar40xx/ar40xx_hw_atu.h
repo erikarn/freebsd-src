@@ -1,7 +1,7 @@
 /*-
  * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
  *
- * Copyright (c) 2021 Adrian Chadd <adrian@FreeBSD.org>
+ * Copyright (c) 2021 Adrian Chadd <adrian@FreeBSD.org>.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,20 +26,14 @@
  *
  * $FreeBSD$
  */
+#ifndef	__AR40XX_HW_ATU_H__
+#define	__AR40XX_HW_ATU_H__
 
-#ifndef	__AR40XX_DEBUG_H__
-#define	__AR40XX_DEBUG_H__
+extern	int ar40xx_hw_atu_wait_busy(struct ar40xx_softc *sc);
+extern	int ar40xx_hw_atu_flush_all(struct ar40xx_softc *sc);
+extern	int ar40xx_hw_atu_flush_port(struct ar40xx_softc *sc, int port);
+extern	int ar40xx_hw_atu_fetch_entry(struct ar40xx_softc *sc,
+	    etherswitch_atu_entry_t *e, int atu_fetch_op);
 
-#define	AR40XX_DBG_HW_INIT			0x00000001
-#define	AR40XX_DBG_HW_RESET			0x00000002
-#define	AR40XX_DBG_HW_PORT_INIT			0x00000004
-#define	AR40XX_DBG_VTU_OP			0x00000008
-#define	AR40XX_DBG_ATU_OP			0x00000010
+#endif	/* __AR40XX_HW_ATU_H__ */
 
-#define	AR40XX_DPRINTF(sc, flags, ...)					\
-	do {								\
-		if ((sc)->sc_debug & flags)				\
-			device_printf((sc)->sc_dev, __VA_ARGS__);	\
-	} while (0)
-
-#endif	/* __AR40XX_DEBUG_H__ */

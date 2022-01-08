@@ -53,6 +53,7 @@
 #define	AR40XX_MAX_VLANS		128
 #define	AR40XX_NUM_PORTS		6
 #define	AR40XX_NUM_PHYS			5
+#define	AR40XX_NUM_ATU_ENTRIES		128
 
 struct ar40xx_softc {
 	struct mtx	sc_mtx;		/* serialize access to softc */
@@ -115,6 +116,13 @@ struct ar40xx_softc {
 		device_t miibus[AR40XX_NUM_PHYS];
 		struct ifnet *ifp[AR40XX_NUM_PHYS];
 	} sc_phys;
+
+	/* ATU (address table unit) support */
+	struct {
+		int count;
+		int size;
+		etherswitch_atu_entry_t entries[AR40XX_NUM_ATU_ENTRIES];
+	} atu;
 };
 
 #endif	/* __AR40XX_VAR_H__ */
