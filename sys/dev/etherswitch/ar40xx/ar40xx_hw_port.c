@@ -178,6 +178,38 @@ ar40xx_hw_port_cpuport_setup(struct ar40xx_softc *sc)
 }
 
 int
+ar40xx_hw_get_port_pvid(struct ar40xx_softc *sc, int port, int *pvid)
+{
+	uint32_t reg;
+
+	AR40XX_LOCK_ASSERT(sc);
+
+	AR40XX_REG_BARRIER_READ(sc);
+	reg = AR40XX_REG_READ(sc, AR40XX_REG_PORT_VLAN0(port));
+
+	reg = reg >> AR40XX_PORT_VLAN0_DEF_CVID_S;
+	reg = reg & 0xffff;
+
+	*pvid = reg;
+	return (0);
+}
+
+int
+ar40xx_hw_set_port_pvid(struct ar40xx_softc *sc, int port, int pvid)
+{
+	uint32_t reg;
+
+	AR40XX_LOCK_ASSERT(sc);
+
+	reg = pvid << AR40XX_PORT_VLAN0_DEF_SVID_S;
+	reg |= pvid << AR40XX_PORT_VLAN0_DEF_CVID_S;
+	AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_VLAN0(port), reg);
+	AR40XX_REG_BARRIER_WRITE(sc);
+
+	return (0);
+}
+
+int
 ar40xx_hw_port_setup(struct ar40xx_softc *sc, int port, uint32_t members)
 {
 	uint32_t egress, ingress, reg;

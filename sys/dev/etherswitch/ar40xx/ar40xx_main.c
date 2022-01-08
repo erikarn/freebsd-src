@@ -390,6 +390,20 @@ ar40xx_attach(device_t dev)
 	// Start timer
 	callout_init_mtx(&sc->sc_phy_callout, &sc->sc_mtx, 0);
 
+	/*
+	 * Setup the etherswitch info block.
+	 */
+	strlcpy(sc->sc_info.es_name, device_get_desc(dev),
+	    sizeof(sc->sc_info.es_name));
+	sc->sc_info.es_nports = AR40XX_NUM_PORTS;
+	sc->sc_info.es_vlan_caps = ETHERSWITCH_VLAN_DOT1Q;
+	/* XXX TODO: double-tag / 802.1ad */
+	sc->sc_info.es_nvlangroups = 16; /* XXX */
+	/* XXX TODO: maximum VLAN ID = AR40XX_MAX_VLANS ? */
+
+	/*
+	 * Fetch the initial port configuration.
+	 */
 	AR40XX_LOCK(sc);
 	ar40xx_tick(sc);
 	AR40XX_UNLOCK(sc);
@@ -427,23 +441,217 @@ ar40xx_detach(device_t dev)
 	return (0);
 }
 
+static void
+ar40xx_lock(device_t dev)
+{
+	struct ar40xx_softc *sc = device_get_softc(dev);
+
+	AR40XX_LOCK(sc);
+}
+
+static void
+ar40xx_unlock(device_t dev)
+{
+	struct ar40xx_softc *sc = device_get_softc(dev);
+
+	AR40XX_LOCK_ASSERT(sc);
+	AR40XX_UNLOCK(sc);
+}
+
+static etherswitch_info_t *
+ar40xx_getinfo(device_t dev)
+{
+	struct ar40xx_softc *sc = device_get_softc(dev);
+
+	return (&sc->sc_info);
+}
+
+static int
+ar40xx_readreg(device_t dev, int addr)
+{
+	struct ar40xx_softc *sc = device_get_softc(dev);
+
+	if (addr >= sc->sc_ess_mem_size - 1)
+		return (-1);
+
+	AR40XX_REG_BARRIER_READ(sc);
+
+	return AR40XX_REG_READ(sc, addr);
+}
+
+static int
+ar40xx_writereg(device_t dev, int addr, int value)
+{
+	struct ar40xx_softc *sc = device_get_softc(dev);
+
+	if (addr >= sc->sc_ess_mem_size - 1)
+		return (-1);
+
+	AR40XX_REG_WRITE(sc, addr, value);
+	AR40XX_REG_BARRIER_WRITE(sc);
+	return (0);
+}
+
+static int
+ar40xx_getport(device_t dev, etherswitch_port_t *p)
+{
+	struct ar40xx_softc *sc = device_get_softc(dev);
+	struct mii_data *mii = NULL;
+	struct ifmediareq *ifmr;
+	int err;
+
+	if (p->es_port < 0 || p->es_port > sc->sc_info.es_nports)
+		return (ENXIO);
+
+	AR40XX_LOCK(sc);
+	/* Fetch the current VLAN configuration for this port */
+	/* PVID */
+	ar40xx_hw_get_port_pvid(sc, p->es_port, &p->es_pvid);
+	/* XXX TODO: VLAN Flags */
+
+	/* Get MII config */
+	mii = ar40xx_phy_miiforport(sc, p->es_port);
+
+	AR40XX_UNLOCK(sc);
+
+	if (p->es_port == 0) {
+		/* CPU port */
+		p->es_flags |= ETHERSWITCH_PORT_CPU;
+		ifmr = &p->es_ifmr;
+		ifmr->ifm_count = 0;
+		ifmr->ifm_current = ifmr->ifm_active =
+		     IFM_ETHER | IFM_1000_T | IFM_FDX;
+		ifmr->ifm_mask = 0;
+		ifmr->ifm_status = IFM_ACTIVE | IFM_AVALID;
+	} else if (mii != NULL) {
+		/* non-CPU port */
+		err = ifmedia_ioctl(mii->mii_ifp, &p->es_ifr,
+		    &mii->mii_media, SIOCGIFMEDIA);
+		if (err)
+			return (err);
+	} else {
+		return (ENXIO);
+	}
+
+	return (0);
+}
+
+static int
+ar40xx_setport(device_t dev, etherswitch_port_t *p)
+{
+	struct ar40xx_softc *sc = device_get_softc(dev);
+	device_printf(sc->sc_dev, "%s: called\n", __func__);
+	return (ENXIO);
+}
+
+static int
+ar40xx_getvgroup(device_t dev, etherswitch_vlangroup_t *e)
+{
+	struct ar40xx_softc *sc = device_get_softc(dev);
+	device_printf(sc->sc_dev, "%s: called\n", __func__);
+	return (ENXIO);
+}
+
+static int
+ar40xx_setvgroup(device_t dev, etherswitch_vlangroup_t *e)
+{
+	struct ar40xx_softc *sc = device_get_softc(dev);
+	device_printf(sc->sc_dev, "%s: called\n", __func__);
+	return (ENXIO);
+}
+
+static int
+ar40xx_getconf(device_t dev, etherswitch_conf_t *conf)
+{
+	struct ar40xx_softc *sc = device_get_softc(dev);
+
+	(void) sc;
+
+	/* Only support VLAN config for now */
+	conf->cmd = ETHERSWITCH_CONF_VLAN_MODE;
+	conf->vlan_mode = ETHERSWITCH_VLAN_DOT1Q;
+
+	/* XXX TODO: switch MAC address */
+	return (0);
+}
+
+static int
+ar40xx_setconf(device_t dev, etherswitch_conf_t *conf)
+{
+	struct ar40xx_softc *sc = device_get_softc(dev);
+	device_printf(sc->sc_dev, "%s: called\n", __func__);
+	return (ENXIO);
+}
+
+static int
+ar40xx_atu_flush_all(device_t dev)
+{
+	struct ar40xx_softc *sc = device_get_softc(dev);
+	device_printf(sc->sc_dev, "%s: called\n", __func__);
+	return (ENXIO);
+}
+
+static int
+ar40xx_atu_flush_port(device_t dev, int port)
+{
+	struct ar40xx_softc *sc = device_get_softc(dev);
+	device_printf(sc->sc_dev, "%s: called\n", __func__);
+	return (ENXIO);
+}
+
+static int
+ar40xx_atu_fetch_table(device_t dev, etherswitch_atu_table_t *table)
+{
+	struct ar40xx_softc *sc = device_get_softc(dev);
+	device_printf(sc->sc_dev, "%s: called\n", __func__);
+	return (ENXIO);
+}
+
+static int
+ar40xx_atu_fetch_table_entry(device_t dev, etherswitch_atu_entry_t *e)
+{
+	struct ar40xx_softc *sc = device_get_softc(dev);
+	device_printf(sc->sc_dev, "%s: called\n", __func__);
+	return (ENXIO);
+}
+
 static device_method_t ar40xx_methods[] = {
 	/* Device interface */
-	DEVMETHOD(device_probe,		ar40xx_probe),
-	DEVMETHOD(device_attach,	ar40xx_attach),
-	DEVMETHOD(device_detach,	ar40xx_detach),
+	DEVMETHOD(device_probe,			ar40xx_probe),
+	DEVMETHOD(device_attach,		ar40xx_attach),
+	DEVMETHOD(device_detach,		ar40xx_detach),
 
 	/* bus interface */
-	DEVMETHOD(bus_add_child,	device_add_child_ordered),
+	DEVMETHOD(bus_add_child,		device_add_child_ordered),
 
 	/* MII interface */
-	DEVMETHOD(miibus_readreg,	ar40xx_readphy),
-	DEVMETHOD(miibus_writereg,	ar40xx_writephy),
-	DEVMETHOD(miibus_statchg,	ar40xx_statchg),
+	DEVMETHOD(miibus_readreg,		ar40xx_readphy),
+	DEVMETHOD(miibus_writereg,		ar40xx_writephy),
+	DEVMETHOD(miibus_statchg,		ar40xx_statchg),
 
 	/* MDIO interface */
+	DEVMETHOD(mdio_readreg,			ar40xx_readphy),
+	DEVMETHOD(mdio_writereg,		ar40xx_writephy),
 
 	/* etherswitch interface */
+	DEVMETHOD(etherswitch_lock,		ar40xx_lock),
+	DEVMETHOD(etherswitch_unlock,		ar40xx_unlock),
+	DEVMETHOD(etherswitch_getinfo,		ar40xx_getinfo),
+	DEVMETHOD(etherswitch_readreg,		ar40xx_readreg),
+	DEVMETHOD(etherswitch_writereg,		ar40xx_writereg),
+	DEVMETHOD(etherswitch_readphyreg,	ar40xx_readphy),
+	DEVMETHOD(etherswitch_writephyreg,	ar40xx_writephy),
+	DEVMETHOD(etherswitch_getport,		ar40xx_getport),
+	DEVMETHOD(etherswitch_setport,		ar40xx_setport),
+	DEVMETHOD(etherswitch_getvgroup,	ar40xx_getvgroup),
+	DEVMETHOD(etherswitch_setvgroup,	ar40xx_setvgroup),
+	DEVMETHOD(etherswitch_getconf,		ar40xx_getconf),
+	DEVMETHOD(etherswitch_setconf,		ar40xx_setconf),
+	DEVMETHOD(etherswitch_flush_all,	ar40xx_atu_flush_all),
+	DEVMETHOD(etherswitch_flush_port,	ar40xx_atu_flush_port),
+	DEVMETHOD(etherswitch_fetch_table,	ar40xx_atu_fetch_table),
+	DEVMETHOD(etherswitch_fetch_table_entry,
+					     ar40xx_atu_fetch_table_entry),
 
 	DEVMETHOD_END
 };

@@ -82,6 +82,8 @@ struct ar40xx_softc {
 	phandle_t		sc_mdio_phandle;
 	device_t		sc_mdio_dev;
 
+	etherswitch_info_t	sc_info;
+
 	struct {
 		uint32_t	phy_t_status;
 	} sc_psgmii;

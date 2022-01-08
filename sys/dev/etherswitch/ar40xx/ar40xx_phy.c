@@ -111,8 +111,8 @@ ar40xx_portforphy(int phy)
 	return (phy+1);
 }
 
-static inline struct mii_data *
-ar40xx_miiforport(struct ar40xx_softc *sc, int port)
+struct mii_data *
+ar40xx_phy_miiforport(struct ar40xx_softc *sc, int port)
 {
 	int phy;
 
@@ -127,9 +127,7 @@ static int
 ar40xx_ifmedia_upd(struct ifnet *ifp)
 {
 	struct ar40xx_softc *sc = ifp->if_softc;
-	struct mii_data *mii = ar40xx_miiforport(sc, ifp->if_dunit);
-
-	device_printf(sc->sc_dev, "%s\n", __func__);
+	struct mii_data *mii = ar40xx_phy_miiforport(sc, ifp->if_dunit);
 
 	if (mii == NULL)
 		return (ENXIO);
@@ -141,9 +139,7 @@ static void
 ar40xx_ifmedia_sts(struct ifnet *ifp, struct ifmediareq *ifmr)
 {
 	struct ar40xx_softc *sc = ifp->if_softc;
-	struct mii_data *mii = ar40xx_miiforport(sc, ifp->if_dunit);
-
-	device_printf(sc->sc_dev, "%s\n", __func__);
+	struct mii_data *mii = ar40xx_phy_miiforport(sc, ifp->if_dunit);
 
 	if (mii == NULL)
 		return;
