@@ -319,27 +319,3 @@ ar40xx_hw_wait_bit(struct ar40xx_softc *sc, int reg, uint32_t mask,
 	    (unsigned int)reg, t, mask, val);
 	return (ETIMEDOUT);
 }
-
-/*
- * XXX TODO: move into an atu.c file; add other ATU ops as appropriate.
- */
-int
-ar40xx_hw_atu_flush(struct ar40xx_softc *sc)
-{
-	int ret;
-
-	AR40XX_DPRINTF(sc, AR40XX_DBG_HW_INIT, "%s: called\n", __func__);
-
-	ret = ar40xx_hw_wait_bit(sc, AR40XX_REG_ATU_FUNC,
-	    AR40XX_ATU_FUNC_BUSY, 0);
-	if (ret != 0)
-		return (ret);
-
-	AR40XX_REG_WRITE(sc, AR40XX_REG_ATU_FUNC,
-	    AR40XX_ATU_FUNC_OP_FLUSH
-	    | AR40XX_ATU_FUNC_BUSY);
-	AR40XX_REG_BARRIER_WRITE(sc);
-
-        return ret;
-}
-

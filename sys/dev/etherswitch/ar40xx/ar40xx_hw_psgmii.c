@@ -66,6 +66,7 @@
 #include <dev/etherswitch/ar40xx/ar40xx_reg.h>
 #include <dev/etherswitch/ar40xx/ar40xx_hw.h>
 #include <dev/etherswitch/ar40xx/ar40xx_phy.h>
+#include <dev/etherswitch/ar40xx/ar40xx_hw_atu.h>
 #include <dev/etherswitch/ar40xx/ar40xx_hw_mdio.h>
 #include <dev/etherswitch/ar40xx/ar40xx_hw_psgmii.h>
 
@@ -406,7 +407,7 @@ ar40xx_hw_psgmii_self_test_clean(struct ar40xx_softc *sc)
 	}
 
 	/* clear fdb entry */
-	ar40xx_hw_atu_flush(sc);
+	ar40xx_hw_atu_flush_all(sc);
 
 	return (0);
 }
