@@ -196,14 +196,10 @@ qcom_ess_edma_tx_ring_complete(struct qcom_ess_edma_softc *sc, int queue)
 /*
  * Attempt to enqueue a single frame.
  *
- * This is (hopefully) the MVP required to send a single ethernet
- * mbuf / mbuf chain.  TSO and other optimisations are currently not
- * supported.
- *
- * TODO: the Linux driver makes a point of commenting on putting the
- * skb in the last descriptor in a list, but it doesn't seem to do it.
- * So I'm not sure if the hardware will incrementally complete fragments
- * or whether it'll complete /all/ of the fragments for a frame at once.
+ * This is the MVP required to send a single ethernet mbuf / mbuf chain.
+ * VLAN tags are added/required as the default switch configuration
+ * from device-tree uses both the port bitmap and VLAN IDs for
+ * controlling LAN/WAN/etc interface traffic.
  */
 int
 qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
@@ -212,13 +208,15 @@ qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
 	struct qcom_ess_edma_desc_ring *ring;
 	struct qcom_ess_edma_sw_desc_tx *txd;
 	struct qcom_ess_edma_tx_desc *ds;
+	struct ether_vlan_header *eh;
 	bus_dma_segment_t txsegs[QCOM_ESS_EDMA_MAX_TXFRAGS];
 	uint32_t reg;
+	uint32_t word1, word3;
+	uint32_t eop;
+	int vlan_id;
 	int num_left, ret, nsegs, i;
 	uint16_t next_to_fill;
 	uint16_t svlan_tag;
-	uint32_t word1, word3;
-	uint32_t eop;
 
 	ring = &sc->sc_tx_ring[queue];
 
@@ -287,13 +285,39 @@ qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
 	 */
 	word3 = 0;
 	word3 |= (port_bitmap << EDMA_TPD_PORT_BITMAP_SHIFT);
-	/* Set default vlan as 802.1q, as the switch config needs it */
+
 	/*
-	 * yes, later on this'll need to change for proper 802.1q / 802.1ad
-	 * offload.
+	 * If VLAN offload is enabled, we can enable inserting a CVLAN
+	 * tag here for the default VLAN, or the VLAN interface.
+	 * The default switch configuration requires both a port_bitmap
+	 * and 802.1q VLANs configured.
+	 *
+	 * If there's a VLAN tag on the mbuf then we leave it alone.
+	 * I don't want to try and strip out the VLAN header from a packet
+	 * here.
+	 *
+	 * There's no 802.1ad support in here yet.
 	 */
-	word3 |= (1U << EDMA_TX_INS_CVLAN);
-	word3 |= (default_vlan << EDMA_TX_CVLAN_TAG_SHIFT);
+	eh = mtod(m, struct ether_vlan_header *);
+	if (eh->evl_encap_proto == htons(ETHERTYPE_VLAN)) {
+		/* Don't add a tag, just use what's here */
+		vlan_id = -1;
+	} else if ((m->m_flags & M_VLANTAG) != 0) {
+		/* We have an offload VLAN tag, use it */
+		vlan_id = m->m_pkthdr.ether_vtag & 0x0fff;
+	} else {
+		/* No VLAN tag, no VLAN header; default VLAN */
+		vlan_id = default_vlan;
+	}
+
+	/*
+	 * Only add the offload tag if we need to.
+	 */
+	if (vlan_id != -1) {
+		word3 |= (1U << EDMA_TX_INS_CVLAN);
+		word3 |= (default_vlan << EDMA_TX_CVLAN_TAG_SHIFT);
+	}
+
 	eop = 0;
 
 	/*

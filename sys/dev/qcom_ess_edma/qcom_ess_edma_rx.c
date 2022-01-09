@@ -323,6 +323,7 @@ qcom_ess_edma_rx_ring_complete(struct qcom_ess_edma_softc *sc, int queue,
 	struct qcom_edma_rx_return_desc *rrd;
 	int num_rfds, port_id, priority, hash_type, hash_val, flow_cookie, vlan;
 	bool rx_checksum = 1;
+	int port_vlan = -1;
 
 	ring = &sc->sc_rx_ring[queue];
 
@@ -363,7 +364,8 @@ qcom_ess_edma_rx_ring_complete(struct qcom_ess_edma_softc *sc, int queue,
 			    & EDMA_PORT_ID_MASK;
 			priority = (rrd->rrd1 >> EDMA_RRD_PRIORITY_SHIFT)
 			    & EDMA_RRD_PRIORITY_MASK;
-			hash_type = (rrd->rrd5 >> EDMA_HASH_TYPE_SHIFT);
+			hash_type = (rrd->rrd5 >> EDMA_HASH_TYPE_SHIFT)
+			    & EDMA_HASH_TYPE_MASK;
 			hash_val = rrd->rrd2;
 			flow_cookie = rrd->rrd3 & EDMA_RRD_FLOW_COOKIE_MASK;
 			vlan = rrd->rrd4;
@@ -387,9 +389,6 @@ qcom_ess_edma_rx_ring_complete(struct qcom_ess_edma_softc *sc, int queue,
 			    !! (rrd->rrd6 & EDMA_RRD_CSUM_FAIL_MASK),
 			    !! (rrd->rrd7 & EDMA_RRD_CVLAN),
 			    !! (rrd->rrd1 & EDMA_RRD_SVLAN));
-			/* rrd->rrd6 & EDMA_RRD_CSUM_FAIL_MASK - L4 checksum fail? */
-			/* rrd->rrd7 & EDMA_RRD_CVLAN - 802.1q vlan */
-			/* rrd->rrd1 & EDMA_RRD_SVLAN - 802.1ad vlan */
 		} else {
 			len = 0;
 		}
@@ -417,11 +416,46 @@ qcom_ess_edma_rx_ring_complete(struct qcom_ess_edma_softc *sc, int queue,
 				if ((gmac->ifp->if_capenable & IFCAP_RXCSUM) != 0)
 					rx_checksum = true;
 			}
+			port_vlan = gmac->vlan_id;
 		}
 
 		/* XXX TODO: handle multi-frame packets (ie, jumbos!) */
-		/* XXX TODO: add vlan header / tag offload fields */
-		/* XXX TODO: add flow offload, etc */
+		/* XXX TODO: handle 802.1ad VLAN offload field */
+		/* XXX TODO: flow offload */
+
+		/*
+		 * For now we don't support disabling VLAN offload.
+		 * Instead, tags are stripped by the hardware.
+		 * Handle the outer VLAN tag; worry about 802.1ad
+		 * later on (and hopefully by something other than
+		 * adding another mbuf.)
+		 */
+		if ((rrd->rrd7 & EDMA_RRD_CVLAN) != 0) {
+			/*
+			 * There's an outer VLAN tag that has been
+			 * decaped by the hardware. Compare it to the
+			 * current port vlan, and if they don't match,
+			 * add an offloaded VLAN tag to the mbuf.
+			 *
+			 * And yes, care about the priority field too.
+			 */
+			 if ((port_vlan == -1) || (port_vlan != vlan)) {
+			 	m->m_pkthdr.ether_vtag = (vlan & 0xfff)
+				    | ((priority < 1) & 0xf);
+				m->m_flags |= M_VLANTAG;
+			 }
+		}
+
+		/*
+		 * Store the hash info in the mbuf if it's there.
+		 *
+		 * XXX TODO: decode the RSS field and translate it to
+		 * the mbuf hash entry.  For now, just treat as OPAQUE.
+		 */
+		if (hash_type != EDMA_RRD_RSS_TYPE_NONE) {
+			m->m_pkthdr.flowid = hash_val;
+			M_HASHTYPE_SET(m, M_HASHTYPE_OPAQUE);
+		}
 
 		/*
 		 * Check the RX checksum flag if the destination ifp

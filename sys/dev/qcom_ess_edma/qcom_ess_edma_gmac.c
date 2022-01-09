@@ -146,6 +146,10 @@ qcom_ess_edma_gmac_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 		    (ifp->if_capabilities & IFCAP_RXCSUM) != 0)
 			ifp->if_capenable ^= IFCAP_RXCSUM;
 
+		if ((mask & IFCAP_VLAN_HWTAGGING) != 0 &&
+		    (ifp->if_capabilities & IFCAP_VLAN_HWTAGGING) != 0)
+			ifp->if_capenable ^= IFCAP_VLAN_HWTAGGING;
+
 		VLAN_CAPABILITIES(ifp);
 		break;
 	default:
@@ -350,7 +354,7 @@ qcom_ess_edma_gmac_create_ifnet(struct qcom_ess_edma_softc *sc, int gmac_id)
 	gmac->ifp->if_transmit = qcom_ess_edma_gmac_transmit;
 	gmac->ifp->if_qflush = qcom_ess_edma_gmac_qflush;
 
-	gmac->ifp->if_capabilities |= IFCAP_VLAN_MTU;
+	gmac->ifp->if_capabilities |= IFCAP_VLAN_MTU | IFCAP_VLAN_HWTAGGING;
 
 	gmac->ifp->if_capabilities |= IFCAP_RXCSUM;
 	/* CSUM_TCP | CSUM_UDP for TX checksum offload */
