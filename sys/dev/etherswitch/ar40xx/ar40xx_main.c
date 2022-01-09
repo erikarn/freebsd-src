@@ -668,7 +668,9 @@ ar40xx_atu_flush_all(device_t dev)
 	struct ar40xx_softc *sc = device_get_softc(dev);
 	int ret;
 
+	AR40XX_LOCK(sc);
 	ret = ar40xx_hw_atu_flush_all(sc);
+	AR40XX_UNLOCK(sc);
 	return (ret);
 }
 
@@ -678,7 +680,9 @@ ar40xx_atu_flush_port(device_t dev, int port)
 	struct ar40xx_softc *sc = device_get_softc(dev);
 	int ret;
 
+	AR40XX_LOCK(sc);
 	ret = ar40xx_hw_atu_flush_port(sc, port);
+	AR40XX_UNLOCK(sc);
 	return (ret);
 }
 
