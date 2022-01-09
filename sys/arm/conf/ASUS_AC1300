@@ -49,6 +49,7 @@ device 		gpio
 device 		ether
 device 		mii
 device 		bpf
+device 		vlan
 
 options 	GEOM_UZIP
 device 		xz
@@ -63,6 +64,7 @@ device		w25n
 device 		scbus
 device 		umass
 device 		da
+
 
 # 4 megabyte rootfs
 options 	MD_ROOT
