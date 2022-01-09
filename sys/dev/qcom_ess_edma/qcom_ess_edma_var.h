@@ -141,11 +141,12 @@ struct qcom_ess_edma_desc_ring {
 		uint64_t	num_tx_mapfail;
 		uint64_t	num_rx_csum_ok;
 		uint64_t	num_rx_csum_fail;
+		uint64_t	num_tx_complete;
 	} stats;
 };
 
 /*
- * Placeholder structs for transmit and receive software
+ * Structs for transmit and receive software
  * ring entries.
  */
 struct qcom_ess_edma_sw_desc_tx {
@@ -159,6 +160,18 @@ struct qcom_ess_edma_sw_desc_rx {
 	struct mbuf		*m;
 	bus_dmamap_t		m_dmamap;
 	bus_addr_t		m_physaddr;
+};
+
+/*
+ * (TODO) Per transmit ring TX state for TX queue / buf_ring stuff.
+ */
+struct qcom_ess_edma_tx_state {
+	struct task enqueue_task;
+	struct buf_ring *br;
+	struct taskqueue *enqueue_tq;
+	struct qcom_ess_edma_softc *sc;
+	bool enqueue_is_running;
+	int queue_id;
 };
 
 struct qcom_ess_edma_gmac {
@@ -190,7 +203,7 @@ struct qcom_ess_edma_softc {
 
 	struct qcom_ess_edma_desc_ring sc_tx_ring[QCOM_ESS_EDMA_NUM_TX_RINGS];
 	struct qcom_ess_edma_desc_ring sc_rx_ring[QCOM_ESS_EDMA_NUM_RX_RINGS];
-
+	struct qcom_ess_edma_tx_state sc_tx_state[QCOM_ESS_EDMA_NUM_TX_RINGS];
 	struct qcom_ess_edma_gmac	sc_gmac[QCOM_ESS_EDMA_MAX_NUM_GMACS];
 
 	int			sc_gmac_port_map[QCOM_ESS_EDMA_MAX_NUM_PORTS];
@@ -210,6 +223,9 @@ struct qcom_ess_edma_softc {
 		/* number of tx/rx descriptor entries in each ring */
 		uint32_t rx_ring_count;
 		uint32_t tx_ring_count;
+
+		/* how many queues for each CPU */
+		uint32_t num_tx_queue_per_cpu;
 	} sc_config;
 
 	struct {

@@ -42,6 +42,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/mbuf.h>
 #include <sys/socket.h>
 #include <sys/sockio.h>
+#include <sys/smp.h>
 
 #include <net/if.h>
 #include <net/if_var.h>
@@ -97,6 +98,18 @@ qcom_ess_edma_release_intr(struct qcom_ess_edma_softc *sc,
 }
 
 static int
+qcom_ess_edma_setup_tx_state(struct qcom_ess_edma_softc *sc, int txq)
+{
+	return (0);
+}
+
+static int
+qcom_ess_edma_free_tx_state(struct qcom_ess_edma_softc *sc, int txq)
+{
+	return (0);
+}
+
+static int
 qcom_ess_edma_detach(device_t dev)
 {
 	struct qcom_ess_edma_softc *sc = device_get_softc(dev);
@@ -110,6 +123,7 @@ qcom_ess_edma_detach(device_t dev)
 	}
 
 	for (i = 0; i < QCOM_ESS_EDMA_NUM_TX_RINGS; i++) {
+		(void) qcom_ess_edma_free_tx_state(sc, i);
 		(void) qcom_ess_edma_tx_ring_clean(sc, &sc->sc_rx_ring[i]);
 		(void) qcom_ess_edma_desc_ring_free(sc, &sc->sc_tx_ring[i]);
 	}
@@ -138,13 +152,21 @@ qcom_ess_edma_filter(void *arg)
 	struct qcom_ess_edma_intr *intr = arg;
 	struct qcom_ess_edma_softc *sc = intr->sc;
 
-	(void) sc;
-
-	/* XXX TODO */
-#if 0
-	device_printf(sc->sc_dev, "%s: called; rid=%d\n", __func__,
-	    intr->irq_rid);
-#endif
+	if (intr->irq_rid < QCOM_ESS_EDMA_NUM_TX_IRQS) {
+		int tx_queue = intr->irq_rid;
+		/*
+		 * Disable the interrupt for this ring.
+		 */
+		(void) qcom_ess_edma_hw_intr_tx_intr_set_enable(sc, tx_queue,
+		    false);
+	} else {
+		int rx_queue = intr->irq_rid - QCOM_ESS_EDMA_NUM_TX_IRQS;
+		/*
+		 * Disable the interrupt for this ring.
+		 */
+		(void) qcom_ess_edma_hw_intr_rx_intr_set_enable(sc, rx_queue,
+		    false);
+	}
 
 	return (FILTER_SCHEDULE_THREAD);
 }
@@ -173,13 +195,6 @@ qcom_ess_edma_intr(void *arg)
 		    "%s: called; TX queue %d\n", __func__, intr->irq_rid);
 
 		EDMA_RING_LOCK(&sc->sc_tx_ring[tx_queue]);
-		/*
-		 * XXX TODO: should put this in the edma filter routine?
-		 *
-		 * Disable the interrupt for this ring.
-		 */
-		(void) qcom_ess_edma_hw_intr_tx_intr_set_enable(sc, tx_queue,
-		    false);
 
 		/*
 		 * Complete/free tx mbufs.
@@ -213,14 +228,6 @@ qcom_ess_edma_intr(void *arg)
 		EDMA_RING_LOCK(&sc->sc_rx_ring[rx_queue]);
 
 		/*
-		 * XXX TODO: should put this in the edma filter routine?
-		 *
-		 * Disable the interrupt for this ring.
-		 */
-		(void) qcom_ess_edma_hw_intr_rx_intr_set_enable(sc, rx_queue,
-		    false);
-
-		/*
 		 * Do receive work, get completed mbufs.
 		 */
 		(void) qcom_ess_edma_rx_ring_complete(sc, rx_queue, &mq);
@@ -245,7 +252,7 @@ qcom_ess_edma_intr(void *arg)
 
 static int
 qcom_ess_edma_setup_intr(struct qcom_ess_edma_softc *sc,
-    struct qcom_ess_edma_intr *intr, int rid)
+    struct qcom_ess_edma_intr *intr, int rid, int cpu_id)
 {
 
 	QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_INTERRUPT,
@@ -269,6 +276,16 @@ qcom_ess_edma_setup_intr(struct qcom_ess_edma_softc *sc,
 		    "ERROR: unable to register interrupt handler for"
 		    " IRQ %d\n", rid);
 		return (ENXIO);
+	}
+
+	/* If requested, bind the interrupt to the given CPU. */
+	if (cpu_id != -1) {
+		if (intr_bind_irq(sc->sc_dev, intr->irq_res, cpu_id) != 0) {
+			device_printf(sc->sc_dev,
+			    "ERROR: unable to bind IRQ %d to CPU %d\n",
+			    rid, cpu_id);
+		}
+		/* Note: don't completely error out here */
 	}
 
 	return (0);
@@ -303,20 +320,54 @@ qcom_ess_edma_sysctl_dump_state(SYSCTL_HANDLER_ARGS)
 		device_printf(sc->sc_dev,
 		    "RXQ[%d]: num_added=%llu, num_cleaned=%llu,"
 		    " num_dropped=%llu, num_enqueue_full=%llu,"
-		    " num_rx_no_gmac=%llu, num_rx_ok=%llu\n",
+		    " num_rx_no_gmac=%llu, tx_mapfail=%llu,"
+		    " num_tx_maxfrags=%llu, num_rx_ok=%llu\n",
 		    i,
 		    sc->sc_rx_ring[i].stats.num_added,
 		    sc->sc_rx_ring[i].stats.num_cleaned,
 		    sc->sc_rx_ring[i].stats.num_dropped,
 		    sc->sc_rx_ring[i].stats.num_enqueue_full,
 		    sc->sc_rx_ring[i].stats.num_rx_no_gmac,
+		    sc->sc_rx_ring[i].stats.num_tx_mapfail,
+		    sc->sc_rx_ring[i].stats.num_tx_maxfrags,
 		    sc->sc_rx_ring[i].stats.num_rx_ok);
 	}
+
+	for (i = 0; i < QCOM_ESS_EDMA_NUM_TX_RINGS; i++) {
+		device_printf(sc->sc_dev,
+		    "TXQ[%d]: prod=%u, cons=%u, hw prod=%u, hw cons=%u\n",
+		    i,
+		    sc->sc_tx_ring[i].next_to_fill,
+		    sc->sc_tx_ring[i].next_to_clean,
+		    (EDMA_REG_READ(sc, EDMA_REG_TPD_IDX_Q(i)) >> EDMA_TPD_CONS_IDX_SHIFT) & EDMA_TPD_CONS_IDX_MASK,
+		    EDMA_REG_READ(sc, EDMA_REG_TX_SW_CONS_IDX_Q(i)));
+		device_printf(sc->sc_dev,
+		    "TXQ[%d]: num_added=%llu, num_cleaned=%llu,"
+		    " num_dropped=%llu, num_enqueue_full=%llu,"
+		    " tx_mapfail=%llu, tx_complete=%llu"
+		    " num_tx_maxfrags=%llu, num_tx_ok=%llu\n",
+		    i,
+		    sc->sc_tx_ring[i].stats.num_added,
+		    sc->sc_tx_ring[i].stats.num_cleaned,
+		    sc->sc_tx_ring[i].stats.num_dropped,
+		    sc->sc_tx_ring[i].stats.num_enqueue_full,
+		    sc->sc_tx_ring[i].stats.num_tx_mapfail,
+		    sc->sc_tx_ring[i].stats.num_tx_complete,
+		    sc->sc_tx_ring[i].stats.num_tx_maxfrags,
+		    sc->sc_tx_ring[i].stats.num_tx_ok);
+	}
+
 
 	for (i = 0; i < QCOM_ESS_EDMA_NUM_RX_IRQS; i++) {
 		device_printf(sc->sc_dev, "INTR_RXQ[%d]: num_intr=%llu\n",
 		    i,
 		    sc->sc_rx_irq[i].stats.num_intr);
+	}
+
+	for (i = 0; i < QCOM_ESS_EDMA_NUM_TX_IRQS; i++) {
+		device_printf(sc->sc_dev, "INTR_TXQ[%d]: num_intr=%llu\n",
+		    i,
+		    sc->sc_tx_irq[i].stats.num_intr);
 	}
 
 	device_printf(sc->sc_dev, "EDMA_REG_TXQ_CTRL=0x%08x\n",
@@ -400,17 +451,46 @@ qcom_ess_edma_attach(device_t dev)
 		goto error;
 	}
 
+	/*
+	 * How many TX queues per CPU, for figuring out flowid/CPU
+	 * mapping.
+	 */
+	sc->sc_config.num_tx_queue_per_cpu =
+	    QCOM_ESS_EDMA_NUM_TX_RINGS / mp_ncpus;
+
 	/* Allocate TX IRQs */
 	for (i = 0; i < QCOM_ESS_EDMA_NUM_TX_IRQS; i++) {
-		if (qcom_ess_edma_setup_intr(sc, &sc->sc_tx_irq[i], i) != 0)
+		int cpu_id;
+
+		/*
+		 * The current mapping in the if_transmit() path
+		 * will map mp_ncpu groups of flowids to the TXQs.
+		 * So for a 4 CPU system the first four will be CPU 0,
+		 * the second four will be CPU 1, etc.
+		 */
+		cpu_id = i / mp_ncpus;
+		if (qcom_ess_edma_setup_intr(sc, &sc->sc_tx_irq[i],
+		    i, cpu_id) != 0)
 			goto error;
+		if (bootverbose)
+			device_printf(sc->sc_dev,
+			    "mapping TX IRQ %d to CPU %d\n",
+			    i, cpu_id);
 	}
 
 	/* Allocate RX IRQs */
 	for (i = 0; i < QCOM_ESS_EDMA_NUM_RX_IRQS; i++) {
+		/*
+		 * Receive queue is simply mapped to all the CPUs.
+		 */
+		int cpu_id = i % mp_ncpus;
 		if (qcom_ess_edma_setup_intr(sc, &sc->sc_rx_irq[i],
-		    i + QCOM_ESS_EDMA_NUM_TX_IRQS) != 0)
+		    i + QCOM_ESS_EDMA_NUM_TX_IRQS, cpu_id) != 0)
 			goto error;
+		if (bootverbose)
+			device_printf(sc->sc_dev,
+			    "mapping RX IRQ %d to CPU %d\n",
+			    i, cpu_id);
 	}
 
 	/* Default receive frame size - before ETHER_ALIGN hack */
@@ -479,6 +559,9 @@ qcom_ess_edma_attach(device_t dev)
 		    ESS_EDMA_TX_BUFFER_ALIGN) != 0)
 			goto error;
 		if (qcom_ess_edma_tx_ring_setup(sc, &sc->sc_tx_ring[i]) != 0)
+			goto error;
+
+		if (qcom_ess_edma_setup_tx_state(sc, i) != 0)
 			goto error;
 	}
 

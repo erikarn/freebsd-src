@@ -125,7 +125,7 @@ qcom_ess_edma_tx_unmap_and_clean(struct qcom_ess_edma_softc *sc,
 		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_RING,
 		    "%s:   idx %d, unmap/free\n", __func__, idx);
 		bus_dmamap_unload(ring->buffer_dma_tag, txd->m_dmamap);
-		m_free(txd->m);
+		m_freem(txd->m);
 		txd->m = NULL;
 		txd->is_first = txd->is_last = 0;
 	}
@@ -175,6 +175,9 @@ qcom_ess_edma_tx_ring_complete(struct qcom_ess_edma_softc *sc, int queue)
 			sw_next_to_clean = 0;
 		n++;
 	}
+
+	ring->stats.num_cleaned += n;
+	ring->stats.num_tx_complete++;
 
 	ring->next_to_clean = sw_next_to_clean;
 
@@ -260,9 +263,9 @@ qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
 		return (ENOBUFS);
 	}
 	if (nsegs == 0) {
+		ring->stats.num_tx_maxfrags++;
 		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_FRAME,
 		    "%s: too many segs\n", __func__);
-		ring->stats.num_tx_maxfrags++;
 		return (ENOBUFS);
 	}
 
@@ -302,14 +305,15 @@ qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
 		    "%s:   filling idx %d\n", __func__, next_to_fill);
 		txd = qcom_ess_edma_desc_ring_get_sw_desc(sc, ring, next_to_fill);
 		ds = qcom_ess_edma_desc_ring_get_hw_desc(sc, ring, next_to_fill);
-		if (i == 0)
+		txd->m = NULL;
+		if (i == 0) {
 			txd->is_first = 1;
+		}
 		if (i == (nsegs - 1)) {
 			txd->is_last = 1;
 			eop = EDMA_TPD_EOP;
+			txd->m = m;
 		}
-		if (i != 0)
-			txd->m = NULL;
 		ds->word1 = word1 | eop;
 		ds->word3 = word3;
 		ds->svlan_tag = svlan_tag;
@@ -328,6 +332,8 @@ qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
 			next_to_fill = 0;
 	}
 
+	ring->stats.num_added += nsegs;
+
 	/* Finish, update ring tracking, poke hardware */
 	ring->next_to_fill = next_to_fill;
 	qcom_ess_edma_desc_ring_flush_preupdate(sc, ring);
@@ -340,6 +346,8 @@ qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
 	    << EDMA_TPD_PROD_IDX_SHIFT;
 	EDMA_REG_WRITE(sc, EDMA_REG_TPD_IDX_Q(queue), reg);
 	EDMA_REG_BARRIER_WRITE(sc);
+
+	ring->stats.num_tx_ok++;
 
 	return (0);
 }

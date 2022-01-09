@@ -34,6 +34,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/bus.h>
 
 #include <sys/kernel.h>
+#include <sys/kthread.h>
 #include <sys/module.h>
 #include <sys/rman.h>
 #include <sys/lock.h>
@@ -43,6 +44,9 @@ __FBSDID("$FreeBSD$");
 #include <sys/mbuf.h>
 #include <sys/socket.h>
 #include <sys/sockio.h>
+#include <sys/smp.h>
+#include <sys/proc.h>
+#include <sys/sched.h>
 
 #include <net/if.h>
 #include <net/if_var.h>
@@ -176,6 +180,9 @@ qcom_ess_edma_gmac_transmit(struct ifnet *ifp, struct mbuf *m)
 	int ret;
 	int q;
 
+	/* Make sure our CPU doesn't change whilst we're running */
+	sched_pin();
+
 	/*
 	 * Map flowid / curcpu to a given transmit queue.
 	 *
@@ -186,12 +193,18 @@ qcom_ess_edma_gmac_transmit(struct ifnet *ifp, struct mbuf *m)
 	 * the flowid and map it to one of a set of TX queues that
 	 * is dedicated to this CPU.
 	 */
-#if 0
-	if (M_HASHTYPE_GET(m) != M_HASHTYPE_NONE)
-		q = m->m_pkthdr.flowid % QCOM_ESS_EDMA_NUM_TX_RINGS;
-	else
+	if (M_HASHTYPE_GET(m) != M_HASHTYPE_NONE) {
+		/* Map flowid to a queue */
+		q = m->m_pkthdr.flowid % sc->sc_config.num_tx_queue_per_cpu;
+
+		/* Now, map the queue to a set of unique queues per CPU */
+		q = q << (mp_ncpus * curcpu);
+
+		/* And ensure we're not overflowing */
+		q = q % QCOM_ESS_EDMA_NUM_TX_RINGS;
+	} else {
 		q = curcpu % QCOM_ESS_EDMA_NUM_TX_RINGS;
-#endif
+	}
 	q = curcpu % QCOM_ESS_EDMA_NUM_TX_RINGS;
 
 	EDMA_RING_LOCK(&sc->sc_tx_ring[q]);
@@ -208,6 +221,13 @@ qcom_ess_edma_gmac_transmit(struct ifnet *ifp, struct mbuf *m)
 	    gmac->vlan_id);
 
 	EDMA_RING_UNLOCK(&sc->sc_tx_ring[q]);
+
+	sched_unpin();
+
+	if (ret == 0)
+		if_inc_counter(ifp, IFCOUNTER_OPACKETS, 1);
+	else
+		if_inc_counter(ifp, IFCOUNTER_OERRORS, 1);
 
 	/* Don't consume mbuf; if_transmit caller will if needed */
 	return (ret);
@@ -405,7 +425,7 @@ qcom_ess_edma_gmac_receive_frames(struct qcom_ess_edma_softc *sc,
 	while ((m = mbufq_dequeue(mq)) != NULL) {
 		if (m->m_pkthdr.rcvif == NULL) {
 			ring->stats.num_rx_no_gmac++;
-			m_free(m);
+			m_freem(m);
 		} else {
 			ring->stats.num_rx_ok++;
 			ifp = m->m_pkthdr.rcvif;

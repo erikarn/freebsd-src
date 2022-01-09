@@ -158,7 +158,7 @@ qcom_ess_edma_rx_buf_alloc(struct qcom_ess_edma_softc *sc,
 	if (error != 0 || nsegs != 1) {
 		device_printf(sc->sc_dev,
 		    "ERROR: couldn't load mbuf dmamap (%d) (nsegs=%d)\n", error, nsegs);
-		m_free(m);
+		m_freem(m);
 		return (error);
 	}
 
@@ -443,7 +443,7 @@ qcom_ess_edma_rx_ring_complete(struct qcom_ess_edma_softc *sc, int queue,
 
 		if (mbufq_enqueue(mq, m) != 0) {
 			ring->stats.num_enqueue_full++;
-			m_free(m);
+			m_freem(m);
 		}
 	}
 	ring->next_to_clean = sw_next_to_clean;

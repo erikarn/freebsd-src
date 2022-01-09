@@ -178,15 +178,11 @@ qcom_ess_edma_hw_intr_disable(struct qcom_ess_edma_softc *sc)
 
 /*
  * Enable/disable the given RX ring interrupt.
- *
- * Must be called with the RX ring lock held.
  */
 int
 qcom_ess_edma_hw_intr_rx_intr_set_enable(struct qcom_ess_edma_softc *sc,
     int rxq, bool state)
 {
-	// XXX TODO: ring lock assert
-
 	EDMA_REG_WRITE(sc, EDMA_REG_RX_INT_MASK_Q(rxq), state ? 1 : 0);
 	EDMA_REG_BARRIER_WRITE(sc);
 
@@ -195,15 +191,11 @@ qcom_ess_edma_hw_intr_rx_intr_set_enable(struct qcom_ess_edma_softc *sc,
 
 /*
  * Enable/disable the given TX ring interrupt.
- *
- * Must be called with the TX ring lock held.
  */
 int
 qcom_ess_edma_hw_intr_tx_intr_set_enable(struct qcom_ess_edma_softc *sc,
     int txq, bool state)
 {
-
-	// XXX TODO: ring lock assert
 
 	EDMA_REG_WRITE(sc, EDMA_REG_TX_INT_MASK_Q(txq), state ? 1 : 0);
 	EDMA_REG_BARRIER_WRITE(sc);
