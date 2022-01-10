@@ -50,10 +50,12 @@
 	    0, (sc)->sc_ess_mem_size,					\
 	    BUS_SPACE_BARRIER_READ | BUS_SPACE_BARRIER_WRITE)
 
-#define	AR40XX_MAX_VLANS		128
+/* Size of the VLAN table itself in hardware */
+#define	AR40XX_NUM_VTU_ENTRIES		64
 #define	AR40XX_NUM_PORTS		6
 #define	AR40XX_NUM_PHYS			5
-#define	AR40XX_NUM_ATU_ENTRIES		128
+/* Size of the ATU table in hardware */
+#define	AR40XX_NUM_ATU_ENTRIES		2048
 
 struct ar40xx_softc {
 	struct mtx	sc_mtx;		/* serialize access to softc */
@@ -96,11 +98,17 @@ struct ar40xx_softc {
 		uint32_t switch_wan_bmp;
 	} sc_config;
 
+	/* VLAN table configuration */
 	struct {
+		/* Whether 802.1q VLANs are enabled or not */
 		bool vlan;
-		uint16_t vlan_id[AR40XX_MAX_VLANS];
-		uint8_t vlan_table[AR40XX_MAX_VLANS];
-		uint16_t vlan_tagged;
+		/* Map etherswitch vgroup to 802.1q vlan */
+		uint16_t vlan_id[AR40XX_NUM_VTU_ENTRIES];
+		/* VLAN port membership */
+		uint8_t vlan_ports[AR40XX_NUM_VTU_ENTRIES];
+		/* VLAN port membership - untagged ports */
+		uint16_t vlan_untagged[AR40XX_NUM_VTU_ENTRIES];
+		/* PVID for each port - index into vlan_id[] */
 		uint16_t pvid[AR40XX_NUM_PORTS];
 	} sc_vlan;
 

@@ -161,14 +161,23 @@ ar40xx_hw_vlan_init(struct ar40xx_softc *sc)
 	/* Enable VLANs by default */
 	sc->sc_vlan.vlan = 1;
 
-	/* Configure initial LAN/WAN bitmap and include CPU port */
-	sc->sc_vlan.vlan_table[AR40XX_LAN_VLAN] =
-	    sc->sc_config.switch_cpu_bmp | sc->sc_config.switch_lan_bmp;
-	sc->sc_vlan.vlan_table[AR40XX_WAN_VLAN] =
-	    sc->sc_config.switch_cpu_bmp | sc->sc_config.switch_wan_bmp;
-	sc->sc_vlan.vlan_tagged = sc->sc_config.switch_cpu_bmp;
+	/* Configure initial LAN/WAN bitmap and include CPU port as tagged */
+	sc->sc_vlan.vlan_id[AR40XX_LAN_VLAN] = AR40XX_LAN_VLAN
+	    | ETHERSWITCH_VID_VALID;
+	sc->sc_vlan.vlan_id[AR40XX_WAN_VLAN] = AR40XX_WAN_VLAN
+	    | ETHERSWITCH_VID_VALID;
 
-	/* Populate the per-port PVID */
+	sc->sc_vlan.vlan_ports[AR40XX_LAN_VLAN] =
+	    sc->sc_config.switch_cpu_bmp | sc->sc_config.switch_lan_bmp;
+	sc->sc_vlan.vlan_untagged[AR40XX_LAN_VLAN] =
+	    sc->sc_config.switch_lan_bmp;
+
+	sc->sc_vlan.vlan_ports[AR40XX_WAN_VLAN] =
+	    sc->sc_config.switch_cpu_bmp | sc->sc_config.switch_wan_bmp;
+	sc->sc_vlan.vlan_untagged[AR40XX_WAN_VLAN] =
+	    sc->sc_config.switch_wan_bmp;
+
+	/* Populate the per-port PVID - pvid[] is an index into vlan_id[] */
 	for (i = 0; i < AR40XX_NUM_PORTS; i++) {
 		if (sc->sc_config.switch_lan_bmp & (1U << i))
 			sc->sc_vlan.pvid[i] = AR40XX_LAN_VLAN;
@@ -213,10 +222,13 @@ ar40xx_hw_sw_hw_apply(struct ar40xx_softc *sc)
 	if (sc->sc_vlan.vlan) {
 		device_printf(sc->sc_dev, "%s: configuring 802.1q VLANs\n",
 		    __func__);
-		for (j = 0; j < AR40XX_MAX_VLANS; j++) {
-			uint8_t vp = sc->sc_vlan.vlan_table[j];
+		for (j = 0; j < AR40XX_NUM_VTU_ENTRIES; j++) {
+			uint8_t vp = sc->sc_vlan.vlan_ports[j];
 
 			if (!vp)
+				continue;
+			if ((sc->sc_vlan.vlan_id[j]
+			    & ETHERSWITCH_VID_VALID) == 0)
 				continue;
 
 			for (i = 0; i < AR40XX_NUM_PORTS; i++) {
@@ -226,8 +238,10 @@ ar40xx_hw_sw_hw_apply(struct ar40xx_softc *sc)
 					portmask[i] |= vp & ~mask;
 			}
 
-			ar40xx_hw_vtu_load_vlan(sc, sc->sc_vlan.vlan_id[j],
-			    sc->sc_vlan.vlan_table[j]);
+			ar40xx_hw_vtu_load_vlan(sc,
+			    sc->sc_vlan.vlan_id[j] & ETHERSWITCH_VID_MASK,
+			    sc->sc_vlan.vlan_ports[j],
+			    sc->sc_vlan.vlan_untagged[j]);
 		}
 	} else {
 		device_printf(sc->sc_dev, "%s: configuring per-port VLANs\n",
@@ -276,8 +290,8 @@ ar40xx_hw_reset_switch(struct ar40xx_softc *sc)
 	memset(&sc->sc_vlan, 0, sizeof(sc->sc_vlan));
 
 	/* initial vlan port mapping */
-	for (i = 0; i < AR40XX_MAX_VLANS; i++) {
-		sc->sc_vlan.vlan_id[i] = i;
+	for (i = 0; i < AR40XX_NUM_VTU_ENTRIES; i++) {
+		sc->sc_vlan.vlan_id[i] = 0;
 	}
 
 	/* init vlan config */

@@ -203,6 +203,7 @@ ar40xx_hw_get_port_pvid(struct ar40xx_softc *sc, int port, int *pvid)
 	reg = AR40XX_REG_READ(sc, AR40XX_REG_PORT_VLAN0(port));
 
 	reg = reg >> AR40XX_PORT_VLAN0_DEF_CVID_S;
+	/* XXX why 16 bit and not 12 bit? */
 	reg = reg & 0xffff;
 
 	*pvid = reg;
@@ -221,6 +222,8 @@ ar40xx_hw_set_port_pvid(struct ar40xx_softc *sc, int port, int pvid)
 	uint32_t reg;
 
 	AR40XX_LOCK_ASSERT(sc);
+
+	pvid &= ETHERSWITCH_VID_MASK;
 
 	reg = pvid << AR40XX_PORT_VLAN0_DEF_SVID_S;
 	reg |= pvid << AR40XX_PORT_VLAN0_DEF_CVID_S;
@@ -248,7 +251,8 @@ int
 ar40xx_hw_port_setup(struct ar40xx_softc *sc, int port, uint32_t members)
 {
 	uint32_t egress, ingress, reg;
-	uint32_t pvid = sc->sc_vlan.vlan_id[sc->sc_vlan.pvid[port]];
+	uint32_t pvid = sc->sc_vlan.vlan_id[sc->sc_vlan.pvid[port]]
+	    & ETHERSWITCH_VID_MASK;
 
 	if (sc->sc_vlan.vlan) {
 		egress = AR40XX_PORT_VLAN1_OUT_MODE_UNMOD;

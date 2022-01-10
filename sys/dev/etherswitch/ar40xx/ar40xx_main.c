@@ -432,8 +432,7 @@ ar40xx_attach(device_t dev)
 	sc->sc_info.es_nports = AR40XX_NUM_PORTS;
 	sc->sc_info.es_vlan_caps = ETHERSWITCH_VLAN_DOT1Q;
 	/* XXX TODO: double-tag / 802.1ad */
-	sc->sc_info.es_nvlangroups = 16; /* XXX */
-	/* XXX TODO: maximum VLAN ID = AR40XX_MAX_VLANS ? */
+	sc->sc_info.es_nvlangroups = AR40XX_NUM_VTU_ENTRIES;
 
 	/*
 	 * Fetch the initial port configuration.
@@ -637,17 +636,14 @@ ar40xx_getvgroup(device_t dev, etherswitch_vlangroup_t *vg)
 		return (-1);
 	}
 
-	/*
-	 * For now, this driver assumes the vlan table == vlan id.
-	 * XXX TODO: should introduce a vlangroup <-> vlan_id mapping.
-	 */
-	vid = vg->es_vlangroup;
-	vg->es_vid = vid;
-	if (sc->sc_vlan.vlan_table[vid] == 0) {
-		/* No ports in it; treat it as not available for now */
+	/* Get vlangroup mapping to VLAN id */
+	vid = sc->sc_vlan.vlan_id[vg->es_vlangroup];
+	if ((vid & ETHERSWITCH_VID_VALID) == 0) {
+		/* Not an active vgroup; bail */
 		AR40XX_UNLOCK(sc);
 		return (0);
 	}
+	vg->es_vid = vid;
 
 	ret = ar40xx_hw_vtu_get_vlan(sc, vid, &vg->es_member_ports,
 	    &vg->es_untagged_ports);
@@ -665,6 +661,7 @@ static int
 ar40xx_setvgroup(device_t dev, etherswitch_vlangroup_t *e)
 {
 	struct ar40xx_softc *sc = device_get_softc(dev);
+
 	device_printf(sc->sc_dev, "%s: called\n", __func__);
 	return (ENXIO);
 }

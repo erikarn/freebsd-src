@@ -73,6 +73,9 @@
 #include "etherswitch_if.h"
 
 
+/*
+ * Perform a VTU (vlan table unit) operation.
+ */
 int
 ar40xx_hw_vtu_op(struct ar40xx_softc *sc, uint32_t op, uint32_t val)
 {
@@ -99,30 +102,37 @@ ar40xx_hw_vtu_op(struct ar40xx_softc *sc, uint32_t op, uint32_t val)
 	return (0);
 }
 
+/*
+ * Load in a VLAN table map / port configuration for the given
+ * vlan ID.
+ */
 int
 ar40xx_hw_vtu_load_vlan(struct ar40xx_softc *sc, uint32_t vid,
-    uint32_t port_mask)
+    uint32_t port_mask, uint32_t untagged_mask)
 {
 
 	uint32_t op, val, mode;
 	int i, ret;
 
 	AR40XX_DPRINTF(sc, AR40XX_DBG_VTU_OP,
-	    "%s: called; vid=%d port_mask=0x%08x\n",
-	    __func__, vid, port_mask);
+	    "%s: called; vid=%d port_mask=0x%08x, untagged_mask=0x%08x\n",
+	    __func__, vid, port_mask, untagged_mask);
 
 	op = AR40XX_VTU_FUNC1_OP_LOAD | (vid << AR40XX_VTU_FUNC1_VID_S);
 	val = AR40XX_VTU_FUNC0_VALID | AR40XX_VTU_FUNC0_IVL;
 	for (i = 0; i < AR40XX_NUM_PORTS; i++) {
 		if ((port_mask & (1U << i)) == 0)
+			/* Not in the VLAN at all */
 			mode = AR40XX_VTU_FUNC0_EG_MODE_NOT;
 		else if (sc->sc_vlan.vlan == 0)
+			/* VLAN mode disabled; keep the provided VLAN tag */
 			mode = AR40XX_VTU_FUNC0_EG_MODE_KEEP;
-		else if ((sc->sc_vlan.vlan_tagged & (1U << i))
-		    || (sc->sc_vlan.vlan_id[sc->sc_vlan.pvid[i]] != vid))
-			mode = AR40XX_VTU_FUNC0_EG_MODE_TAG;
-		else
+		else if (untagged_mask & (1U << i))
+			/* Port in the VLAN; is untagged */
 			mode = AR40XX_VTU_FUNC0_EG_MODE_UNTAG;
+		else
+			/* Port is in the VLAN; is tagged */
+			mode = AR40XX_VTU_FUNC0_EG_MODE_TAG;
 		val |= mode << AR40XX_VTU_FUNC0_EG_MODE_S(i);
 	}
 	ret = ar40xx_hw_vtu_op(sc, op, val);
@@ -130,6 +140,9 @@ ar40xx_hw_vtu_load_vlan(struct ar40xx_softc *sc, uint32_t vid,
 	return (ret);
 }
 
+/*
+ * Flush all VLAN port entries.
+ */
 int
 ar40xx_hw_vtu_flush(struct ar40xx_softc *sc)
 {
@@ -141,6 +154,9 @@ ar40xx_hw_vtu_flush(struct ar40xx_softc *sc)
 	return (ret);
 }
 
+/*
+ * Get the VLAN port map for the given vlan ID.
+ */
 int
 ar40xx_hw_vtu_get_vlan(struct ar40xx_softc *sc, int vid, uint32_t *ports,
     uint32_t *untagged_ports)
@@ -150,8 +166,8 @@ ar40xx_hw_vtu_get_vlan(struct ar40xx_softc *sc, int vid, uint32_t *ports,
 
 	op = AR40XX_VTU_FUNC1_OP_GET_ONE;
 
-	/* Filter out the vid flags; only grab the VLAN ID */
-	vid &= 0xfff;
+	/* Filter out any etherswitch VID flags; only grab the VLAN ID */
+	vid &= ETHERSWITCH_VID_MASK;
 
 	/* XXX TODO: the VTU here stores egress mode - keep, tag, untagged, none */
 	op |= (vid << AR40XX_VTU_FUNC1_VID_S);
