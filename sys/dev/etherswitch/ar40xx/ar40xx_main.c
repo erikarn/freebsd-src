@@ -65,6 +65,7 @@
 #include <dev/etherswitch/ar40xx/ar40xx_var.h>
 #include <dev/etherswitch/ar40xx/ar40xx_reg.h>
 #include <dev/etherswitch/ar40xx/ar40xx_phy.h>
+#include <dev/etherswitch/ar40xx/ar40xx_debug.h>
 #include <dev/etherswitch/ar40xx/ar40xx_hw.h>
 #include <dev/etherswitch/ar40xx/ar40xx_hw_psgmii.h>
 #include <dev/etherswitch/ar40xx/ar40xx_hw_port.h>
@@ -658,12 +659,60 @@ ar40xx_getvgroup(device_t dev, etherswitch_vlangroup_t *vg)
 }
 
 static int
-ar40xx_setvgroup(device_t dev, etherswitch_vlangroup_t *e)
+ar40xx_setvgroup(device_t dev, etherswitch_vlangroup_t *vg)
 {
 	struct ar40xx_softc *sc = device_get_softc(dev);
+	int err, vid;
 
-	device_printf(sc->sc_dev, "%s: called\n", __func__);
-	return (ENXIO);
+	/* For now we only support 802.1q mode */
+	if (sc->sc_vlan.vlan == 0)
+		return (EINVAL);
+
+	AR40XX_LOCK(sc);
+	vid = sc->sc_vlan.vlan_id[vg->es_vlangroup];
+	/*
+	 * If we have an 802.1q VID and it's different to the current one,
+	 * purge the current VTU entry.
+	 */
+	if ((vid != 0) &&
+	    ((vid & ETHERSWITCH_VID_VALID) != 0) &&
+	    ((vid & ETHERSWITCH_VID_MASK) !=
+	     (vg->es_vid & ETHERSWITCH_VID_MASK))) {
+		AR40XX_DPRINTF(sc, AR40XX_DBG_VTU_OP,
+		    "%s: purging VID %d first\n", __func__, vid);
+		err = ar40xx_hw_vtu_flush(sc);
+		if (err != 0) {
+			AR40XX_UNLOCK(sc);
+			return (err);
+		}
+	}
+
+	/* Update VLAN ID */
+	vid = vg->es_vid & ETHERSWITCH_VID_MASK;
+	sc->sc_vlan.vlan_id[vg->es_vlangroup] = vid;
+	if (vid == 0) {
+		/* Setting it to 0 disables the group */
+		AR40XX_UNLOCK(sc);
+		return (0);
+	}
+	/* Add valid bit for this entry */
+	sc->sc_vlan.vlan_id[vg->es_vlangroup] = vid | ETHERSWITCH_VID_VALID;
+
+	/* Update hardware */
+	err = ar40xx_hw_vtu_load_vlan(sc, vid, vg->es_member_ports,
+	    vg->es_untagged_ports);
+	if (err != 0) {
+		AR40XX_UNLOCK(sc);
+		return (err);
+	}
+
+	/* Update the config for the given entry */
+	sc->sc_vlan.vlan_ports[vg->es_vlangroup] = vg->es_member_ports;
+	sc->sc_vlan.vlan_untagged[vg->es_vlangroup] = vg->es_untagged_ports;
+
+	AR40XX_UNLOCK(sc);
+
+	return (0);
 }
 
 static int
