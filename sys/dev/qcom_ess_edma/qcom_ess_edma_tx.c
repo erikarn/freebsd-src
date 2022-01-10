@@ -302,12 +302,20 @@ qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
 	if (eh->evl_encap_proto == htons(ETHERTYPE_VLAN)) {
 		/* Don't add a tag, just use what's here */
 		vlan_id = -1;
+		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_FRAME,
+		    "%s:   no vlan id\n", __func__);
+
 	} else if ((m->m_flags & M_VLANTAG) != 0) {
 		/* We have an offload VLAN tag, use it */
 		vlan_id = m->m_pkthdr.ether_vtag & 0x0fff;
+		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_FRAME,
+		    "%s:   header tag vlan id=%d\n", __func__, vlan_id);
 	} else {
 		/* No VLAN tag, no VLAN header; default VLAN */
 		vlan_id = default_vlan;
+		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_FRAME,
+		    "%s:   no vlan tag/hdr; vlan id=%d\n", __func__,
+		    vlan_id);
 	}
 
 	/*
@@ -315,7 +323,7 @@ qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
 	 */
 	if (vlan_id != -1) {
 		word3 |= (1U << EDMA_TX_INS_CVLAN);
-		word3 |= (default_vlan << EDMA_TX_CVLAN_TAG_SHIFT);
+		word3 |= (vlan_id << EDMA_TX_CVLAN_TAG_SHIFT);
 	}
 
 	eop = 0;
