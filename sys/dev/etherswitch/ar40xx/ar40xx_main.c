@@ -580,8 +580,38 @@ static int
 ar40xx_setport(device_t dev, etherswitch_port_t *p)
 {
 	struct ar40xx_softc *sc = device_get_softc(dev);
-	device_printf(sc->sc_dev, "%s: called\n", __func__);
-	return (ENXIO);
+	struct ifmedia *ifm;
+	struct mii_data *mii;
+	struct ifnet *ifp;
+	int ret;
+
+	if (p->es_port < 0 || p->es_port > sc->sc_info.es_nports)
+		return (EINVAL);
+
+	/* Port flags */
+	AR40XX_LOCK(sc);
+	ret = ar40xx_hw_set_port_pvid(sc, p->es_port, p->es_pvid);
+	if (ret != 0) {
+		AR40XX_UNLOCK(sc);
+		return (ret);
+	}
+	/* XXX TODO: tag strip/unstrip, double-tag, etc */
+	AR40XX_UNLOCK(sc);
+
+	/* Don't change media config on CPU port */
+	if (p->es_port == 0)
+		return (0);
+
+	mii = ar40xx_phy_miiforport(sc, p->es_port);
+	if (mii == NULL)
+		return (ENXIO);
+
+	ifp = ar40xx_phy_ifpforport(sc, p->es_port);
+
+	ifm = &mii->mii_media;
+	return (ifmedia_ioctl(ifp, &p->es_ifr, ifm, SIOCSIFMEDIA));
+
+	return (0);
 }
 
 static int

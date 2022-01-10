@@ -123,6 +123,18 @@ ar40xx_phy_miiforport(struct ar40xx_softc *sc, int port)
 	return (device_get_softc(sc->sc_phys.miibus[phy]));
 }
 
+struct ifnet *
+ar40xx_phy_ifpforport(struct ar40xx_softc *sc, int port)
+{
+	int phy;
+
+	phy = port-1;
+
+	if (phy < 0 || phy >= AR40XX_NUM_PHYS)
+		return (NULL);
+	return (sc->sc_phys.ifp[phy]);
+}
+
 static int
 ar40xx_ifmedia_upd(struct ifnet *ifp)
 {

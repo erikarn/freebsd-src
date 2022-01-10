@@ -34,6 +34,8 @@ extern	int ar40xx_attach_phys(struct ar40xx_softc *sc);
 extern	int ar40xx_hw_phy_get_ids(struct ar40xx_softc *sc);
 extern	struct mii_data * ar40xx_phy_miiforport(struct ar40xx_softc *sc,
 	    int port);
+extern	struct ifnet * ar40xx_phy_ifpforport(struct ar40xx_softc *sc,
+	    int port);
 
 #endif	/* __AR40XX_PHY_H__ */
 
