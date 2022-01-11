@@ -183,7 +183,7 @@ qcom_ess_edma_tx_ring_complete(struct qcom_ess_edma_softc *sc, int queue)
 	/* update the TPD consumer index register */
 	qcom_ess_edma_hw_tx_update_cons_idx(sc, queue, sw_next_to_clean);
 
-	QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_RING,
+	QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_RING_COMPLETE,
 	    "%s: cleaned %d descriptors\n", __func__, n);
 
 	return (0);
@@ -259,6 +259,14 @@ qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
 		ring->stats.num_tx_maxfrags++;
 		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_FRAME,
 		    "%s: too many segs\n", __func__);
+		return (ENOBUFS);
+	}
+
+	if (nsegs + 2 > num_left) {
+		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_FRAME,
+		    "%s: nsegs=%d, num_left=%d\n", __func__, nsegs, num_left);
+		bus_dmamap_unload(ring->buffer_dma_tag, txd->m_dmamap);
+		ring->stats.num_enqueue_full++;
 		return (ENOBUFS);
 	}
 
