@@ -623,3 +623,55 @@ qcom_ess_edma_hw_rx_enable(struct qcom_ess_edma_softc *sc)
 
 	return (0);
 }
+
+/*
+ * Read the TPD consumer index register for the given transmit ring.
+ */
+int
+qcom_ess_edma_hw_tx_read_tpd_cons_idx(struct qcom_ess_edma_softc *sc,
+    int queue_id, uint16_t *idx)
+{
+	uint32_t reg;
+
+	EDMA_REG_BARRIER_READ(sc);
+	reg = EDMA_REG_READ(sc, EDMA_REG_TPD_IDX_Q(queue_id));
+	*idx = (reg >> EDMA_TPD_CONS_IDX_SHIFT) & EDMA_TPD_CONS_IDX_MASK;
+
+	return (0);
+}
+
+int
+qcom_ess_edma_hw_tx_update_tpd_prod_idx(struct qcom_ess_edma_softc *sc,
+    int queue_id, uint16_t idx)
+{
+	uint32_t reg;
+
+	EDMA_REG_BARRIER_READ(sc);
+	reg = EDMA_REG_READ(sc, EDMA_REG_TPD_IDX_Q(queue_id));
+	reg &= ~EDMA_TPD_PROD_IDX_BITS;
+	reg |= (idx & EDMA_TPD_PROD_IDX_MASK) << EDMA_TPD_PROD_IDX_SHIFT;
+	EDMA_REG_WRITE(sc, EDMA_REG_TPD_IDX_Q(queue_id), reg);
+	EDMA_REG_BARRIER_WRITE(sc);
+
+	return (0);
+}
+
+/*
+ * Write the TPD producer index register for the given transmit wring.
+ */
+
+/*
+ * Update the TPD software consumer index register for the given
+ * transmit ring - ie, what software has cleaned.
+ */
+int
+qcom_ess_edma_hw_tx_update_cons_idx(struct qcom_ess_edma_softc *sc,
+    int queue_id, uint16_t idx)
+{
+
+	EDMA_REG_WRITE(sc, EDMA_REG_TX_SW_CONS_IDX_Q(queue_id), idx);
+	EDMA_REG_BARRIER_WRITE(sc);
+
+	return (0);
+}
+

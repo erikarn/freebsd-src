@@ -74,5 +74,11 @@ extern	int qcom_ess_edma_hw_setup_txrx_desc_rings(
 	    struct qcom_ess_edma_softc *sc);
 extern	int qcom_ess_edma_hw_tx_enable(struct qcom_ess_edma_softc *sc);
 extern	int qcom_ess_edma_hw_rx_enable(struct qcom_ess_edma_softc *sc);
+extern	int qcom_ess_edma_hw_tx_read_tpd_cons_idx(
+	    struct qcom_ess_edma_softc *sc, int queue_id, uint16_t *idx);
+extern	int qcom_ess_edma_hw_tx_update_tpd_prod_idx(
+	    struct qcom_ess_edma_softc *sc, int queue_id, uint16_t idx);
+extern	int qcom_ess_edma_hw_tx_update_cons_idx(
+	    struct qcom_ess_edma_softc *sc, int queue_id, uint16_t idx);
 
 #endif	/* __QCOM_ESS_EDMA_VAR_H__ */

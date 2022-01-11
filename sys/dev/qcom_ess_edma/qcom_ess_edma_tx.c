@@ -143,7 +143,7 @@ int
 qcom_ess_edma_tx_ring_complete(struct qcom_ess_edma_softc *sc, int queue)
 {
 	struct qcom_ess_edma_desc_ring *ring;
-	uint32_t reg, n;
+	uint32_t n;
 	uint16_t sw_next_to_clean, hw_next_to_clean;
 
 	ring = &sc->sc_tx_ring[queue];
@@ -156,10 +156,9 @@ qcom_ess_edma_tx_ring_complete(struct qcom_ess_edma_softc *sc, int queue)
 	hw_next_to_clean = 0;
 	n = 0;
 
-	/* XXX TODO: move these to routines in hw.c */
-	EDMA_REG_BARRIER_READ(sc);
-	reg = EDMA_REG_READ(sc, EDMA_REG_TPD_IDX_Q(queue));
-	hw_next_to_clean = (reg >> EDMA_TPD_CONS_IDX_SHIFT) & EDMA_TPD_CONS_IDX_MASK;
+	/* Get the current hardware completion index */
+	(void) qcom_ess_edma_hw_tx_read_tpd_cons_idx(sc, queue,
+	    &hw_next_to_clean);
 
 	QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_RING,
 	    "%s: called; sw=%d, hw=%d\n", __func__,
@@ -182,10 +181,7 @@ qcom_ess_edma_tx_ring_complete(struct qcom_ess_edma_softc *sc, int queue)
 	ring->next_to_clean = sw_next_to_clean;
 
 	/* update the TPD consumer index register */
-	/* XXX TODO: move these to routines in hw.c */
-	EDMA_REG_WRITE(sc, EDMA_REG_TX_SW_CONS_IDX_Q(queue),
-	    sw_next_to_clean);
-	EDMA_REG_BARRIER_WRITE(sc);
+	qcom_ess_edma_hw_tx_update_cons_idx(sc, queue, sw_next_to_clean);
 
 	QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_RING,
 	    "%s: cleaned %d descriptors\n", __func__, n);
@@ -210,7 +206,6 @@ qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
 	struct qcom_ess_edma_tx_desc *ds;
 	struct ether_vlan_header *eh;
 	bus_dma_segment_t txsegs[QCOM_ESS_EDMA_MAX_TXFRAGS];
-	uint32_t reg;
 	uint32_t word1, word3;
 	uint32_t eop;
 	int vlan_id;
@@ -370,14 +365,8 @@ qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
 	ring->next_to_fill = next_to_fill;
 	qcom_ess_edma_desc_ring_flush_preupdate(sc, ring);
 
-	/* XXX TODO: put in hw.c */
-	EDMA_REG_BARRIER_READ(sc);
-	reg = EDMA_REG_READ(sc, EDMA_REG_TPD_IDX_Q(queue));
-	reg &= ~EDMA_TPD_PROD_IDX_BITS;
-	reg |= (next_to_fill & EDMA_TPD_PROD_IDX_MASK)
-	    << EDMA_TPD_PROD_IDX_SHIFT;
-	EDMA_REG_WRITE(sc, EDMA_REG_TPD_IDX_Q(queue), reg);
-	EDMA_REG_BARRIER_WRITE(sc);
+	(void) qcom_ess_edma_hw_tx_update_tpd_prod_idx(sc, queue,
+	    next_to_fill);
 
 	ring->stats.num_tx_ok++;
 

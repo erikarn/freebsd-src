@@ -167,6 +167,7 @@ struct qcom_ess_edma_sw_desc_rx {
  */
 struct qcom_ess_edma_tx_state {
 	struct task enqueue_task;
+	struct task completion_task;
 	struct buf_ring *br;
 	struct taskqueue *enqueue_tq;
 	struct qcom_ess_edma_softc *sc;
