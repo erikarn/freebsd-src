@@ -102,6 +102,30 @@ qcom_ess_edma_hw_reset(struct qcom_ess_edma_softc *sc)
 }
 
 /*
+ * Get the TX interrupt moderation timer.
+ *
+ * The resolution of this register is 2uS.
+ */
+int
+qcom_ess_edma_hw_get_tx_intr_moderation(struct qcom_ess_edma_softc *sc,
+    uint32_t *usec)
+{
+	uint32_t reg;
+
+	EDMA_LOCK_ASSERT(sc);
+
+	EDMA_REG_BARRIER_READ(sc);
+	reg = EDMA_REG_READ(sc, EDMA_REG_IRQ_MODRT_TIMER_INIT);
+	reg = reg >> EDMA_IRQ_MODRT_TX_TIMER_SHIFT;
+	reg &= EDMA_IRQ_MODRT_TIMER_MASK;
+
+	*usec = reg * 2;
+
+	return (0);
+}
+
+
+/*
  * Set the TX interrupt moderation timer.
  *
  * The resolution of this register is 2uS.
@@ -111,6 +135,8 @@ qcom_ess_edma_hw_set_tx_intr_moderation(struct qcom_ess_edma_softc *sc,
     uint32_t usec)
 {
 	uint32_t reg;
+
+	usec = usec / 2;
 
 	EDMA_LOCK_ASSERT(sc);
 

@@ -393,6 +393,32 @@ qcom_ess_edma_sysctl_dump_state(SYSCTL_HANDLER_ARGS)
 }
 
 static int
+qcom_ess_edma_sysctl_tx_intmit(SYSCTL_HANDLER_ARGS)
+{
+	struct qcom_ess_edma_softc *sc = arg1;
+	uint32_t usec;
+	int val = 0;
+	int error;
+
+	EDMA_LOCK(sc);
+	(void) qcom_ess_edma_hw_get_tx_intr_moderation(sc, &usec);
+	EDMA_UNLOCK(sc);
+
+	val = usec;
+
+	error = sysctl_handle_int(oidp, &val, 0, req);
+	if (error || !req->newptr)
+		goto finish;
+
+	EDMA_LOCK(sc);
+	error = qcom_ess_edma_hw_set_tx_intr_moderation(sc, (uint32_t) val);
+	EDMA_UNLOCK(sc);
+finish:
+	return error;
+}
+
+
+static int
 qcom_ess_edma_attach_sysctl(struct qcom_ess_edma_softc *sc)
 {
 	struct sysctl_ctx_list *ctx = device_get_sysctl_ctx(sc->sc_dev);
@@ -405,6 +431,10 @@ qcom_ess_edma_attach_sysctl(struct qcom_ess_edma_softc *sc)
 	SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
 	    "state", CTLTYPE_INT | CTLFLAG_RW, sc,
 	    0, qcom_ess_edma_sysctl_dump_state, "I", "");
+
+	SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
+	    "tx_intmit", CTLTYPE_INT | CTLFLAG_RW, sc,
+	    0, qcom_ess_edma_sysctl_tx_intmit, "I", "");
 
 	return (0);
 }

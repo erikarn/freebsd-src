@@ -33,6 +33,8 @@
 #define	__QCOM_ESS_EDMA_HW_H__
 
 extern	int qcom_ess_edma_hw_reset(struct qcom_ess_edma_softc *sc);
+extern	int qcom_ess_edma_hw_get_tx_intr_moderation(
+	    struct qcom_ess_edma_softc *sc, uint32_t *usec);
 extern	int qcom_ess_edma_hw_set_tx_intr_moderation(
 	    struct qcom_ess_edma_softc *sc, uint32_t usec);
 extern	int qcom_ess_edma_hw_set_rx_intr_moderation(
