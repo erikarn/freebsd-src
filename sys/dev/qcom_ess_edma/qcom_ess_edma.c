@@ -393,6 +393,83 @@ qcom_ess_edma_sysctl_dump_state(SYSCTL_HANDLER_ARGS)
 }
 
 static int
+qcom_ess_edma_sysctl_dump_stats(SYSCTL_HANDLER_ARGS)
+{
+	struct qcom_ess_edma_softc *sc = arg1;
+	int val = 0;
+	int error;
+	int i, j;
+
+	error = sysctl_handle_int(oidp, &val, 0, req);
+	if (error || !req->newptr)
+		return (error);
+	if (val == 0)
+		return (0);
+
+	EDMA_LOCK(sc);
+	for (i = 0; i < QCOM_ESS_EDMA_NUM_RX_RINGS; i++) {
+		device_printf(sc->sc_dev,
+		    "RXQ[%d]: num_added=%llu, num_cleaned=%llu,"
+		    " num_dropped=%llu, num_enqueue_full=%llu,"
+		    " num_rx_no_gmac=%llu, tx_mapfail=%llu,"
+		    " num_tx_maxfrags=%llu, num_rx_ok=%llu\n",
+		    i,
+		    sc->sc_rx_ring[i].stats.num_added,
+		    sc->sc_rx_ring[i].stats.num_cleaned,
+		    sc->sc_rx_ring[i].stats.num_dropped,
+		    sc->sc_rx_ring[i].stats.num_enqueue_full,
+		    sc->sc_rx_ring[i].stats.num_rx_no_gmac,
+		    sc->sc_rx_ring[i].stats.num_tx_mapfail,
+		    sc->sc_rx_ring[i].stats.num_tx_maxfrags,
+		    sc->sc_rx_ring[i].stats.num_rx_ok);
+		device_printf(sc->sc_dev, "RXQ[%d]: compl: ", i);
+		for (j = 0; j < 32; j++) {
+			printf("%lld ", sc->sc_rx_ring[i].stats.num_processed[j]);
+		}
+		printf("\n");
+	}
+
+	for (i = 0; i < QCOM_ESS_EDMA_NUM_TX_RINGS; i++) {
+		device_printf(sc->sc_dev,
+		    "TXQ[%d]: num_added=%llu, num_cleaned=%llu,"
+		    " num_dropped=%llu, num_enqueue_full=%llu,"
+		    " tx_mapfail=%llu, tx_complete=%llu"
+		    " num_tx_maxfrags=%llu, num_tx_ok=%llu\n",
+		    i,
+		    sc->sc_tx_ring[i].stats.num_added,
+		    sc->sc_tx_ring[i].stats.num_cleaned,
+		    sc->sc_tx_ring[i].stats.num_dropped,
+		    sc->sc_tx_ring[i].stats.num_enqueue_full,
+		    sc->sc_tx_ring[i].stats.num_tx_mapfail,
+		    sc->sc_tx_ring[i].stats.num_tx_complete,
+		    sc->sc_tx_ring[i].stats.num_tx_maxfrags,
+		    sc->sc_tx_ring[i].stats.num_tx_ok);
+		device_printf(sc->sc_dev, "TXQ[%d]: compl: ", i);
+		for (j = 0; j < 32; j++) {
+			printf("%lld ", sc->sc_tx_ring[i].stats.num_processed[j]);
+		}
+		printf("\n");
+	}
+
+	for (i = 0; i < QCOM_ESS_EDMA_NUM_RX_IRQS; i++) {
+		device_printf(sc->sc_dev, "INTR_RXQ[%d]: num_intr=%llu\n",
+		    i,
+		    sc->sc_rx_irq[i].stats.num_intr);
+	}
+
+	for (i = 0; i < QCOM_ESS_EDMA_NUM_TX_IRQS; i++) {
+		device_printf(sc->sc_dev, "INTR_TXQ[%d]: num_intr=%llu\n",
+		    i,
+		    sc->sc_tx_irq[i].stats.num_intr);
+	}
+
+	EDMA_UNLOCK(sc);
+
+	return (0);
+}
+
+
+static int
 qcom_ess_edma_sysctl_tx_intmit(SYSCTL_HANDLER_ARGS)
 {
 	struct qcom_ess_edma_softc *sc = arg1;
@@ -431,6 +508,10 @@ qcom_ess_edma_attach_sysctl(struct qcom_ess_edma_softc *sc)
 	SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
 	    "state", CTLTYPE_INT | CTLFLAG_RW, sc,
 	    0, qcom_ess_edma_sysctl_dump_state, "I", "");
+
+	SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
+	    "stats", CTLTYPE_INT | CTLFLAG_RW, sc,
+	    0, qcom_ess_edma_sysctl_dump_stats, "I", "");
 
 	SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
 	    "tx_intmit", CTLTYPE_INT | CTLFLAG_RW, sc,

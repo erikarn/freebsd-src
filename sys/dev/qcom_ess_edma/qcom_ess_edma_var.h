@@ -142,6 +142,7 @@ struct qcom_ess_edma_desc_ring {
 		uint64_t	num_rx_csum_ok;
 		uint64_t	num_rx_csum_fail;
 		uint64_t	num_tx_complete;
+		uint64_t	num_processed[32];
 	} stats;
 };
 

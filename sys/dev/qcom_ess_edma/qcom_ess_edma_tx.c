@@ -186,6 +186,8 @@ qcom_ess_edma_tx_ring_complete(struct qcom_ess_edma_softc *sc, int queue)
 	QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_RING_COMPLETE,
 	    "%s: cleaned %d descriptors\n", __func__, n);
 
+	ring->stats.num_processed[n < 32 ? n : 31]++;
+
 	return (0);
 }
 
