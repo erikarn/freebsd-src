@@ -528,6 +528,9 @@ ar40xx_writereg(device_t dev, int addr, int value)
 	return (0);
 }
 
+/*
+ * Get the port configuration and status.
+ */
 static int
 ar40xx_getport(device_t dev, etherswitch_port_t *p)
 {
@@ -576,6 +579,9 @@ ar40xx_getport(device_t dev, etherswitch_port_t *p)
 	return (0);
 }
 
+/*
+ * Set the port configuration and status.
+ */
 static int
 ar40xx_setport(device_t dev, etherswitch_port_t *p)
 {
@@ -614,6 +620,11 @@ ar40xx_setport(device_t dev, etherswitch_port_t *p)
 	return (0);
 }
 
+/*
+ * Get the current VLAN group (per-port, ISL, dot1q) configuration.
+ *
+ * For now the only supported operating mode is dot1q.
+ */
 static int
 ar40xx_getvgroup(device_t dev, etherswitch_vlangroup_t *vg)
 {
@@ -658,6 +669,11 @@ ar40xx_getvgroup(device_t dev, etherswitch_vlangroup_t *vg)
 	return (ret);
 }
 
+/*
+ * Set the current VLAN group (per-port, ISL, dot1q) configuration.
+ *
+ * For now the only supported operating mode is dot1q.
+ */
 static int
 ar40xx_setvgroup(device_t dev, etherswitch_vlangroup_t *vg)
 {
@@ -715,29 +731,62 @@ ar40xx_setvgroup(device_t dev, etherswitch_vlangroup_t *vg)
 	return (0);
 }
 
+/*
+ * Get the current configuration mode.
+ */
 static int
 ar40xx_getconf(device_t dev, etherswitch_conf_t *conf)
 {
 	struct ar40xx_softc *sc = device_get_softc(dev);
+	int ret;
 
-	(void) sc;
+	AR40XX_LOCK(sc);
 
-	/* Only support VLAN config for now */
+	/* Only support dot1q VLAN for now */
 	conf->cmd = ETHERSWITCH_CONF_VLAN_MODE;
 	conf->vlan_mode = ETHERSWITCH_VLAN_DOT1Q;
 
-	/* XXX TODO: switch MAC address */
+	/* Switch MAC address */
+	ret = ar40xx_hw_read_switch_mac_address(sc, &conf->switch_macaddr);
+	if (ret == 0)
+		conf->cmd |= ETHERSWITCH_CONF_SWITCH_MACADDR;
+
+	AR40XX_UNLOCK(sc);
+
 	return (0);
 }
 
+/*
+ * Set the current configuration and do a switch reset.
+ *
+ * For now the only supported operating mode is dot1q, don't
+ * allow it to be set to non-dot1q.
+ */
 static int
 ar40xx_setconf(device_t dev, etherswitch_conf_t *conf)
 {
 	struct ar40xx_softc *sc = device_get_softc(dev);
-	device_printf(sc->sc_dev, "%s: called\n", __func__);
-	return (ENXIO);
+	int ret = 0;
+
+	if (conf->cmd & ETHERSWITCH_CONF_VLAN_MODE) {
+		/* Only support dot1q VLAN for now */
+		if (conf->vlan_mode != ETHERSWITCH_VLAN_DOT1Q)
+			return (EINVAL);
+	}
+
+	if (conf->cmd & ETHERSWITCH_CONF_SWITCH_MACADDR) {
+		AR40XX_LOCK(sc);
+		ret = ar40xx_hw_read_switch_mac_address(sc,
+		    &conf->switch_macaddr);
+		AR40XX_UNLOCK(sc);
+	}
+
+	return (ret);
 }
 
+/*
+ * Flush all ATU entries.
+ */
 static int
 ar40xx_atu_flush_all(device_t dev)
 {
@@ -750,6 +799,9 @@ ar40xx_atu_flush_all(device_t dev)
 	return (ret);
 }
 
+/*
+ * Flush all ATU entries for the given port.
+ */
 static int
 ar40xx_atu_flush_port(device_t dev, int port)
 {
@@ -762,6 +814,10 @@ ar40xx_atu_flush_port(device_t dev, int port)
 	return (ret);
 }
 
+/*
+ * Load the ATU table into local storage so it can be iterated
+ * over.
+ */
 static int
 ar40xx_atu_fetch_table(device_t dev, etherswitch_atu_table_t *table)
 {
@@ -795,6 +851,10 @@ done:
 	return (0);
 }
 
+/*
+ * Iterate over the ATU table entries that have been previously
+ * fetched.
+ */
 static int
 ar40xx_atu_fetch_table_entry(device_t dev, etherswitch_atu_entry_t *e)
 {

@@ -333,3 +333,61 @@ ar40xx_hw_wait_bit(struct ar40xx_softc *sc, int reg, uint32_t mask,
 	    (unsigned int)reg, t, mask, val);
 	return (ETIMEDOUT);
 }
+
+/*
+ * Read the switch MAC address.
+ */
+int
+ar40xx_hw_read_switch_mac_address(struct ar40xx_softc *sc,
+    struct ether_addr *ea)
+{
+	uint32_t ret0, ret1;
+	char *s;
+
+	s = (void *) ea;
+
+	AR40XX_LOCK_ASSERT(sc);
+
+	AR40XX_REG_BARRIER_READ(sc);
+	ret0 = AR40XX_REG_READ(sc, AR40XX_REG_SW_MAC_ADDR0);
+	ret1 = AR40XX_REG_READ(sc, AR40XX_REG_SW_MAC_ADDR1);
+
+	s[5] = MS(ret0, AR40XX_REG_SW_MAC_ADDR0_BYTE5);
+	s[4] = MS(ret0, AR40XX_REG_SW_MAC_ADDR0_BYTE4);
+	s[3] = MS(ret1, AR40XX_REG_SW_MAC_ADDR1_BYTE3);
+	s[2] = MS(ret1, AR40XX_REG_SW_MAC_ADDR1_BYTE2);
+	s[1] = MS(ret1, AR40XX_REG_SW_MAC_ADDR1_BYTE1);
+	s[0] = MS(ret1, AR40XX_REG_SW_MAC_ADDR1_BYTE0);
+
+	return (0);
+}
+
+/*
+ * Set the switch MAC address.
+ */
+int
+ar40xx_hw_write_switch_mac_address(struct ar40xx_softc *sc,
+    struct ether_addr *ea)
+{
+	uint32_t ret0 = 0, ret1 = 0;
+	char *s;
+
+	s = (void *) ea;
+
+	AR40XX_LOCK_ASSERT(sc);
+
+	ret0 |= SM(s[5], AR40XX_REG_SW_MAC_ADDR0_BYTE5);
+	ret0 |= SM(s[4], AR40XX_REG_SW_MAC_ADDR0_BYTE4);
+
+	ret1 |= SM(s[3], AR40XX_REG_SW_MAC_ADDR1_BYTE3);
+	ret1 |= SM(s[2], AR40XX_REG_SW_MAC_ADDR1_BYTE2);
+	ret1 |= SM(s[1], AR40XX_REG_SW_MAC_ADDR1_BYTE1);
+	ret1 |= SM(s[0], AR40XX_REG_SW_MAC_ADDR1_BYTE0);
+
+	AR40XX_REG_WRITE(sc, AR40XX_REG_SW_MAC_ADDR0, ret0);
+	AR40XX_REG_WRITE(sc, AR40XX_REG_SW_MAC_ADDR1, ret1);
+
+	AR40XX_REG_BARRIER_WRITE(sc);
+
+	return (0);
+}
