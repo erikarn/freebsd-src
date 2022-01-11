@@ -485,6 +485,8 @@ ar8xxx_atu_learn_default(struct arswitch_softc *sc)
 
 /*
  * Fetch the configured switch MAC address.
+ *
+ * XXX TODO: make a different one for AR8327, it's different!
  */
 static int
 ar8xxx_hw_get_switch_macaddr(struct arswitch_softc *sc, struct ether_addr *ea)
