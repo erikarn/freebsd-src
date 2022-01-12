@@ -167,11 +167,11 @@ struct qcom_ess_edma_sw_desc_rx {
  * (TODO) Per transmit ring TX state for TX queue / buf_ring stuff.
  */
 struct qcom_ess_edma_tx_state {
-	struct task enqueue_task;
 	struct task completion_task;
 	struct buf_ring *br;
-	struct taskqueue *enqueue_tq;
+	struct taskqueue *completion_tq;
 	struct qcom_ess_edma_softc *sc;
+	char label[16];
 	bool enqueue_is_running;
 	int queue_id;
 };

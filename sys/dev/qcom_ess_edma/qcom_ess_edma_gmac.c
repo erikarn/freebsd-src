@@ -209,7 +209,6 @@ qcom_ess_edma_gmac_transmit(struct ifnet *ifp, struct mbuf *m)
 	} else {
 		q = curcpu % QCOM_ESS_EDMA_NUM_TX_RINGS;
 	}
-	q = curcpu % QCOM_ESS_EDMA_NUM_TX_RINGS;
 
 	EDMA_RING_LOCK(&sc->sc_tx_ring[q]);
 

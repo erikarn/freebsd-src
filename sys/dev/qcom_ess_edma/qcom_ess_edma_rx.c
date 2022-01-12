@@ -220,11 +220,14 @@ qcom_ess_edma_rx_buf_clean(struct qcom_ess_edma_softc *sc,
 	/* Remove sw/hw desc entries */
 	m = rxd->m;
 	rxd->m = NULL;
+
+#if 0
 	/*
 	 * XXX Note: removing hw entries is purely for correctness; it may be
 	 * VERY SLOW!  Once this is working it should just be removed.
 	 */
 	ds->addr = 0;
+#endif
 
 	ring->stats.num_cleaned++;
 
