@@ -164,7 +164,7 @@ struct qcom_ess_edma_sw_desc_rx {
 };
 
 /*
- * (TODO) Per transmit ring TX state for TX queue / buf_ring stuff.
+ * Per transmit ring TX state for TX queue / buf_ring stuff.
  */
 struct qcom_ess_edma_tx_state {
 	struct task completion_task;
@@ -173,6 +173,17 @@ struct qcom_ess_edma_tx_state {
 	struct qcom_ess_edma_softc *sc;
 	char label[16];
 	bool enqueue_is_running;
+	int queue_id;
+};
+
+/*
+ * Per receive ring RX state for taskqueue stuff.
+ */
+struct qcom_ess_edma_rx_state {
+	struct task completion_task;
+	struct taskqueue *completion_tq;
+	struct qcom_ess_edma_softc *sc;
+	char label[16];
 	int queue_id;
 };
 
@@ -206,6 +217,7 @@ struct qcom_ess_edma_softc {
 	struct qcom_ess_edma_desc_ring sc_tx_ring[QCOM_ESS_EDMA_NUM_TX_RINGS];
 	struct qcom_ess_edma_desc_ring sc_rx_ring[QCOM_ESS_EDMA_NUM_RX_RINGS];
 	struct qcom_ess_edma_tx_state sc_tx_state[QCOM_ESS_EDMA_NUM_TX_RINGS];
+	struct qcom_ess_edma_rx_state sc_rx_state[QCOM_ESS_EDMA_NUM_RX_RINGS];
 	struct qcom_ess_edma_gmac	sc_gmac[QCOM_ESS_EDMA_MAX_NUM_GMACS];
 
 	int			sc_gmac_port_map[QCOM_ESS_EDMA_MAX_NUM_PORTS];

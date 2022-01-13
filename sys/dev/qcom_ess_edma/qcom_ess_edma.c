@@ -158,8 +158,80 @@ qcom_ess_edma_setup_tx_state(struct qcom_ess_edma_softc *sc, int txq, int cpu)
 static int
 qcom_ess_edma_free_tx_state(struct qcom_ess_edma_softc *sc, int txq)
 {
+	/* XXX TODO */
 	return (0);
 }
+
+static void
+qcom_ess_edma_rx_queue_complete_task(void *arg, int npending)
+{
+	struct qcom_ess_edma_rx_state *rxs = arg;
+	struct qcom_ess_edma_softc *sc = rxs->sc;
+	struct mbufq mq;
+
+	mbufq_init(&mq, EDMA_RX_RING_SIZE);
+
+	/* Receive queue */
+	QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_INTERRUPT,
+	    "%s: called; RX queue %d\n",
+	    __func__, rxs->queue_id);
+
+	EDMA_RING_LOCK(&sc->sc_rx_ring[rxs->queue_id]);
+
+	/*
+	 * Do receive work, get completed mbufs.
+	 */
+	(void) qcom_ess_edma_rx_ring_complete(sc, rxs->queue_id, &mq);
+
+	/*
+	 * ACK the interrupt.
+	 */
+	(void) qcom_ess_edma_hw_intr_rx_ack(sc, rxs->queue_id);
+
+	/*
+	 * Re-enable interrupt for this ring.
+	 */
+	(void) qcom_ess_edma_hw_intr_rx_intr_set_enable(sc, rxs->queue_id,
+	    true);
+
+	EDMA_RING_UNLOCK(&sc->sc_rx_ring[rxs->queue_id]);
+
+	/* Push frames into networking stack */
+	(void) qcom_ess_edma_gmac_receive_frames(sc, rxs->queue_id, &mq);
+}
+
+static int
+qcom_ess_edma_setup_rx_state(struct qcom_ess_edma_softc *sc, int rxq, int cpu)
+{
+	struct qcom_ess_edma_rx_state *rxs;
+	cpuset_t mask;
+
+	rxs = &sc->sc_rx_state[rxq];
+
+	snprintf(rxs->label, 15, "rxq%d_compl", rxq);
+
+	CPU_ZERO(&mask);
+	CPU_SET(cpu, &mask);
+
+	rxs->queue_id = rxq;
+	rxs->sc = sc;
+	rxs->completion_tq = taskqueue_create_fast(rxs->label, M_NOWAIT,
+	    taskqueue_thread_enqueue, &rxs->completion_tq);
+	taskqueue_start_threads_cpuset(&rxs->completion_tq, 1, PI_NET,
+	    &mask, "%s", rxs->label);
+
+	TASK_INIT(&rxs->completion_task, 0,
+	    qcom_ess_edma_rx_queue_complete_task, rxs);
+	return (0);
+}
+
+static int
+qcom_ess_edma_free_rx_state(struct qcom_ess_edma_softc *sc, int rxq)
+{
+	/* XXX TODO */
+	return (0);
+}
+
 
 static int
 qcom_ess_edma_detach(device_t dev)
@@ -181,6 +253,7 @@ qcom_ess_edma_detach(device_t dev)
 	}
 
 	for (i = 0; i < QCOM_ESS_EDMA_NUM_RX_RINGS; i++) {
+		(void) qcom_ess_edma_free_rx_state(sc, i);
 		(void) qcom_ess_edma_rx_ring_clean(sc, &sc->sc_rx_ring[i]);
 		(void) qcom_ess_edma_desc_ring_free(sc, &sc->sc_rx_ring[i]);
 	}
@@ -224,71 +297,22 @@ qcom_ess_edma_filter(void *arg)
 		return (FILTER_HANDLED);
 	} else {
 		int rx_queue = intr->irq_rid - QCOM_ESS_EDMA_NUM_TX_IRQS;
+
+		intr->stats.num_intr++;
+
 		/*
 		 * Disable the interrupt for this ring.
 		 */
 		(void) qcom_ess_edma_hw_intr_rx_intr_set_enable(sc, rx_queue,
 		    false);
-		return (FILTER_SCHEDULE_THREAD);
-	}
-
-	return (FILTER_STRAY);
-}
-
-static void
-qcom_ess_edma_intr(void *arg)
-{
-	struct qcom_ess_edma_intr *intr = arg;
-	struct qcom_ess_edma_softc *sc = intr->sc;
-
-	QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_INTERRUPT,
-	    "%s: called; rid=%d\n", __func__,
-	    intr->irq_rid);
-
-	intr->stats.num_intr++;
-
-	/*
-	 * The RX queue in question starts at QCOM_ESS_EDMA_NUM_TX_IRQS.
-	 * (eg if it's 16 then rid 16 == RX queue 0.)
-	 */
-	if (intr->irq_rid < QCOM_ESS_EDMA_NUM_TX_IRQS) {
-		/*
-		 * This is done in the fast interrupt context now.
-		 */
-	} else {
-		struct mbufq mq;
-		int rx_queue;
-
-		mbufq_init(&mq, EDMA_RX_RING_SIZE);
-
-		rx_queue = intr->irq_rid - QCOM_ESS_EDMA_NUM_TX_IRQS;
-		/* Receive queue */
-		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_INTERRUPT,
-		    "%s: called; RX queue %d\n",
-		    __func__, rx_queue);
-
-		EDMA_RING_LOCK(&sc->sc_rx_ring[rx_queue]);
 
 		/*
-		 * Do receive work, get completed mbufs.
+		 * Schedule taskqueue to run for this queue.
 		 */
-		(void) qcom_ess_edma_rx_ring_complete(sc, rx_queue, &mq);
+		taskqueue_enqueue(sc->sc_rx_state[rx_queue].completion_tq,
+		    &sc->sc_rx_state[rx_queue].completion_task);
 
-		/*
-		 * ACK the interrupt.
-		 */
-		(void) qcom_ess_edma_hw_intr_rx_ack(sc, rx_queue);
-
-		/*
-		 * Re-enable interrupt for this ring.
-		 */
-		(void) qcom_ess_edma_hw_intr_rx_intr_set_enable(sc, rx_queue,
-		    true);
-
-		EDMA_RING_UNLOCK(&sc->sc_rx_ring[rx_queue]);
-
-		/* Push frames into networking stack */
-		(void) qcom_ess_edma_gmac_receive_frames(sc, rx_queue, &mq);
+		return (FILTER_HANDLED);
 	}
 }
 
@@ -312,7 +336,7 @@ qcom_ess_edma_setup_intr(struct qcom_ess_edma_softc *sc,
 
 	if ((bus_setup_intr(sc->sc_dev, intr->irq_res,
 	    INTR_TYPE_NET | INTR_MPSAFE,
-	    qcom_ess_edma_filter, qcom_ess_edma_intr, intr,
+	    qcom_ess_edma_filter, NULL, intr,
 	        &intr->irq_intr))) {
 		device_printf(sc->sc_dev,
 		    "ERROR: unable to register interrupt handler for"
@@ -659,8 +683,8 @@ qcom_ess_edma_attach(device_t dev)
 
 	/* allocate tx rings */
 	for (i = 0; i < QCOM_ESS_EDMA_NUM_TX_RINGS; i++) {
-		int cpu_id;
 		char label[16];
+		int cpu_id;
 
 		snprintf(label, 16, "tx_ring%d", i);
 		if (qcom_ess_edma_desc_ring_setup(sc, &sc->sc_tx_ring[i],
@@ -684,6 +708,7 @@ qcom_ess_edma_attach(device_t dev)
 	/* allocate rx rings */
 	for (i = 0; i < QCOM_ESS_EDMA_NUM_RX_RINGS; i++) {
 		char label[16];
+		int cpu_id;
 
 		snprintf(label, 16, "rx_ring%d", i);
 		if (qcom_ess_edma_desc_ring_setup(sc, &sc->sc_rx_ring[i],
@@ -695,6 +720,12 @@ qcom_ess_edma_attach(device_t dev)
 		    ESS_EDMA_RX_BUFFER_ALIGN) != 0)
 			goto error;
 		if (qcom_ess_edma_rx_ring_setup(sc, &sc->sc_rx_ring[i]) != 0)
+			goto error;
+
+		/* Same CPU as the interrupts for now */
+		cpu_id = i / mp_ncpus;
+
+		if (qcom_ess_edma_setup_rx_state(sc, i, cpu_id) != 0)
 			goto error;
 	}
 
