@@ -66,8 +66,10 @@
 #include <dev/etherswitch/ar40xx/ar40xx_reg.h>
 #include <dev/etherswitch/ar40xx/ar40xx_hw.h>
 #include <dev/etherswitch/ar40xx/ar40xx_hw_mdio.h>
+#include <dev/etherswitch/ar40xx/ar40xx_hw_port.h>
+#include <dev/etherswitch/ar40xx/ar40xx_hw_atu.h>
 #include <dev/etherswitch/ar40xx/ar40xx_phy.h>
-
+#include <dev/etherswitch/ar40xx/ar40xx_debug.h>
 
 #include "mdio_if.h"
 #include "miibus_if.h"
@@ -79,18 +81,42 @@ ar40xx_phy_tick(struct ar40xx_softc *sc)
 {
 	struct mii_softc *miisc;
 	struct mii_data *mii;
-	int i, port;
+	int phy;
+	uint32_t reg;
 
 	AR40XX_LOCK_ASSERT(sc);
 
+	AR40XX_REG_BARRIER_READ(sc);
 	/*
-	 * Loop over; update port status here
+	 * Loop over; update phy port status here
 	 */
-//	device_printf(sc->sc_dev, "%s: called!\n", __func__);
+	for (phy = 0; phy < AR40XX_NUM_PHYS; phy++) {
+		/*
+		 * Port here is PHY, not port!
+		 */
+		reg = AR40XX_REG_READ(sc, AR40XX_REG_PORT_STATUS(phy + 1));
 
-	for (i = 0; i < AR40XX_NUM_PHYS; i++) {
-		port = i;
-		mii = device_get_softc(sc->sc_phys.miibus[port]);
+		mii = device_get_softc(sc->sc_phys.miibus[phy]);
+
+		/*
+		 * Compare the current link status to the previous link
+		 * status.  We may need to clear ATU / change phy config.
+		 */
+		if (((reg & AR40XX_PORT_STATUS_LINK_UP) != 0) &&
+		    (mii->mii_media_status & IFM_ACTIVE) == 0) {
+			AR40XX_DPRINTF(sc, AR40XX_DBG_PORT_STATUS,
+			    "%s: PHY %d: down -> up\n", __func__, phy);
+			ar40xx_hw_port_link_up(sc, phy + 1);
+			ar40xx_hw_atu_flush_port(sc, phy + 1);
+		}
+		if (((reg & AR40XX_PORT_STATUS_LINK_UP) == 0) &&
+		    (mii->mii_media_status & IFM_ACTIVE) != 0) {
+			AR40XX_DPRINTF(sc, AR40XX_DBG_PORT_STATUS,
+			    "%s: PHY %d: up -> down\n", __func__, phy);
+			ar40xx_hw_port_link_down(sc, phy + 1);
+			ar40xx_hw_atu_flush_port(sc, phy + 1);
+		}
+
 		mii_tick(mii);
 		LIST_FOREACH(miisc, &mii->mii_phys, mii_list) {
 			if (IFM_INST(mii->mii_media.ifm_cur->ifm_media) !=
@@ -129,7 +155,6 @@ ar40xx_phy_ifpforport(struct ar40xx_softc *sc, int port)
 	int phy;
 
 	phy = port-1;
-
 	if (phy < 0 || phy >= AR40XX_NUM_PHYS)
 		return (NULL);
 	return (sc->sc_phys.ifp[phy]);
@@ -140,6 +165,9 @@ ar40xx_ifmedia_upd(struct ifnet *ifp)
 {
 	struct ar40xx_softc *sc = ifp->if_softc;
 	struct mii_data *mii = ar40xx_phy_miiforport(sc, ifp->if_dunit);
+
+	AR40XX_DPRINTF(sc, AR40XX_DBG_PORT_STATUS, "%s: called, PHY %d\n",
+	    __func__, ifp->if_dunit);
 
 	if (mii == NULL)
 		return (ENXIO);
@@ -153,19 +181,15 @@ ar40xx_ifmedia_sts(struct ifnet *ifp, struct ifmediareq *ifmr)
 	struct ar40xx_softc *sc = ifp->if_softc;
 	struct mii_data *mii = ar40xx_phy_miiforport(sc, ifp->if_dunit);
 
+	AR40XX_DPRINTF(sc, AR40XX_DBG_PORT_STATUS, "%s: called, PHY %d\n",
+	    __func__, ifp->if_dunit);
+
 	if (mii == NULL)
 		return;
 	mii_pollstat(mii);
 
-	/*
-	 * XXX TODO: compare up/down status; configure the hw port
-	 * mode up or down; ATU flush for the given port upon
-	 * change.
-	 */
-
 	ifmr->ifm_active = mii->mii_media_active;
 	ifmr->ifm_status = mii->mii_media_status;
-
 }
 
 int
@@ -179,7 +203,9 @@ ar40xx_attach_phys(struct ar40xx_softc *sc)
 	for (phy = 0; phy < AR40XX_NUM_PHYS; phy++) {
 		sc->sc_phys.ifp[phy] = if_alloc(IFT_ETHER);
 		if (sc->sc_phys.ifp[phy] == NULL) {
-			device_printf(sc->sc_dev, "couldn't allocate ifnet structure\n");
+			device_printf(sc->sc_dev,
+			    "PHY %d: couldn't allocate ifnet structure\n",
+			    phy);
 			err = ENOMEM;
 			break;
 		}
@@ -187,14 +213,17 @@ ar40xx_attach_phys(struct ar40xx_softc *sc)
 		sc->sc_phys.ifp[phy]->if_softc = sc;
 		sc->sc_phys.ifp[phy]->if_flags |= IFF_UP | IFF_BROADCAST |
 		    IFF_DRV_RUNNING | IFF_SIMPLEX;
-		sc->sc_phys.ifname[phy] = malloc(strlen(name)+1, M_DEVBUF, M_WAITOK);
+		sc->sc_phys.ifname[phy] = malloc(strlen(name)+1, M_DEVBUF,
+		    M_WAITOK);
 		bcopy(name, sc->sc_phys.ifname[phy], strlen(name)+1);
 		if_initname(sc->sc_phys.ifp[phy], sc->sc_phys.ifname[phy],
 		    ar40xx_portforphy(phy));
-		err = mii_attach(sc->sc_dev, &sc->sc_phys.miibus[phy], sc->sc_phys.ifp[phy],
-		    ar40xx_ifmedia_upd, ar40xx_ifmedia_sts, \
-		    BMSR_DEFCAPMASK, phy, MII_OFFSET_ANY, 0);
-		device_printf(sc->sc_dev, "%s attached to pseudo interface %s\n",
+		err = mii_attach(sc->sc_dev, &sc->sc_phys.miibus[phy],
+		    sc->sc_phys.ifp[phy], ar40xx_ifmedia_upd,
+		    ar40xx_ifmedia_sts, BMSR_DEFCAPMASK,
+		    phy, MII_OFFSET_ANY, 0);
+		device_printf(sc->sc_dev,
+		    "%s attached to pseudo interface %s\n",
 		    device_get_nameunit(sc->sc_phys.miibus[phy]),
 		    sc->sc_phys.ifp[phy]->if_xname);
 		if (err != 0) {
@@ -216,7 +245,8 @@ ar40xx_hw_phy_get_ids(struct ar40xx_softc *sc)
 	for (phy = 0; phy < AR40XX_NUM_PHYS; phy++) {
 		id1 = MDIO_READREG(sc->sc_mdio_dev, phy, 2);
 		id2 = MDIO_READREG(sc->sc_mdio_dev, phy, 3);
-		device_printf(sc->sc_dev, "%s: PHY %d: ID1=0x%04x, ID2=0x%04x\n",
+		device_printf(sc->sc_dev,
+		    "%s: PHY %d: ID1=0x%04x, ID2=0x%04x\n",
 		    __func__, phy, id1, id2);
 	}
 

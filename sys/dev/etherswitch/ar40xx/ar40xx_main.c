@@ -110,7 +110,7 @@ ar40xx_statchg(device_t dev)
 {
 	struct ar40xx_softc *sc = device_get_softc(dev);
 
-	device_printf(sc->sc_dev, "%s\n", __func__);
+	AR40XX_DPRINTF(sc, AR40XX_DBG_PORT_STATUS, "%s\n", __func__);
 }
 
 static int

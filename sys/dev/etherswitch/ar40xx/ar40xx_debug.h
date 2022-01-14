@@ -35,6 +35,7 @@
 #define	AR40XX_DBG_HW_PORT_INIT			0x00000004
 #define	AR40XX_DBG_VTU_OP			0x00000008
 #define	AR40XX_DBG_ATU_OP			0x00000010
+#define	AR40XX_DBG_PORT_STATUS			0x00000020
 
 #define	AR40XX_DPRINTF(sc, flags, ...)					\
 	do {								\

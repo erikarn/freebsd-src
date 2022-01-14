@@ -103,8 +103,10 @@ ar40xx_hw_port_init(struct ar40xx_softc *sc, int port)
 	 * working, and then remove it once the QM workaround path
 	 * is ported and verified.
 	 */
+#if 0
 	AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_STATUS(port),
 	    AR40XX_PORT_AUTO_LINK_EN);
+#endif
 
 	reg = AR40XX_PORT_VLAN1_OUT_MODE_UNTOUCH
 	     << AR40XX_PORT_VLAN1_OUT_MODE_S;
@@ -149,6 +151,7 @@ ar40xx_hw_port_link_up(struct ar40xx_softc *sc, int port)
 	AR40XX_DPRINTF(sc, AR40XX_DBG_HW_PORT_INIT,
 	    "%s: called; port %d\n", __func__, port);
 
+	/* Auto-link enable */
 	AR40XX_REG_BARRIER_READ(sc);
 	reg = AR40XX_REG_READ(sc, AR40XX_REG_PORT_STATUS(port));
 	reg |= AR40XX_PORT_AUTO_LINK_EN;
