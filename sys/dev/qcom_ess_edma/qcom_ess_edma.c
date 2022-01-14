@@ -723,7 +723,7 @@ qcom_ess_edma_attach(device_t dev)
 			goto error;
 
 		/* Same CPU as the interrupts for now */
-		cpu_id = i / mp_ncpus;
+		cpu_id = i % mp_ncpus;
 
 		if (qcom_ess_edma_setup_rx_state(sc, i, cpu_id) != 0)
 			goto error;
