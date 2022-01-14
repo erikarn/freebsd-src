@@ -88,7 +88,7 @@ ar40xx_hw_port_init(struct ar40xx_softc *sc, int port)
 	DELAY(20);
 
 	/*
-	 * XXX TODO: ok, so here's where things get super fun in the AR40xx
+	 * Ok! Here is where things get super fun in the AR40xx
 	 * driver in uboot/linux.
 	 *
 	 * The earlier chipset switch drivers enable auto link enable here.
@@ -99,15 +99,19 @@ ar40xx_hw_port_init(struct ar40xx_softc *sc, int port)
 	 * NOTABLY - they do NOT enable the TX/RX MAC here or autoneg -
 	 * it's done in the work around path.
 	 *
-	 * SO - leave this on for now to get the essedma ethernet code
-	 * working, and then remove it once the QM workaround path
-	 * is ported and verified.
+	 * SO - for now the port is left off until the PHY state changes.
+	 * And then we flip it on and off based on the PHY state.
 	 */
 #if 0
 	AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_STATUS(port),
 	    AR40XX_PORT_AUTO_LINK_EN);
 #endif
 
+	/*
+	 * Configure the VLAN egress mode (don't touch them) and
+	 * learning state for STP/ATU.  This isn't currently
+	 * configurable so it's just nailed up here and left alone.
+	 */
 	reg = AR40XX_PORT_VLAN1_OUT_MODE_UNTOUCH
 	     << AR40XX_PORT_VLAN1_OUT_MODE_S;
 	AR40XX_REG_WRITE(sc, AR40XX_REG_PORT_VLAN1(port), reg);
@@ -206,8 +210,7 @@ ar40xx_hw_get_port_pvid(struct ar40xx_softc *sc, int port, int *pvid)
 	reg = AR40XX_REG_READ(sc, AR40XX_REG_PORT_VLAN0(port));
 
 	reg = reg >> AR40XX_PORT_VLAN0_DEF_CVID_S;
-	/* XXX why 16 bit and not 12 bit? */
-	reg = reg & 0xffff;
+	reg = reg & 0x0fff; /* XXX */
 
 	*pvid = reg;
 	return (0);
