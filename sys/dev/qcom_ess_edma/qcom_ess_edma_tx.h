@@ -41,5 +41,7 @@ extern	int qcom_ess_edma_tx_ring_complete(struct qcom_ess_edma_softc *sc,
 	    int queue);
 extern	int qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc,
 	    int queue, struct mbuf *m, uint16_t port_bitmap, int default_vlan);
+extern	int qcom_ess_edma_tx_ring_frame_update(struct qcom_ess_edma_softc *sc,
+	    int queue);
 
 #endif	/* __QCOM_ESS_EDMA_TX_H__ */

@@ -213,15 +213,14 @@ qcom_ess_edma_gmac_transmit(struct ifnet *ifp, struct mbuf *m)
 	EDMA_RING_LOCK(&sc->sc_tx_ring[q]);
 
 	/*
-	 * For now we don't support vlans /at all/. Just transmit
-	 * using the default port mask and vlan for the given gmac
-	 * and the tx_ring_frame routine will mark it as the default
-	 * vlan.
-	 *
-	 * Figure out the rest once this is done and working.
+	 * Transmit a single frame.
 	 */
 	ret = qcom_ess_edma_tx_ring_frame(sc, q, m, gmac->port_mask,
 	    gmac->vlan_id);
+	if (ret == 0) {
+		/* TX ok, update hardware ring pointer now */
+		qcom_ess_edma_tx_ring_frame_update(sc, q);
+	}
 
 	EDMA_RING_UNLOCK(&sc->sc_tx_ring[q]);
 

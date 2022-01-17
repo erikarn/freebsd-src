@@ -200,6 +200,9 @@ qcom_ess_edma_tx_ring_complete(struct qcom_ess_edma_softc *sc, int queue)
  * VLAN tags are added/required as the default switch configuration
  * from device-tree uses both the port bitmap and VLAN IDs for
  * controlling LAN/WAN/etc interface traffic.
+ *
+ * Note, this does NOT update the transmit pointer to the hardware;
+ * that must be done after calling this function one or more times.
  */
 int
 qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
@@ -373,14 +376,31 @@ qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
 
 	ring->stats.num_added += nsegs;
 
-	/* Finish, update ring tracking, poke hardware */
+	/* Finish, update ring tracking */
 	ring->next_to_fill = next_to_fill;
-	qcom_ess_edma_desc_ring_flush_preupdate(sc, ring);
-
-	(void) qcom_ess_edma_hw_tx_update_tpd_prod_idx(sc, queue,
-	    next_to_fill);
 
 	ring->stats.num_tx_ok++;
 
+	return (0);
+}
+
+/*
+ * Update the hardware with the new state of the transmit ring.
+ */
+int
+qcom_ess_edma_tx_ring_frame_update(struct qcom_ess_edma_softc *sc, int queue)
+{
+	struct qcom_ess_edma_desc_ring *ring;
+
+	ring = &sc->sc_tx_ring[queue];
+
+	EDMA_RING_LOCK_ASSERT(ring);
+
+	qcom_ess_edma_desc_ring_flush_preupdate(sc, ring);
+
+	(void) qcom_ess_edma_hw_tx_update_tpd_prod_idx(sc, queue,
+	    ring->next_to_fill);
+
+	/* XXX keep stats for this specific call? */
 	return (0);
 }
