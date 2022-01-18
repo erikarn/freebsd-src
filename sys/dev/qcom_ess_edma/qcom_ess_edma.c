@@ -111,8 +111,9 @@ qcom_ess_edma_tx_queue_xmit(struct qcom_ess_edma_softc *sc, int queue_id)
 
 	EDMA_RING_LOCK_ASSERT(&sc->sc_tx_ring[queue_id]);
 
-	sc->sc_tx_ring[queue_id].stats.num_tx_xmit_task++;
+	sc->sc_tx_ring[queue_id].stats.num_tx_xmit_defer++;
 
+	(void) atomic_cmpset_int(&txs->enqueue_is_running, 1, 0);
 
 	/* Don't do any work if the ring is empty */
 	if (buf_ring_empty(txs->br))
@@ -153,9 +154,12 @@ qcom_ess_edma_tx_queue_xmit(struct qcom_ess_edma_softc *sc, int queue_id)
 		n++;
 	}
 
-	if (n != 0) {
+	/*
+	 * Only push the updated descriptor ring stuff to the hardware
+	 * if we actually queued something.
+	 */
+	if (n != 0)
 		(void) qcom_ess_edma_tx_ring_frame_update(sc, queue_id);
-	}
 }
 
 /*
@@ -170,10 +174,9 @@ qcom_ess_edma_tx_queue_xmit_task(void *arg, int npending)
 	QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_INTERRUPT,
 	    "%s: called; TX queue %d\n", __func__, txs->queue_id);
 
-	(void) atomic_cmpset_int(&txs->enqueue_is_running, 1, 0);
-
 	EDMA_RING_LOCK(&sc->sc_tx_ring[txs->queue_id]);
 
+	sc->sc_tx_ring[txs->queue_id].stats.num_tx_xmit_task++;
 	qcom_ess_edma_tx_queue_xmit(sc, txs->queue_id);
 
 	EDMA_RING_UNLOCK(&sc->sc_tx_ring[txs->queue_id]);
@@ -211,7 +214,7 @@ qcom_ess_edma_tx_queue_complete_task(void *arg, int npending)
 	    true);
 
 	/*
-	 * Do any pending TX work.
+	 * Do any pending TX work if there's any buffers in the ring.
 	 */
 	if (! buf_ring_empty(txs->br))
 		qcom_ess_edma_tx_queue_xmit(sc, txs->queue_id);
@@ -567,8 +570,9 @@ qcom_ess_edma_sysctl_dump_stats(SYSCTL_HANDLER_ARGS)
 		device_printf(sc->sc_dev,
 		    "TXQ[%d]: num_added=%llu, num_cleaned=%llu,"
 		    " num_dropped=%llu, num_enqueue_full=%llu,"
-		    " tx_mapfail=%llu, tx_complete=%llu, tx_xmit_task=%llu,"
-		    " num_tx_maxfrags=%llu, num_tx_ok=%llu\n",
+		    " tx_mapfail=%llu, tx_complete=%llu, tx_xmit_defer=%llu,"
+		    " tx_xmit_task=%llu, num_tx_maxfrags=%llu,"
+		    " num_tx_ok=%llu\n",
 		    i,
 		    sc->sc_tx_ring[i].stats.num_added,
 		    sc->sc_tx_ring[i].stats.num_cleaned,
@@ -576,6 +580,7 @@ qcom_ess_edma_sysctl_dump_stats(SYSCTL_HANDLER_ARGS)
 		    sc->sc_tx_ring[i].stats.num_enqueue_full,
 		    sc->sc_tx_ring[i].stats.num_tx_mapfail,
 		    sc->sc_tx_ring[i].stats.num_tx_complete,
+		    sc->sc_tx_ring[i].stats.num_tx_xmit_defer,
 		    sc->sc_tx_ring[i].stats.num_tx_xmit_task,
 		    sc->sc_tx_ring[i].stats.num_tx_maxfrags,
 		    sc->sc_tx_ring[i].stats.num_tx_ok);
