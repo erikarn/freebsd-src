@@ -47,6 +47,8 @@ __FBSDID("$FreeBSD$");
 #include <sys/smp.h>
 #include <sys/proc.h>
 #include <sys/sched.h>
+#include <sys/queue.h>
+#include <sys/taskqueue.h>
 
 #include <net/if.h>
 #include <net/if_var.h>
@@ -57,6 +59,8 @@ __FBSDID("$FreeBSD$");
 
 #include <machine/bus.h>
 #include <machine/resource.h>
+#include <machine/atomic.h>
+
 #include <dev/gpio/gpiobusvar.h>
 
 #include <dev/fdt/fdt_common.h>
@@ -181,6 +185,9 @@ qcom_ess_edma_gmac_transmit(struct ifnet *ifp, struct mbuf *m)
 {
 	struct qcom_ess_edma_gmac *gmac = ifp->if_softc;
 	struct qcom_ess_edma_softc *sc = gmac->sc;
+#if 1
+	struct qcom_ess_edma_tx_state *txs;
+#endif
 	int ret;
 	int q;
 
@@ -209,13 +216,13 @@ qcom_ess_edma_gmac_transmit(struct ifnet *ifp, struct mbuf *m)
 	} else {
 		q = curcpu % QCOM_ESS_EDMA_NUM_TX_RINGS;
 	}
-
+#if 0
 	EDMA_RING_LOCK(&sc->sc_tx_ring[q]);
 
 	/*
 	 * Transmit a single frame.
 	 */
-	ret = qcom_ess_edma_tx_ring_frame(sc, q, m, gmac->port_mask,
+	ret = qcom_ess_edma_tx_ring_frame(sc, q, &m, gmac->port_mask,
 	    gmac->vlan_id);
 	if (ret == 0) {
 		/* TX ok, update hardware ring pointer now */
@@ -223,13 +230,34 @@ qcom_ess_edma_gmac_transmit(struct ifnet *ifp, struct mbuf *m)
 	}
 
 	EDMA_RING_UNLOCK(&sc->sc_tx_ring[q]);
+#else
+	/* Attempt to enqueue in the buf_ring. */
+	/*
+	 * XXX TODO: maybe move this into *tx.c so gmac.c doesn't
+	 * need to reach into the tx_state stuff?
+	 */
+	txs = &sc->sc_tx_state[q];
+
+	/* XXX TODO: add an mbuf tag instead? for the transmit gmac/ifp ? */
+	m->m_pkthdr.rcvif = ifp;
+
+	ret = buf_ring_enqueue(txs->br, m);
+
+	if (ret == 0) {
+		if (atomic_cmpset_int(&txs->enqueue_is_running, 0, 1) == 1) {
+			taskqueue_enqueue(txs->completion_tq, &txs->xmit_task);
+		}
+	}
+#endif
 
 	sched_unpin();
 
+#if 0
 	if (ret == 0)
 		if_inc_counter(ifp, IFCOUNTER_OPACKETS, 1);
 	else
 		if_inc_counter(ifp, IFCOUNTER_OERRORS, 1);
+#endif
 
 	/* Don't consume mbuf; if_transmit caller will if needed */
 	return (ret);

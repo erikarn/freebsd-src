@@ -80,6 +80,8 @@
 #define	EDMA_TX_RING_SIZE		128
 #define	EDMA_RX_RING_SIZE		128
 
+#define	EDMA_TX_BUFRING_SIZE		512
+
 /* Maximum number of GMAC instances */
 #define	QCOM_ESS_EDMA_MAX_NUM_GMACS	5
 
@@ -142,6 +144,7 @@ struct qcom_ess_edma_desc_ring {
 		uint64_t	num_rx_csum_ok;
 		uint64_t	num_rx_csum_fail;
 		uint64_t	num_tx_complete;
+		uint64_t	num_tx_xmit_task;
 		uint64_t	num_processed[32];
 	} stats;
 };
@@ -168,11 +171,12 @@ struct qcom_ess_edma_sw_desc_rx {
  */
 struct qcom_ess_edma_tx_state {
 	struct task completion_task;
+	struct task xmit_task;
 	struct buf_ring *br;
 	struct taskqueue *completion_tq;
 	struct qcom_ess_edma_softc *sc;
 	char label[16];
-	bool enqueue_is_running;
+	int enqueue_is_running;
 	int queue_id;
 };
 

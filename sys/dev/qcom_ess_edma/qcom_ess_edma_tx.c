@@ -203,10 +203,14 @@ qcom_ess_edma_tx_ring_complete(struct qcom_ess_edma_softc *sc, int queue)
  *
  * Note, this does NOT update the transmit pointer to the hardware;
  * that must be done after calling this function one or more times.
+ *
+ * The mbuf is either consumed into the ring or it is returned
+ * unsent.  If we've modifide it in any way then the caller should
+ * use what's returned back in m0 (eg to pushback.)
  */
 int
 qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
-    struct mbuf *m, uint16_t port_bitmap, int default_vlan)
+    struct mbuf **m0, uint16_t port_bitmap, int default_vlan)
 {
 	struct qcom_ess_edma_desc_ring *ring;
 	struct qcom_ess_edma_sw_desc_tx *txd;
@@ -219,10 +223,13 @@ qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
 	int num_left, ret, nsegs, i;
 	uint16_t next_to_fill;
 	uint16_t svlan_tag;
+	struct mbuf *m;
 
 	ring = &sc->sc_tx_ring[queue];
 
 	EDMA_RING_LOCK_ASSERT(ring);
+
+	m = *m0;
 
 	/*
 	 * Do we have ANY space? If not, return ENOBUFS, let the
@@ -283,6 +290,12 @@ qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
 	/*
 	 * At this point we're committed to sending the frame.
 	 *
+	 * Get rid of the rcvif that is being used to track /send/ ifnet.
+	 */
+	m->m_pkthdr.rcvif = NULL;
+
+	/*
+	 *
 	 * Configure up the various header fields that are shared
 	 * between descriptors.
 	 */
@@ -336,6 +349,7 @@ qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
 		word3 |= (vlan_id << EDMA_TX_CVLAN_TAG_SHIFT);
 	}
 
+	/* End of frame flag */
 	eop = 0;
 
 	/*

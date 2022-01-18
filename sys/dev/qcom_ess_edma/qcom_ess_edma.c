@@ -100,6 +100,89 @@ qcom_ess_edma_release_intr(struct qcom_ess_edma_softc *sc,
 }
 
 static void
+qcom_ess_edma_tx_queue_xmit(struct qcom_ess_edma_softc *sc, int queue_id)
+{
+	struct qcom_ess_edma_tx_state *txs = &sc->sc_tx_state[queue_id];
+	int n = 0;
+	int ret;
+
+	QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_TASK,
+	    "%s: called; TX queue %d\n", __func__, queue_id);
+
+	EDMA_RING_LOCK_ASSERT(&sc->sc_tx_ring[queue_id]);
+
+	sc->sc_tx_ring[queue_id].stats.num_tx_xmit_task++;
+
+
+	/* Don't do any work if the ring is empty */
+	if (buf_ring_empty(txs->br))
+		return;
+
+	/*
+	 * The ring isn't empty, dequeue frames and hand
+	 * them to the hardware; defer updating the
+	 * transmit ring pointer until we're done.
+	 */
+	while (! buf_ring_empty(txs->br)) {
+		struct ifnet *ifp;
+		struct qcom_ess_edma_gmac *gmac;
+		struct mbuf *m;
+
+		m = buf_ring_peek_clear_sc(txs->br);
+		if (m == NULL)
+			break;
+
+		ifp = m->m_pkthdr.rcvif;
+		gmac = ifp->if_softc;
+
+		/*
+		 * The only way we'll know if we have space is to
+		 * to try and transmit it.
+		 */
+		ret = qcom_ess_edma_tx_ring_frame(sc, queue_id, &m,
+		    gmac->port_mask, gmac->vlan_id);
+		if (ret == 0) {
+			if_inc_counter(gmac->ifp, IFCOUNTER_OPACKETS, 1);
+			buf_ring_advance_sc(txs->br);
+		} else {
+			/* Put whatever we tried to transmit back */
+			if_inc_counter(gmac->ifp, IFCOUNTER_OERRORS, 1);
+			buf_ring_putback_sc(txs->br, m);
+			break;
+		}
+		n++;
+	}
+
+	if (n != 0) {
+		(void) qcom_ess_edma_tx_ring_frame_update(sc, queue_id);
+	}
+}
+
+/*
+ * Enqueued when a deferred TX needs to happen.
+ */
+static void
+qcom_ess_edma_tx_queue_xmit_task(void *arg, int npending)
+{
+	struct qcom_ess_edma_tx_state *txs = arg;
+	struct qcom_ess_edma_softc *sc = txs->sc;
+
+	QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_INTERRUPT,
+	    "%s: called; TX queue %d\n", __func__, txs->queue_id);
+
+	(void) atomic_cmpset_int(&txs->enqueue_is_running, 1, 0);
+
+	EDMA_RING_LOCK(&sc->sc_tx_ring[txs->queue_id]);
+
+	qcom_ess_edma_tx_queue_xmit(sc, txs->queue_id);
+
+	EDMA_RING_UNLOCK(&sc->sc_tx_ring[txs->queue_id]);
+}
+
+/*
+ * Enqueued when a TX completion interrupt occurs.
+ */
+static void
 qcom_ess_edma_tx_queue_complete_task(void *arg, int npending)
 {
 	struct qcom_ess_edma_tx_state *txs = arg;
@@ -127,6 +210,12 @@ qcom_ess_edma_tx_queue_complete_task(void *arg, int npending)
 	(void) qcom_ess_edma_hw_intr_tx_intr_set_enable(sc, txs->queue_id,
 	    true);
 
+	/*
+	 * Do any pending TX work.
+	 */
+	if (! buf_ring_empty(txs->br))
+		qcom_ess_edma_tx_queue_xmit(sc, txs->queue_id);
+
 	EDMA_RING_UNLOCK(&sc->sc_tx_ring[txs->queue_id]);
 }
 
@@ -134,9 +223,11 @@ static int
 qcom_ess_edma_setup_tx_state(struct qcom_ess_edma_softc *sc, int txq, int cpu)
 {
 	struct qcom_ess_edma_tx_state *txs;
+	struct qcom_ess_edma_desc_ring *ring;
 	cpuset_t mask;
 
 	txs = &sc->sc_tx_state[txq];
+	ring = &sc->sc_tx_ring[txq];
 
 	snprintf(txs->label, 15, "txq%d_compl", txq);
 
@@ -147,11 +238,22 @@ qcom_ess_edma_setup_tx_state(struct qcom_ess_edma_softc *sc, int txq, int cpu)
 	txs->sc = sc;
 	txs->completion_tq = taskqueue_create_fast(txs->label, M_NOWAIT,
 	    taskqueue_thread_enqueue, &txs->completion_tq);
+#if 0
 	taskqueue_start_threads_cpuset(&txs->completion_tq, 1, PI_NET,
 	    &mask, "%s", txs->label);
+#else
+	taskqueue_start_threads(&txs->completion_tq, 1, PI_NET,
+	    "%s", txs->label);
+#endif
 
 	TASK_INIT(&txs->completion_task, 0,
 	    qcom_ess_edma_tx_queue_complete_task, txs);
+	TASK_INIT(&txs->xmit_task, 0,
+	    qcom_ess_edma_tx_queue_xmit_task, txs);
+
+	txs->br = buf_ring_alloc(EDMA_TX_BUFRING_SIZE, M_DEVBUF, M_WAITOK,
+	    &ring->mtx);
+
 	return (0);
 }
 
@@ -159,6 +261,7 @@ static int
 qcom_ess_edma_free_tx_state(struct qcom_ess_edma_softc *sc, int txq)
 {
 	/* XXX TODO */
+	device_printf(sc->sc_dev, "%s: called, TODO\n", __func__);
 	return (0);
 }
 
@@ -217,8 +320,13 @@ qcom_ess_edma_setup_rx_state(struct qcom_ess_edma_softc *sc, int rxq, int cpu)
 	rxs->sc = sc;
 	rxs->completion_tq = taskqueue_create_fast(rxs->label, M_NOWAIT,
 	    taskqueue_thread_enqueue, &rxs->completion_tq);
+#if 0
 	taskqueue_start_threads_cpuset(&rxs->completion_tq, 1, PI_NET,
 	    &mask, "%s", rxs->label);
+#else
+	taskqueue_start_threads(&rxs->completion_tq, 1, PI_NET,
+	    "%s", rxs->label);
+#endif
 
 	TASK_INIT(&rxs->completion_task, 0,
 	    qcom_ess_edma_rx_queue_complete_task, rxs);
@@ -229,6 +337,7 @@ static int
 qcom_ess_edma_free_rx_state(struct qcom_ess_edma_softc *sc, int rxq)
 {
 	/* XXX TODO */
+	device_printf(sc->sc_dev, "%s: called, TODO\n", __func__);
 	return (0);
 }
 
@@ -458,7 +567,7 @@ qcom_ess_edma_sysctl_dump_stats(SYSCTL_HANDLER_ARGS)
 		device_printf(sc->sc_dev,
 		    "TXQ[%d]: num_added=%llu, num_cleaned=%llu,"
 		    " num_dropped=%llu, num_enqueue_full=%llu,"
-		    " tx_mapfail=%llu, tx_complete=%llu"
+		    " tx_mapfail=%llu, tx_complete=%llu, tx_xmit_task=%llu,"
 		    " num_tx_maxfrags=%llu, num_tx_ok=%llu\n",
 		    i,
 		    sc->sc_tx_ring[i].stats.num_added,
@@ -467,6 +576,7 @@ qcom_ess_edma_sysctl_dump_stats(SYSCTL_HANDLER_ARGS)
 		    sc->sc_tx_ring[i].stats.num_enqueue_full,
 		    sc->sc_tx_ring[i].stats.num_tx_mapfail,
 		    sc->sc_tx_ring[i].stats.num_tx_complete,
+		    sc->sc_tx_ring[i].stats.num_tx_xmit_task,
 		    sc->sc_tx_ring[i].stats.num_tx_maxfrags,
 		    sc->sc_tx_ring[i].stats.num_tx_ok);
 		device_printf(sc->sc_dev, "TXQ[%d]: compl: ", i);
