@@ -84,7 +84,7 @@ qcom_ess_edma_desc_ring_setup(struct qcom_ess_edma_softc *sc,
     int buffer_align)
 {
 	int error;
-
+	int hw_ring_size;
 
 	ring->label = strdup(label, M_TEMP);
 	if (ring->label == NULL) {
@@ -96,6 +96,15 @@ qcom_ess_edma_desc_ring_setup(struct qcom_ess_edma_softc *sc,
 
 	mtx_init(&ring->mtx, ring->label, NULL, MTX_DEF);
 
+	hw_ring_size = count * hw_desc_size;
+
+	/*
+	 * Round the hardware ring size up to a cacheline
+	 * so we don't end up with partial cacheline sizes
+	 * causing bounce buffers to be used.
+	 */
+	hw_ring_size = ((hw_ring_size + PAGE_SIZE) / PAGE_SIZE) * PAGE_SIZE;
+
 	/*
 	 * For now set it to 4 byte alignment, no max size.
 	 */
@@ -106,9 +115,9 @@ qcom_ess_edma_desc_ring_setup(struct qcom_ess_edma_softc *sc,
 	    BUS_SPACE_MAXADDR,		/* lowaddr */
 	    BUS_SPACE_MAXADDR,		/* highaddr */
 	    NULL, NULL,			/* filter, filterarg */
-	    count * hw_desc_size,	/* maxsize */
+	    hw_ring_size,		/* maxsize */
 	    1,				/* nsegments */
-	    count * hw_desc_size,	/* maxsegsize */
+	    hw_ring_size,		/* maxsegsize */
 	    0,				/* flags */
 	    NULL, NULL,			/* lockfunc, lockarg */
 	    &ring->hw_ring_dma_tag);
@@ -122,6 +131,7 @@ qcom_ess_edma_desc_ring_setup(struct qcom_ess_edma_softc *sc,
 	/*
 	 * Buffer ring - used passed in value
 	 */
+	ring->buffer_align = buffer_align;
 	error = bus_dma_tag_create(
 	    sc->sc_dma_tag,		/* parent */
 	    buffer_align, 0,		/* alignment, boundary */
@@ -167,7 +177,7 @@ qcom_ess_edma_desc_ring_setup(struct qcom_ess_edma_softc *sc,
 	}
 	ring->hw_desc_paddr = 0;
 	error = bus_dmamap_load(ring->hw_ring_dma_tag, ring->hw_desc_map,
-	    ring->hw_desc, count * hw_desc_size, qcom_ess_edma_desc_map_addr,
+	    ring->hw_desc, hw_ring_size, qcom_ess_edma_desc_map_addr,
 	    &ring->hw_desc_paddr, BUS_DMA_NOWAIT);
 	bus_dmamap_sync(ring->hw_ring_dma_tag, ring->hw_desc_map,
 	    BUS_DMASYNC_PREWRITE);
