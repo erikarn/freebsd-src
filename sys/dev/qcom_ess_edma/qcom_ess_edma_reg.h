@@ -57,7 +57,7 @@
 
 /* XXX TODO: not sure about these yet? Whether HW or performance based */
 #define	ESS_EDMA_TX_BUFFER_ALIGN	1
-#define	ESS_EDMA_RX_BUFFER_ALIGN	128
+#define	ESS_EDMA_RX_BUFFER_ALIGN	1
 
 /* register definition */
 #define	EDMA_REG_MAS_CTRL		0x0
