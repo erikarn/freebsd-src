@@ -212,9 +212,8 @@ int
 qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
     struct mbuf **m0, uint16_t port_bitmap, int default_vlan)
 {
+	struct qcom_ess_edma_sw_desc_tx *txd_first;
 	struct qcom_ess_edma_desc_ring *ring;
-	struct qcom_ess_edma_sw_desc_tx *txd;
-	struct qcom_ess_edma_tx_desc *ds;
 	struct ether_vlan_header *eh;
 	bus_dma_segment_t txsegs[QCOM_ESS_EDMA_MAX_TXFRAGS];
 	uint32_t word1, word3;
@@ -244,11 +243,13 @@ qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
 	}
 
 	/*
-	 * Get the current sw/hw descriptor offset; we'll store
-	 * the mbuf and dmamap for said mbuf in here.
+	 * Get the current sw/hw descriptor offset; we'll use its
+	 * dmamap and then switch it out with the last one when
+	 * the mbuf is put there.
 	 */
 	next_to_fill = ring->next_to_fill;
-	txd = qcom_ess_edma_desc_ring_get_sw_desc(sc, ring, next_to_fill);
+	txd_first = qcom_ess_edma_desc_ring_get_sw_desc(sc, ring,
+	    next_to_fill);
 	QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_FRAME,
 	    "%s: starting at idx %d\n", __func__, next_to_fill);
 
@@ -258,7 +259,7 @@ qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
 	 * then immediately unmap and return an error.
 	 */
 	ret = bus_dmamap_load_mbuf_sg(ring->buffer_dma_tag,
-	    txd->m_dmamap,
+	    txd_first->m_dmamap,
 	    m,
 	    txsegs,
 	    &nsegs,
@@ -266,7 +267,7 @@ qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
 	if (ret != 0) {
 		ring->stats.num_tx_mapfail++;
 		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_FRAME,
-		    "%s: map failed\n", __func__);
+		    "%s: map failed (%d)\n", __func__, ret);
 		return (ENOBUFS);
 	}
 	if (nsegs == 0) {
@@ -279,12 +280,12 @@ qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
 	if (nsegs + 2 > num_left) {
 		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_FRAME,
 		    "%s: nsegs=%d, num_left=%d\n", __func__, nsegs, num_left);
-		bus_dmamap_unload(ring->buffer_dma_tag, txd->m_dmamap);
+		bus_dmamap_unload(ring->buffer_dma_tag, txd_first->m_dmamap);
 		ring->stats.num_enqueue_full++;
 		return (ENOBUFS);
 	}
 
-	bus_dmamap_sync(ring->buffer_dma_tag, txd->m_dmamap,
+	bus_dmamap_sync(ring->buffer_dma_tag, txd_first->m_dmamap,
 	    BUS_DMASYNC_PREWRITE);
 
 	/*
@@ -354,9 +355,12 @@ qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
 
 	/*
 	 * Walk the mbuf segment list, and allocate descriptor
-	 * entries.
+	 * entries.  Put the mbuf in the last descriptor entry
+	 * and then switch out the first/last dmamap entries.
 	 */
 	for (i = 0; i < nsegs; i++) {
+		struct qcom_ess_edma_sw_desc_tx *txd;
+		struct qcom_ess_edma_tx_desc *ds;
 		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_TX_FRAME,
 		    "%s:   filling idx %d\n", __func__, next_to_fill);
 		txd = qcom_ess_edma_desc_ring_get_sw_desc(sc, ring, next_to_fill);
@@ -366,9 +370,25 @@ qcom_ess_edma_tx_ring_frame(struct qcom_ess_edma_softc *sc, int queue,
 			txd->is_first = 1;
 		}
 		if (i == (nsegs - 1)) {
+			bus_dmamap_t dm;
+
 			txd->is_last = 1;
 			eop = EDMA_TPD_EOP;
+			/*
+			 * Put the txmap and the mbuf in the last swdesc.
+			 * That way it isn't freed until we've transmitted
+			 * all the descriptors of this frame, in case the
+			 * hardware decides to notify us of some half-sent
+			 * stuff.
+			 *
+			 * Moving the pointers around here sucks a little
+			 * but it DOES beat not freeing the dmamap entries
+			 * correctly.
+			 */
 			txd->m = m;
+			dm = txd_first->m_dmamap;
+			txd_first->m_dmamap = txd->m_dmamap;
+			txd->m_dmamap = dm;
 		}
 		ds->word1 = word1 | eop;
 		ds->word3 = word3;
