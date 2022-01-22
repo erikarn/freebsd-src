@@ -40,10 +40,11 @@
 #define	QCOM_ESS_EDMA_DBG_TX_RING			0x00000080
 #define	QCOM_ESS_EDMA_DBG_TX_RING_COMPLETE		0x00000100
 #define	QCOM_ESS_EDMA_DBG_TX_TASK			0x00000200
+#define	QCOM_ESS_EDMA_DBG_TX_FRAME_ERROR		0x00000400
 
 #define	QCOM_ESS_EDMA_DPRINTF(sc, flags, ...)				\
 	do {								\
-		if ((sc)->sc_debug & flags)				\
+		if ((sc)->sc_debug & (flags))				\
 			device_printf((sc)->sc_dev, __VA_ARGS__);	\
 	} while (0)
 
