@@ -33,8 +33,10 @@
 #define	__QCOM_ESS_EDMA_TX_H__
 
 
+extern	int qcom_ess_edma_tx_queue_to_cpu(struct qcom_ess_edma_softc *sc,
+	    int queue);
 extern	int qcom_ess_edma_tx_ring_setup(struct qcom_ess_edma_softc *sc,
-    struct qcom_ess_edma_desc_ring *ring);
+	    struct qcom_ess_edma_desc_ring *ring);
 extern	int qcom_ess_edma_tx_ring_clean(struct qcom_ess_edma_softc *sc,
     struct qcom_ess_edma_desc_ring *ring);
 extern	int qcom_ess_edma_tx_ring_complete(struct qcom_ess_edma_softc *sc,

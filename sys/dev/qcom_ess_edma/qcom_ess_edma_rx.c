@@ -41,6 +41,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/mutex.h>
 #include <sys/mbuf.h>
 #include <sys/endian.h>
+#include <sys/smp.h>
 #include <sys/socket.h>
 #include <sys/sockio.h>
 
@@ -58,6 +59,15 @@ __FBSDID("$FreeBSD$");
 #include <dev/qcom_ess_edma/qcom_ess_edma_desc.h>
 #include <dev/qcom_ess_edma/qcom_ess_edma_rx.h>
 #include <dev/qcom_ess_edma/qcom_ess_edma_debug.h>
+
+/*
+ * Map the given RX queue to a given CPU.
+ */
+int
+qcom_ess_edma_rx_queue_to_cpu(struct qcom_ess_edma_softc *sc, int queue)
+{
+	return (queue % mp_ncpus);
+}
 
 int
 qcom_ess_edma_rx_ring_setup(struct qcom_ess_edma_softc *sc,

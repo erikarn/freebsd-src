@@ -32,9 +32,10 @@
 #ifndef	__QCOM_ESS_EDMA_RX_H__
 #define	__QCOM_ESS_EDMA_RX_H__
 
-
+extern	int qcom_ess_edma_rx_queue_to_cpu(struct qcom_ess_edma_softc *sc,
+	    int queue);
 extern	int qcom_ess_edma_rx_ring_setup(struct qcom_ess_edma_softc *sc,
-    struct qcom_ess_edma_desc_ring *ring);
+	    struct qcom_ess_edma_desc_ring *ring);
 extern	int qcom_ess_edma_rx_ring_clean(struct qcom_ess_edma_softc *sc,
     struct qcom_ess_edma_desc_ring *ring);
 extern	int qcom_ess_edma_rx_buf_alloc(struct qcom_ess_edma_softc *sc,

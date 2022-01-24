@@ -214,7 +214,11 @@ qcom_ess_edma_gmac_transmit(struct ifnet *ifp, struct mbuf *m)
 		/* And ensure we're not overflowing */
 		q = q % QCOM_ESS_EDMA_NUM_TX_RINGS;
 	} else {
-		q = curcpu % QCOM_ESS_EDMA_NUM_TX_RINGS;
+		/*
+		 * Use the first TXQ in each CPU group, so we don't
+		 * hit lock contention with traffic that has flowids.
+		 */
+		q = (mp_ncpus * curcpu) % QCOM_ESS_EDMA_NUM_TX_RINGS;
 	}
 #if 0
 	EDMA_RING_LOCK(&sc->sc_tx_ring[q]);

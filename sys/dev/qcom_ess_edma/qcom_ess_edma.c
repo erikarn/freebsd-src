@@ -719,7 +719,7 @@ qcom_ess_edma_attach(device_t dev)
 		 * So for a 4 CPU system the first four will be CPU 0,
 		 * the second four will be CPU 1, etc.
 		 */
-		cpu_id = i / mp_ncpus;
+		cpu_id = qcom_ess_edma_tx_queue_to_cpu(sc, i);
 		if (qcom_ess_edma_setup_intr(sc, &sc->sc_tx_irq[i],
 		    i, cpu_id) != 0)
 			goto error;
@@ -731,10 +731,7 @@ qcom_ess_edma_attach(device_t dev)
 
 	/* Allocate RX IRQs */
 	for (i = 0; i < QCOM_ESS_EDMA_NUM_RX_IRQS; i++) {
-		/*
-		 * Receive queue is simply mapped to all the CPUs.
-		 */
-		int cpu_id = i % mp_ncpus;
+		int cpu_id = qcom_ess_edma_rx_queue_to_cpu(sc, i);
 		if (qcom_ess_edma_setup_intr(sc, &sc->sc_rx_irq[i],
 		    i + QCOM_ESS_EDMA_NUM_TX_IRQS, cpu_id) != 0)
 			goto error;
@@ -814,7 +811,7 @@ qcom_ess_edma_attach(device_t dev)
 			goto error;
 
 		/* Same CPU as the interrupts for now */
-		cpu_id = i / mp_ncpus;
+		cpu_id = qcom_ess_edma_tx_queue_to_cpu(sc, i);
 
 		if (qcom_ess_edma_setup_tx_state(sc, i, cpu_id) != 0)
 			goto error;
@@ -838,7 +835,7 @@ qcom_ess_edma_attach(device_t dev)
 			goto error;
 
 		/* Same CPU as the interrupts for now */
-		cpu_id = i % mp_ncpus;
+		cpu_id = qcom_ess_edma_rx_queue_to_cpu(sc, i);
 
 		if (qcom_ess_edma_setup_rx_state(sc, i, cpu_id) != 0)
 			goto error;

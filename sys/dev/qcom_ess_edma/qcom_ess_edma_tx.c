@@ -41,6 +41,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/mutex.h>
 #include <sys/mbuf.h>
 #include <sys/endian.h>
+#include <sys/smp.h>
 #include <sys/socket.h>
 #include <sys/sockio.h>
 
@@ -58,6 +59,21 @@ __FBSDID("$FreeBSD$");
 #include <dev/qcom_ess_edma/qcom_ess_edma_desc.h>
 #include <dev/qcom_ess_edma/qcom_ess_edma_tx.h>
 #include <dev/qcom_ess_edma/qcom_ess_edma_debug.h>
+
+/*
+ * Map the given TX queue to a given CPU.
+ *
+ * The current mapping in the if_transmit() path
+ * will map mp_ncpu groups of flowids to the TXQs.
+ * So for a 4 CPU system the first four will be CPU 0,
+ * the second four will be CPU 1, etc.
+ */
+int
+qcom_ess_edma_tx_queue_to_cpu(struct qcom_ess_edma_softc *sc, int queue)
+{
+
+	return (queue / mp_ncpus);
+}
 
 int
 qcom_ess_edma_tx_ring_setup(struct qcom_ess_edma_softc *sc,
