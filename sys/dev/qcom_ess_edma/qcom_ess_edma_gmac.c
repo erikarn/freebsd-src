@@ -200,9 +200,7 @@ qcom_ess_edma_gmac_transmit(struct ifnet *ifp, struct mbuf *m)
 	 * Since we're running on a platform with either two
 	 * or four CPUs, we want to distribute the load to a set
 	 * of TX queues that won't clash with any other CPU TX queue
-	 * use.  So for now, just use curcpu; later on this should
-	 * the flowid and map it to one of a set of TX queues that
-	 * is dedicated to this CPU.
+	 * use.
 	 */
 	if (M_HASHTYPE_GET(m) != M_HASHTYPE_NONE) {
 		/* Map flowid to a queue */
@@ -273,6 +271,7 @@ qcom_ess_edma_gmac_qflush(struct ifnet *ifp)
 	struct qcom_ess_edma_gmac *gmac = ifp->if_softc;
 	struct qcom_ess_edma_softc *sc = gmac->sc;
 
+	/* XXX TODO */
 	device_printf(sc->sc_dev, "%s: gmac%d: called\n",
 	    __func__,
 	    gmac->id);
@@ -334,7 +333,6 @@ qcom_ess_edma_gmac_parse(struct qcom_ess_edma_softc *sc, int gmac_id)
 	gmac->enabled = true;
 	gmac->vlan_id = vlan_tag[0];
 	gmac->port_mask = vlan_tag[1];
-
 
 	device_printf(sc->sc_dev,
 	    "gmac%d: MAC=%6D, vlan id=%d, port_mask=0x%04x\n",
@@ -444,6 +442,15 @@ qcom_ess_edma_gmac_setup_port_mapping(struct qcom_ess_edma_softc *sc,
 	return (0);
 }
 
+/*
+ * Receive frames to into the network stack.
+ *
+ * This takes a list of mbufs in the mbufq and receives them
+ * up into the appopriate ifnet context.  It takes care of
+ * the network epoch as well.
+ *
+ * This must be called with no locks held.
+ */
 int
 qcom_ess_edma_gmac_receive_frames(struct qcom_ess_edma_softc *sc,
     int rx_queue, struct mbufq *mq)
@@ -470,4 +477,3 @@ qcom_ess_edma_gmac_receive_frames(struct qcom_ess_edma_softc *sc,
 	NET_EPOCH_EXIT(et);
 	return (0);
 }
-
