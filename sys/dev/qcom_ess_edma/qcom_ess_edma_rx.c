@@ -505,8 +505,5 @@ qcom_ess_edma_rx_ring_complete(struct qcom_ess_edma_softc *sc, int queue,
 		    ring->next_to_clean);
 	}
 
-	ring->stats.num_processed[cleaned_count < 32 ? cleaned_count : 31]++;
-
-
 	return (0);
 }

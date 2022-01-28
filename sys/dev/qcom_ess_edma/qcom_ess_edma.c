@@ -535,7 +535,7 @@ qcom_ess_edma_sysctl_dump_stats(SYSCTL_HANDLER_ARGS)
 	struct qcom_ess_edma_softc *sc = arg1;
 	int val = 0;
 	int error;
-	int i, j;
+	int i;
 
 	error = sysctl_handle_int(oidp, &val, 0, req);
 	if (error || !req->newptr)
@@ -559,11 +559,6 @@ qcom_ess_edma_sysctl_dump_stats(SYSCTL_HANDLER_ARGS)
 		    sc->sc_rx_ring[i].stats.num_tx_mapfail,
 		    sc->sc_rx_ring[i].stats.num_tx_maxfrags,
 		    sc->sc_rx_ring[i].stats.num_rx_ok);
-		device_printf(sc->sc_dev, "RXQ[%d]: compl: ", i);
-		for (j = 0; j < 32; j++) {
-			printf("%lld ", sc->sc_rx_ring[i].stats.num_processed[j]);
-		}
-		printf("\n");
 	}
 
 	for (i = 0; i < QCOM_ESS_EDMA_NUM_TX_RINGS; i++) {
@@ -584,11 +579,6 @@ qcom_ess_edma_sysctl_dump_stats(SYSCTL_HANDLER_ARGS)
 		    sc->sc_tx_ring[i].stats.num_tx_xmit_task,
 		    sc->sc_tx_ring[i].stats.num_tx_maxfrags,
 		    sc->sc_tx_ring[i].stats.num_tx_ok);
-		device_printf(sc->sc_dev, "TXQ[%d]: compl: ", i);
-		for (j = 0; j < 32; j++) {
-			printf("%lld ", sc->sc_tx_ring[i].stats.num_processed[j]);
-		}
-		printf("\n");
 	}
 
 	for (i = 0; i < QCOM_ESS_EDMA_NUM_RX_IRQS; i++) {
