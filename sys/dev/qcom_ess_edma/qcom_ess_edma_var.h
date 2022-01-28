@@ -86,7 +86,7 @@
 #define	QCOM_ESS_EDMA_MAX_NUM_GMACS	5
 
 /* Maximum number of ports to support mapping to GMACs */
-#define	QCOM_ESS_EDMA_MAX_NUM_PORTS	6
+#define	QCOM_ESS_EDMA_MAX_NUM_PORTS	8
 
 #define	QCOM_ESS_EDMA_MAX_TXFRAGS	8
 
