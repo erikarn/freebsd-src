@@ -692,6 +692,14 @@ qcom_ess_edma_attach(device_t dev)
 		goto error;
 	}
 
+	sc->sc_mem_res_size = (size_t) bus_get_resource_count(dev,
+	    SYS_RES_MEMORY, sc->sc_mem_rid);
+	if (sc->sc_mem_res_size == 0) {
+		device_printf(dev, "%s: failed to get device memory size\n",
+		    __func__);
+		goto error;
+	}
+
 	/*
 	 * How many TX queues per CPU, for figuring out flowid/CPU
 	 * mapping.

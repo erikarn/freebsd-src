@@ -55,13 +55,12 @@
 #define EDMA_REG_CLEAR_BITS(sc, reg, bits)	\
 	EDMA_REG_WRITE(sc, reg, EDMA_REG_READ(sc, (reg)) & ~(bits))
 
-/* XXX TODO: use res_size */
 #define	EDMA_REG_BARRIER_WRITE(sc)	bus_barrier((sc)->sc_mem_res,	\
-	    0, 0x8000, BUS_SPACE_BARRIER_WRITE)
+	    0, (sc)->sc_mem_res_size, BUS_SPACE_BARRIER_WRITE)
 #define EDMA_REG_BARRIER_READ(sc)	bus_barrier((sc)->sc_mem_res,	\
-	    0, 0x8000, BUS_SPACE_BARRIER_READ)
+	    0, (sc)->sc_mem_res_size, BUS_SPACE_BARRIER_READ)
 #define EDMA_REG_BARRIER_RW(sc)		bus_barrier((sc)->sc_mem_res,	\
-	    0, 0x8000,							\
+	    0, (sc)->sc_mem_res_size,					\
 	    BUS_SPACE_BARRIER_READ | BUS_SPACE_BARRIER_WRITE)
 
 
@@ -211,6 +210,7 @@ struct qcom_ess_edma_softc {
 	device_t		sc_dev;
 	struct mtx		sc_mtx;
 	struct resource		*sc_mem_res;
+	size_t			sc_mem_res_size;
 	int			sc_mem_rid;
 	uint32_t		sc_debug;
 	bus_dma_tag_t		sc_dma_tag;
