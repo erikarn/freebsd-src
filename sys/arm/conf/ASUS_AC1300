@@ -49,4 +49,24 @@ device 		gpio
 device 		ether
 device 		mii
 device 		bpf
+device 		vlan
 
+options 	GEOM_UZIP
+device 		xz
+
+# SPI NOR flash
+device		mx25l
+
+# SPI NAND flash
+device		w25n
+
+# USB storage
+device 		scbus
+device 		umass
+device 		da
+
+# 8 megabyte rootfs
+options 	MD_ROOT
+options 	MD_ROOT_SIZE=8192
+options 	ROOTDEVNAME=\"ufs:md0.uzip\"
+makeoptions 	MFS_IMAGE=/tftpboot/mfs-arm.uzip
