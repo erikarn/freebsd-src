@@ -79,3 +79,4 @@ device 		miibus
 device 		qcom_mdio_ipq4018
 device 		etherswitch
 device 		ar40xx_switch
+device 		qcom_ess_edma

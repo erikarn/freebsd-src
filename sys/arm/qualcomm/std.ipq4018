@@ -34,6 +34,13 @@ dev/qcom_rnd/qcom_rnd.c			optional qcom_rnd
 dev/qcom_qup/qcom_spi.c			optional qcom_qup_spi
 dev/qcom_qup/qcom_spi_hw.c		optional qcom_qup_spi
 
+dev/qcom_ess_edma/qcom_ess_edma.c	optional qcom_ess_edma
+dev/qcom_ess_edma/qcom_ess_edma_desc.c	optional qcom_ess_edma
+dev/qcom_ess_edma/qcom_ess_edma_gmac.c	optional qcom_ess_edma
+dev/qcom_ess_edma/qcom_ess_edma_hw.c	optional qcom_ess_edma
+dev/qcom_ess_edma/qcom_ess_edma_rx.c	optional qcom_ess_edma
+dev/qcom_ess_edma/qcom_ess_edma_tx.c	optional qcom_ess_edma
+
 dev/qcom_gcc/qcom_gcc_ipq4018.c		optional qcom_gcc_ipq4018
 dev/qcom_gcc/qcom_gcc_ipq4018_reset.c	optional qcom_gcc_ipq4018
 dev/qcom_gcc/qcom_gcc_ipq4018_clock.c	optional qcom_gcc_ipq4018
