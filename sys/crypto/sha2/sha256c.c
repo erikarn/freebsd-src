@@ -132,7 +132,11 @@ static const uint32_t K[64] = {
  * the 512-bit input block to produce a new state.
  */
 static void
+#if defined(ARM64_SHA2)
+SHA256_Transform_c(uint32_t * state, const unsigned char block[64])
+#else
 SHA256_Transform(uint32_t * state, const unsigned char block[64])
+#endif
 {
 	uint32_t W[64];
 	uint32_t S[8];
@@ -187,6 +191,27 @@ SHA256_Transform(uint32_t * state, const unsigned char block[64])
 	for (i = 0; i < 8; i++)
 		state[i] += S[i];
 }
+
+#if defined(ARM64_SHA2)
+static void
+SHA256_Transform_arm64(uint32_t * state, const unsigned char block[64])
+{
+	SHA256_Transform_arm64_impl(state, block, K);
+}
+
+DEFINE_UIFUNC(static, void, SHA256_Transform,
+    (uint32_t * state, const unsigned char block[64]))
+{
+	u_long hwcap;
+
+	if (elf_aux_info(AT_HWCAP, &hwcap, sizeof(hwcap)) == 0) {
+		if ((hwcap & HWCAP_SHA2) != 0)
+			return (SHA256_Transform_arm64);
+	}
+
+	return (SHA256_Transform_c);
+}
+#endif
 
 static unsigned char PAD[64] = {
 	0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
