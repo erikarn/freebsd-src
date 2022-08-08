@@ -239,10 +239,10 @@ INCSGROUPS=	INCS \
 		TEKEN \
 		VERIEXEC
 
-.if ${MK_AUDIT} != "no"
+#.if ${MK_AUDIT} != "no"
 INCSGROUPS+=	BSM
 INCSGROUPS+=	SECAUDIT
-.endif
+#.endif
 
 .if ${MK_IPFILTER} != "no"
 INCSGROUPS+=	IPFILTER
