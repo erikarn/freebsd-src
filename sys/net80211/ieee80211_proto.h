@@ -326,6 +326,22 @@ ieee80211_getqos(void *data)
 }
 
 /*
+ * Return offset to the QoS field from a QOS frame.
+ */
+static __inline int
+ieee80211_getqos_offset(void *data)
+{
+	struct ieee80211_frame *wh = data;
+
+	KASSERT(IEEE80211_QOS_HAS_SEQ(wh), ("QoS field is absent!"));
+
+	if (IEEE80211_IS_DSTODS(wh))
+		return 30;
+	else
+		return 24;
+}
+
+/*
  * Return the WME TID from a QoS frame.  If no TID
  * is present return the index for the "non-QoS" entry.
  */

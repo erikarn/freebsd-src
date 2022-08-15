@@ -163,21 +163,111 @@ struct ieee80211_qosframe_addr4 {
 #define	IEEE80211_FC0_SUBTYPE_QOS_CFACKPOLL	0xb0
 #define	IEEE80211_FC0_SUBTYPE_QOS_NULL		0xc0
 
+/* Check the version field */
+#define	IEEE80211_IS_FC0_CHECK_VER(wh, v)			\
+	(((wh)->i_fc[0] & IEEE80211_FC0_VERSION_MASK) == (v))
+
+/* Check the version and type field */
+#define	IEEE80211_IS_FC0_CHECK_VER_TYPE(wh, v, t)		\
+	(((((wh)->i_fc[0] & IEEE80211_FC0_VERSION_MASK) == (v))) &&	\
+	  (((wh)->i_fc[0] & IEEE80211_FC0_TYPE_MASK) == (t)))
+
+/* Check the version, type and subtype field */
+#define	IEEE80211_IS_FC0_CHECK_VER_TYPE_SUBTYPE(wh, v, t, st)		\
+	(((((wh)->i_fc[0] & IEEE80211_FC0_VERSION_MASK) == (v))) &&	\
+	  (((wh)->i_fc[0] & IEEE80211_FC0_TYPE_MASK) == (t)) &&		\
+	  (((wh)->i_fc[0] & IEEE80211_FC0_SUBTYPE_MASK) == (st)))
+
+/* Frame version/type checks - mgmt, ctl, data, all version 0 */
+
 #define	IEEE80211_IS_MGMT(wh)					\
-	(!! (((wh)->i_fc[0] & IEEE80211_FC0_TYPE_MASK)		\
-	    == IEEE80211_FC0_TYPE_MGT))
+	(IEEE80211_IS_FC0_CHECK_VER_TYPE(wh, IEEE80211_FC0_VERSION_0,	\
+	 IEEE80211_FC0_TYPE_MGT))
 #define	IEEE80211_IS_CTL(wh)					\
-	(!! (((wh)->i_fc[0] & IEEE80211_FC0_TYPE_MASK)		\
-	    == IEEE80211_FC0_TYPE_CTL))
+	(IEEE80211_IS_FC0_CHECK_VER_TYPE(wh, IEEE80211_FC0_VERSION_0,	\
+	 IEEE80211_FC0_TYPE_CTL))
 #define	IEEE80211_IS_DATA(wh)					\
-	(!! (((wh)->i_fc[0] & IEEE80211_FC0_TYPE_MASK)		\
-	    == IEEE80211_FC0_TYPE_DATA))
+	(IEEE80211_IS_FC0_CHECK_VER_TYPE(wh, IEEE80211_FC0_VERSION_0,	\
+	 IEEE80211_FC0_TYPE_DATA))
+
+/* Management frame types */
+
+#define	IEEE80211_IS_BEACON(wh)					\
+	(IEEE80211_IS_FC0_CHECK_VER_TYPE_SUBTYPE(wh,		\
+	 IEEE80211_FC0_VERSION_0,				\
+	 IEEE80211_FC0_TYPE_MGT,				\
+	 IEEE80211_FC0_SUBTYPE_BEACON))				\
+
+#define	IEEE80211_IS_AUTH(wh)					\
+	(IEEE80211_IS_FC0_CHECK_VER_TYPE_SUBTYPE(wh,		\
+	 IEEE80211_FC0_VERSION_0,				\
+	 IEEE80211_FC0_TYPE_MGT,				\
+	 IEEE80211_FC0_SUBTYPE_AUTH))				\
+
+/*
+ * Note: ACTION and ACTION_NOACK are both action frames, just
+ * the ACK is different.
+ */
+#define	IEEE80211_IS_ACTION_ACK(wh)				\
+	(IEEE80211_IS_MGMT(wh) &&				\
+	   (((wh)->i_fc[0] & IEEE80211_FC0_SUBTYPE_MASK)	\
+	   == IEEE80211_FC0_SUBTYPE_ACTION))
+#define	IEEE80211_IS_ACTION_NOACK(wh)				\
+	(IEEE80211_IS_MGMT(wh) &&				\
+	   (((wh)->i_fc[0] & IEEE80211_FC0_SUBTYPE_MASK)	\
+	   == IEEE80211_FC0_SUBTYPE_ACTION_NOACK))
+#define	IEEE80211_IS_ACTION(wh)					\
+	((IEEE80211_IS_ACTION_ACK(wh)) ||			\
+	 (IEEE80211_IS_ACTION_NOACK(wh)))
+
+#define	IEEE80211_IS_DEAUTH(wh)					\
+	(IEEE80211_IS_FC0_CHECK_VER_TYPE_SUBTYPE(wh,		\
+	 IEEE80211_FC0_VERSION_0,				\
+	 IEEE80211_FC0_TYPE_MGT,				\
+	 IEEE80211_FC0_SUBTYPE_DEAUTH))				\
+
+#define	IEEE80211_IS_DISASSOC(wh)				\
+	(IEEE80211_IS_FC0_CHECK_VER_TYPE_SUBTYPE(wh,		\
+	 IEEE80211_FC0_VERSION_0,				\
+	 IEEE80211_FC0_TYPE_MGT,				\
+	 IEEE80211_FC0_SUBTYPE_DISASSOC))			\
+
+/* Control frame types */
+
+/* Data frame types */
 
 #define	IEEE80211_FC0_QOSDATA \
 	(IEEE80211_FC0_TYPE_DATA|IEEE80211_FC0_SUBTYPE_QOS|IEEE80211_FC0_VERSION_0)
 
+/*
+ * This returns true if it's any of the QOS frame types, not just
+ * data frames.
+ */
+#define	IEEE80211_IS_QOS_ANY(wh)				\
+	((IEEE80211_IS_FC0_CHECK_VER_TYPE(wh, IEEE80211_FC0_VERSION_0,	\
+	 IEEE80211_FC0_TYPE_DATA)) &&				\
+	 ((wh)->i_fc[0] & IEEE80211_FC0_SUBTYPE_QOS))
+
+/* This is /only/ for QOS data */
 #define	IEEE80211_IS_QOSDATA(wh) \
-	((wh)->i_fc[0] == IEEE80211_FC0_QOSDATA)
+	(IEEE80211_IS_FC0_CHECK_VER_TYPE_SUBTYPE(wh,		\
+	 IEEE80211_FC0_VERSION_0,				\
+	 IEEE80211_FC0_TYPE_DATA,				\
+	 IEEE80211_FC0_SUBTYPE_QOS))				\
+
+/* This is /only/ for non-QoS NULL frames */
+#define	IEEE80211_IS_DATA_NULL(wh)				\
+	(IEEE80211_IS_FC0_CHECK_VER_TYPE_SUBTYPE(wh,		\
+	 IEEE80211_FC0_VERSION_0,				\
+	 IEEE80211_FC0_TYPE_DATA,				\
+	 IEEE80211_FC0_SUBTYPE_NODATA))				\
+
+/* This is /only/ for QoS NULL frames */
+#define	IEEE80211_IS_DATA_QOSNULL(wh)				\
+	(IEEE80211_IS_FC0_CHECK_VER_TYPE_SUBTYPE(wh,		\
+	 IEEE80211_FC0_VERSION_0,				\
+	 IEEE80211_FC0_TYPE_DATA,				\
+	 IEEE80211_FC0_SUBTYPE_QOS_NULL))			\
 
 #define	IEEE80211_FC1_DIR_MASK			0x03
 #define	IEEE80211_FC1_DIR_NODS			0x00	/* STA->STA */

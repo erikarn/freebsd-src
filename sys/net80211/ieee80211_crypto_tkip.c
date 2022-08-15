@@ -862,7 +862,8 @@ michael_mic_hdr(const struct ieee80211_frame *wh0, uint8_t hdr[16])
 		break;
 	}
 
-	if (wh->i_fc[0] & IEEE80211_FC0_SUBTYPE_QOS) {
+	/* Note: yes this is checking if it's /any/ QoS frame */
+	if (IEEE80211_IS_QOS_ANY(wh)) {
 		const struct ieee80211_qosframe *qwh =
 			(const struct ieee80211_qosframe *) wh;
 		hdr[12] = qwh->i_qos[0] & IEEE80211_QOS_TID;
