@@ -945,13 +945,10 @@ static driver_t qcom_ess_edma_driver = {
 	qcom_ess_edma_methods,
 	sizeof(struct qcom_ess_edma_softc),
 };
-static devclass_t qcom_ess_edma_devclass;
 
 
-DRIVER_MODULE(qcom_ess_edma, simplebus, qcom_ess_edma_driver,
-    qcom_ess_edma_devclass, NULL, 0);
-DRIVER_MODULE(qcom_ess_edma, ofwbus, qcom_ess_edma_driver,
-    qcom_ess_edma_devclass, NULL, 0);
+DRIVER_MODULE(qcom_ess_edma, simplebus, qcom_ess_edma_driver, NULL, 0);
+DRIVER_MODULE(qcom_ess_edma, ofwbus, qcom_ess_edma_driver, NULL, 0);
 MODULE_VERSION(qcom_ess_edma, 1);
 
 /* XXX TODO dependencies (eg ethernet) */

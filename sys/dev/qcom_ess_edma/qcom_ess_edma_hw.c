@@ -400,8 +400,28 @@ qcom_ess_edma_hw_stop(struct qcom_ess_edma_softc *sc)
 	EDMA_LOCK_ASSERT(sc);
 
 	ret = qcom_ess_edma_hw_intr_disable(sc);
+	if (ret != 0) {
+		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_INTERRUPT,
+		    "%s: hw_intr_disable failed (%d)\n",
+		    __func__,
+		    ret);
+	}
+
 	ret = qcom_ess_edma_hw_intr_status_clear(sc);
+	if (ret != 0) {
+		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_INTERRUPT,
+		    "%s: hw_intr_status_clear failed (%d)\n",
+		    __func__,
+		    ret);
+	}
+
 	ret = qcom_ess_edma_hw_stop_txrx_queues(sc);
+	if (ret != 0) {
+		QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_INTERRUPT,
+		    "%s: hw_stop_txrx_queues failed (%d)\n",
+		    __func__,
+		    ret);
+	}
 
 	return (0);
 }
