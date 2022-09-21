@@ -393,7 +393,7 @@ struct qcom_ess_edma_tx_desc {
 #define	EDMA_PORT_ID_SHIFT 12
 #define	EDMA_PORT_ID_MASK 0x7
 
-/* RX RRD descriptor */
+/* RX RRD descriptor - 16 bytes */
 struct qcom_edma_rx_return_desc {
 	uint16_t rrd0;
 	uint16_t rrd1;

@@ -341,8 +341,6 @@ qcom_ess_edma_desc_ring_get_num_available(struct qcom_ess_edma_softc *sc,
 	uint16_t sw_next_to_clean;
 	uint16_t count = 0;
 
-	/* XXX TODO: redo this; it seems overly complicated! */
-
 	sw_next_to_clean = ring->next_to_clean;
 	sw_next_to_fill = ring->next_to_fill;
 

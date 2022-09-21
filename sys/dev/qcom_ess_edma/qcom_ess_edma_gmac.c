@@ -107,7 +107,6 @@ qcom_ess_edma_gmac_mediastatus(struct ifnet *ifp, struct ifmediareq *ifmr)
 	ifmr->ifm_active = IFM_ETHER | IFM_1000_T | IFM_FDX;
 }
 
-
 static int
 qcom_ess_edma_gmac_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 {
@@ -116,12 +115,12 @@ qcom_ess_edma_gmac_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 	struct ifreq *ifr = (struct ifreq *) data;
 	int error, mask;
 
-	/* XXX TODO */
 	switch (command) {
 	case SIOCSIFFLAGS:
 		if ((ifp->if_flags & IFF_UP) != 0) {
 			/* up */
-			device_printf(sc->sc_dev, "%s: gmac%d: IFF_UP\n",
+			QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_STATE,
+			    "%s: gmac%d: IFF_UP\n",
 			    __func__,
 			    gmac->id);
 			ifp->if_drv_flags |= IFF_DRV_RUNNING;
@@ -131,7 +130,8 @@ qcom_ess_edma_gmac_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 		} else if ((ifp->if_drv_flags & IFF_DRV_RUNNING) != 0) {
 			/* down */
 			ifp->if_drv_flags &= ~IFF_DRV_RUNNING;
-			device_printf(sc->sc_dev, "%s: gmac%d: IF down\n",
+			QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_STATE,
+			    "%s: gmac%d: IF down\n",
 			    __func__,
 			    gmac->id);
 			if_link_state_change(ifp, LINK_STATE_DOWN);
@@ -170,8 +170,8 @@ qcom_ess_edma_gmac_init(void *arg)
 	struct qcom_ess_edma_gmac *gmac = arg;
 	struct qcom_ess_edma_softc *sc = gmac->sc;
 
-	/* XXX TODO */
-	device_printf(sc->sc_dev, "%s: gmac%d: called\n",
+	QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_STATE,
+	    "%s: gmac%d: called\n",
 	    __func__,
 	    gmac->id);
 
@@ -252,14 +252,14 @@ qcom_ess_edma_gmac_transmit(struct ifnet *ifp, struct mbuf *m)
 	}
 #endif
 
-	sched_unpin();
-
 #if 0
 	if (ret == 0)
 		if_inc_counter(ifp, IFCOUNTER_OPACKETS, 1);
 	else
 		if_inc_counter(ifp, IFCOUNTER_OERRORS, 1);
 #endif
+
+	sched_unpin();
 
 	/* Don't consume mbuf; if_transmit caller will if needed */
 	return (ret);
@@ -275,6 +275,12 @@ qcom_ess_edma_gmac_qflush(struct ifnet *ifp)
 	device_printf(sc->sc_dev, "%s: gmac%d: called\n",
 	    __func__,
 	    gmac->id);
+
+	/*
+	 * Flushing the ifnet would, sigh, require walking each buf_ring
+	 * and then removing /only/ the entries matching that ifnet.
+	 * Which is a complete pain to do right now.
+	 */
 }
 
 int

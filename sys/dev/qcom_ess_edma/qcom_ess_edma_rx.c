@@ -407,7 +407,7 @@ qcom_ess_edma_rx_ring_complete(struct qcom_ess_edma_softc *sc, int queue,
 		}
 
 		/* Payload starts after the RRD header */
-		m_adj(m, 16);
+		m_adj(m, sizeof(struct qcom_edma_rx_return_desc));
 
 		/* Set mbuf length now */
 		m->m_len = m->m_pkthdr.len = len;
@@ -488,6 +488,11 @@ qcom_ess_edma_rx_ring_complete(struct qcom_ess_edma_softc *sc, int queue,
 			}
 		}
 
+
+		/*
+		 * Finally enqueue into the incoming receive queue
+		 * to push up into the networking stack.
+		 */
 		if (mbufq_enqueue(mq, m) != 0) {
 			ring->stats.num_enqueue_full++;
 			m_freem(m);

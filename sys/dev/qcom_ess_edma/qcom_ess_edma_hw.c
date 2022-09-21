@@ -98,6 +98,7 @@ qcom_ess_edma_hw_reset(struct qcom_ess_edma_softc *sc)
 	 *
 	 * instead, this should be done by the ar40xx_switch driver!
 	 */
+
 	return (0);
 }
 
@@ -277,12 +278,14 @@ qcom_ess_edma_hw_intr_status_clear(struct qcom_ess_edma_softc *sc)
 
 /*
  * ACK the given RX queue ISR.
+ *
+ * Must be called with the RX ring lock held!
  */
 int
 qcom_ess_edma_hw_intr_rx_ack(struct qcom_ess_edma_softc *sc, int rx_queue)
 {
-	// XXX TODO: ring lock assert
 
+	EDMA_RING_LOCK_ASSERT(&sc->sc_rx_ring[rx_queue]);
 	EDMA_REG_WRITE(sc, EDMA_REG_RX_ISR, (1U << rx_queue));
 	(void) EDMA_REG_READ(sc, EDMA_REG_RX_ISR);
 
@@ -291,12 +294,14 @@ qcom_ess_edma_hw_intr_rx_ack(struct qcom_ess_edma_softc *sc, int rx_queue)
 
 /*
  * ACK the given TX queue ISR.
+ *
+ * Must be called with the TX ring lock held!
  */
 int
 qcom_ess_edma_hw_intr_tx_ack(struct qcom_ess_edma_softc *sc, int tx_queue)
 {
-	// XXX TODO: ring lock assert
 
+	EDMA_RING_LOCK_ASSERT(&sc->sc_tx_ring[tx_queue]);
 	EDMA_REG_WRITE(sc, EDMA_REG_TX_ISR, (1U << tx_queue));
 	(void) EDMA_REG_READ(sc, EDMA_REG_TX_ISR);
 
@@ -428,6 +433,10 @@ qcom_ess_edma_hw_stop(struct qcom_ess_edma_softc *sc)
 
 /*
  * Update the producer index for the given receive queue.
+ *
+ * Note: the RX ring lock must be held!
+ *
+ * Return 0 if OK, an error number if there's an error.
  */
 int
 qcom_ess_edma_hw_rfd_prod_index_update(struct qcom_ess_edma_softc *sc,
@@ -435,7 +444,7 @@ qcom_ess_edma_hw_rfd_prod_index_update(struct qcom_ess_edma_softc *sc,
 {
 	uint32_t reg;
 
-	// XXX TODO: ring lock assert
+	EDMA_RING_LOCK_ASSERT(&sc->sc_rx_ring[queue]);
 
 	QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_RX_RING_MGMT,
 	    "%s: called; q=%d idx=0x%x\n",
@@ -457,13 +466,16 @@ qcom_ess_edma_hw_rfd_prod_index_update(struct qcom_ess_edma_softc *sc,
 
 /*
  * Fetch the consumer index for the given receive queue.
+ *
+ * Returns the current consumer index.
+ *
+ * Note - since it's used in statistics/debugging it isn't asserting the
+ * RX ring lock, so be careful when/how you use this!
  */
 int
 qcom_ess_edma_hw_rfd_get_cons_index(struct qcom_ess_edma_softc *sc, int queue)
 {
 	uint32_t reg;
-
-	// XXX TODO: ring lock assert
 
 	EDMA_REG_BARRIER_READ(sc);
 	reg = EDMA_REG_READ(sc, EDMA_REG_RFD_IDX_Q(queue));
@@ -473,12 +485,16 @@ qcom_ess_edma_hw_rfd_get_cons_index(struct qcom_ess_edma_softc *sc, int queue)
 /*
  * Update the software consumed index to the hardware, so
  * it knows what we've read.
+ *
+ * Note: the RX ring lock must be held when calling this!
+ *
+ * Returns 0 if OK, error number if error.
  */
 int
 qcom_ess_edma_hw_rfd_sw_cons_index_update(struct qcom_ess_edma_softc *sc,
     int queue, int idx)
 {
-	// XXX TODO: ring lock assert
+	EDMA_RING_LOCK_ASSERT(&sc->sc_rx_ring[queue]);
 
 	EDMA_REG_WRITE(sc, EDMA_REG_RX_SW_CONS_IDX_Q(queue), idx);
 	EDMA_REG_BARRIER_WRITE(sc);
@@ -516,6 +532,9 @@ qcom_ess_edma_hw_setup(struct qcom_ess_edma_softc *sc)
 	return (0);
 }
 
+/*
+ * Setup TX DMA burst configuration.
+ */
 int
 qcom_ess_edma_hw_setup_tx(struct qcom_ess_edma_softc *sc)
 {
@@ -532,6 +551,11 @@ qcom_ess_edma_hw_setup_tx(struct qcom_ess_edma_softc *sc)
 	return (0);
 }
 
+/*
+ * Setup default RSS, RX burst/prefetch/interrupt thresholds.
+ *
+ * Strip VLANs, those are offloaded in the RX descriptor.
+ */
 int
 qcom_ess_edma_hw_setup_rx(struct qcom_ess_edma_softc *sc)
 {
@@ -640,11 +664,15 @@ qcom_ess_edma_hw_setup_txrx_desc_rings(struct qcom_ess_edma_softc *sc)
 	return (0);
 }
 
+/*
+ * Enable general MAC TX DMA.
+ */
 int
 qcom_ess_edma_hw_tx_enable(struct qcom_ess_edma_softc *sc)
 {
-	EDMA_LOCK_ASSERT(sc);
 	uint32_t reg;
+
+	EDMA_LOCK_ASSERT(sc);
 
 	EDMA_REG_BARRIER_READ(sc);
 	reg = EDMA_REG_READ(sc, EDMA_REG_TXQ_CTRL);
@@ -655,6 +683,9 @@ qcom_ess_edma_hw_tx_enable(struct qcom_ess_edma_softc *sc)
 	return (0);
 }
 
+/*
+ * Enable general MAC RX DMA.
+ */
 int
 qcom_ess_edma_hw_rx_enable(struct qcom_ess_edma_softc *sc)
 {
@@ -686,6 +717,9 @@ qcom_ess_edma_hw_tx_read_tpd_cons_idx(struct qcom_ess_edma_softc *sc,
 	return (0);
 }
 
+/*
+ * Update the TPD producer index for the given transmit wring.
+ */
 int
 qcom_ess_edma_hw_tx_update_tpd_prod_idx(struct qcom_ess_edma_softc *sc,
     int queue_id, uint16_t idx)
@@ -703,10 +737,6 @@ qcom_ess_edma_hw_tx_update_tpd_prod_idx(struct qcom_ess_edma_softc *sc,
 }
 
 /*
- * Write the TPD producer index register for the given transmit wring.
- */
-
-/*
  * Update the TPD software consumer index register for the given
  * transmit ring - ie, what software has cleaned.
  */
@@ -720,4 +750,3 @@ qcom_ess_edma_hw_tx_update_cons_idx(struct qcom_ess_edma_softc *sc,
 
 	return (0);
 }
-
