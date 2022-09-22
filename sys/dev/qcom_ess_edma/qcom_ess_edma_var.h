@@ -165,6 +165,8 @@ struct qcom_ess_edma_sw_desc_rx {
 	bus_addr_t		m_physaddr;
 };
 
+#define	QCOM_ESS_EDMA_LABEL_SZ	16
+
 /*
  * Per transmit ring TX state for TX queue / buf_ring stuff.
  */
@@ -174,7 +176,7 @@ struct qcom_ess_edma_tx_state {
 	struct buf_ring *br;
 	struct taskqueue *completion_tq;
 	struct qcom_ess_edma_softc *sc;
-	char label[16];
+	char label[QCOM_ESS_EDMA_LABEL_SZ];
 	int enqueue_is_running;
 	int queue_id;
 };
@@ -186,7 +188,7 @@ struct qcom_ess_edma_rx_state {
 	struct task completion_task;
 	struct taskqueue *completion_tq;
 	struct qcom_ess_edma_softc *sc;
-	char label[16];
+	char label[QCOM_ESS_EDMA_LABEL_SZ];
 	int queue_id;
 };
 

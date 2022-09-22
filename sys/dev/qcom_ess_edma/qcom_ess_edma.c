@@ -232,7 +232,7 @@ qcom_ess_edma_setup_tx_state(struct qcom_ess_edma_softc *sc, int txq, int cpu)
 	txs = &sc->sc_tx_state[txq];
 	ring = &sc->sc_tx_ring[txq];
 
-	snprintf(txs->label, 15, "txq%d_compl", txq);
+	snprintf(txs->label, QCOM_ESS_EDMA_LABEL_SZ - 1, "txq%d_compl", txq);
 
 	CPU_ZERO(&mask);
 	CPU_SET(cpu, &mask);
@@ -260,11 +260,30 @@ qcom_ess_edma_setup_tx_state(struct qcom_ess_edma_softc *sc, int txq, int cpu)
 	return (0);
 }
 
+/*
+ * Free the transmit ring state.
+ *
+ * This assumes that the taskqueues have been drained and DMA has
+ * stopped - all we're doing here is freeing the allocated resources.
+ */
 static int
 qcom_ess_edma_free_tx_state(struct qcom_ess_edma_softc *sc, int txq)
 {
-	/* XXX TODO */
-	device_printf(sc->sc_dev, "%s: called, TODO\n", __func__);
+	struct qcom_ess_edma_tx_state *txs;
+
+	txs = &sc->sc_tx_state[txq];
+
+	taskqueue_free(txs->completion_tq);
+
+	while (! buf_ring_empty(txs->br)) {
+		struct mbuf *m;
+
+		m = buf_ring_dequeue_sc(txs->br);
+		m_freem(m);
+	}
+
+	buf_ring_free(txs->br, M_DEVBUF);
+
 	return (0);
 }
 
@@ -314,7 +333,7 @@ qcom_ess_edma_setup_rx_state(struct qcom_ess_edma_softc *sc, int rxq, int cpu)
 
 	rxs = &sc->sc_rx_state[rxq];
 
-	snprintf(rxs->label, 15, "rxq%d_compl", rxq);
+	snprintf(rxs->label, QCOM_ESS_EDMA_LABEL_SZ - 1, "rxq%d_compl", rxq);
 
 	CPU_ZERO(&mask);
 	CPU_SET(cpu, &mask);
@@ -336,11 +355,22 @@ qcom_ess_edma_setup_rx_state(struct qcom_ess_edma_softc *sc, int rxq, int cpu)
 	return (0);
 }
 
+/*
+ * Free the receive ring state.
+ *
+ * This assumes that the taskqueues have been drained and DMA has
+ * stopped - all we're doing here is freeing the allocated resources.
+ */
+
 static int
 qcom_ess_edma_free_rx_state(struct qcom_ess_edma_softc *sc, int rxq)
 {
-	/* XXX TODO */
-	device_printf(sc->sc_dev, "%s: called, TODO\n", __func__);
+	struct qcom_ess_edma_rx_state *rxs;
+
+	rxs = &sc->sc_rx_state[rxq];
+
+	taskqueue_free(rxs->completion_tq);
+
 	return (0);
 }
 
@@ -503,7 +533,8 @@ qcom_ess_edma_sysctl_dump_state(SYSCTL_HANDLER_ARGS)
 		    i,
 		    sc->sc_tx_ring[i].next_to_fill,
 		    sc->sc_tx_ring[i].next_to_clean,
-		    (EDMA_REG_READ(sc, EDMA_REG_TPD_IDX_Q(i)) >> EDMA_TPD_CONS_IDX_SHIFT) & EDMA_TPD_CONS_IDX_MASK,
+		    (EDMA_REG_READ(sc, EDMA_REG_TPD_IDX_Q(i))
+		      >> EDMA_TPD_CONS_IDX_SHIFT) & EDMA_TPD_CONS_IDX_MASK,
 		    EDMA_REG_READ(sc, EDMA_REG_TX_SW_CONS_IDX_Q(i)));
 	}
 
@@ -793,10 +824,10 @@ qcom_ess_edma_attach(device_t dev)
 
 	/* allocate tx rings */
 	for (i = 0; i < QCOM_ESS_EDMA_NUM_TX_RINGS; i++) {
-		char label[16];
+		char label[QCOM_ESS_EDMA_LABEL_SZ];
 		int cpu_id;
 
-		snprintf(label, 16, "tx_ring%d", i);
+		snprintf(label, QCOM_ESS_EDMA_LABEL_SZ - 1, "tx_ring%d", i);
 		if (qcom_ess_edma_desc_ring_setup(sc, &sc->sc_tx_ring[i],
 		    label,
 		    sc->sc_config.tx_ring_count,
@@ -817,10 +848,10 @@ qcom_ess_edma_attach(device_t dev)
 
 	/* allocate rx rings */
 	for (i = 0; i < QCOM_ESS_EDMA_NUM_RX_RINGS; i++) {
-		char label[16];
+		char label[QCOM_ESS_EDMA_LABEL_SZ];
 		int cpu_id;
 
-		snprintf(label, 16, "rx_ring%d", i);
+		snprintf(label, QCOM_ESS_EDMA_LABEL_SZ - 1, "rx_ring%d", i);
 		if (qcom_ess_edma_desc_ring_setup(sc, &sc->sc_rx_ring[i],
 		    label,
 		    sc->sc_config.rx_ring_count,
@@ -866,9 +897,11 @@ qcom_ess_edma_attach(device_t dev)
 	}
 
 	/*
-	 * (if there's no ess-switch / we're a single phy, we
-	 * still need to reset the ess fabric.  Worry about this
-	 * later.)
+	 * NOTE: If there's no ess-switch / we're a single phy, we
+	 * still need to reset the ess fabric to a fixed useful state.
+	 * Otherwise we won't be able to pass packets to anything.
+	 *
+	 * Worry about this later.
 	 */
 
 	EDMA_LOCK(sc);
@@ -946,9 +979,7 @@ static driver_t qcom_ess_edma_driver = {
 	sizeof(struct qcom_ess_edma_softc),
 };
 
-
 DRIVER_MODULE(qcom_ess_edma, simplebus, qcom_ess_edma_driver, NULL, 0);
 DRIVER_MODULE(qcom_ess_edma, ofwbus, qcom_ess_edma_driver, NULL, 0);
+MODULE_DEPEND(qcom_ess_edma, ether, 1, 1, 1);
 MODULE_VERSION(qcom_ess_edma, 1);
-
-/* XXX TODO dependencies (eg ethernet) */
