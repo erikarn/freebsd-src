@@ -146,7 +146,7 @@ qcom_ess_edma_tx_unmap_and_clean(struct qcom_ess_edma_softc *sc,
 		txd->is_first = txd->is_last = 0;
 	}
 
-#if 0
+#ifdef	ESS_EDMA_DEBUG_CLEAR_DESC
 	/* This is purely for debugging/testing right now; it's slow! */
 	memset(ds, 0, sizeof(struct qcom_ess_edma_tx_desc));
 #endif

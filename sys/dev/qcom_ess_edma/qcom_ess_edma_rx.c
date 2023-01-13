@@ -231,10 +231,10 @@ qcom_ess_edma_rx_buf_clean(struct qcom_ess_edma_softc *sc,
 	m = rxd->m;
 	rxd->m = NULL;
 
-#if 0
+#ifdef	ESS_EDMA_DEBUG_CLEAR_DESC
 	/*
-	 * XXX Note: removing hw entries is purely for correctness; it may be
-	 * VERY SLOW!  Once this is working it should just be removed.
+	 * Note: removing hw entries is purely for correctness; it may be
+	 * VERY SLOW!
 	 */
 	ds->addr = 0;
 #endif

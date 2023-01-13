@@ -185,9 +185,7 @@ qcom_ess_edma_gmac_transmit(struct ifnet *ifp, struct mbuf *m)
 {
 	struct qcom_ess_edma_gmac *gmac = ifp->if_softc;
 	struct qcom_ess_edma_softc *sc = gmac->sc;
-#if 1
 	struct qcom_ess_edma_tx_state *txs;
-#endif
 	int ret;
 	int q;
 
@@ -218,21 +216,7 @@ qcom_ess_edma_gmac_transmit(struct ifnet *ifp, struct mbuf *m)
 		 */
 		q = (mp_ncpus * curcpu) % QCOM_ESS_EDMA_NUM_TX_RINGS;
 	}
-#if 0
-	EDMA_RING_LOCK(&sc->sc_tx_ring[q]);
 
-	/*
-	 * Transmit a single frame.
-	 */
-	ret = qcom_ess_edma_tx_ring_frame(sc, q, &m, gmac->port_mask,
-	    gmac->vlan_id);
-	if (ret == 0) {
-		/* TX ok, update hardware ring pointer now */
-		qcom_ess_edma_tx_ring_frame_update(sc, q);
-	}
-
-	EDMA_RING_UNLOCK(&sc->sc_tx_ring[q]);
-#else
 	/* Attempt to enqueue in the buf_ring. */
 	/*
 	 * XXX TODO: maybe move this into *tx.c so gmac.c doesn't
@@ -250,14 +234,6 @@ qcom_ess_edma_gmac_transmit(struct ifnet *ifp, struct mbuf *m)
 			taskqueue_enqueue(txs->completion_tq, &txs->xmit_task);
 		}
 	}
-#endif
-
-#if 0
-	if (ret == 0)
-		if_inc_counter(ifp, IFCOUNTER_OPACKETS, 1);
-	else
-		if_inc_counter(ifp, IFCOUNTER_OERRORS, 1);
-#endif
 
 	sched_unpin();
 
