@@ -106,6 +106,7 @@ static int 	asmc_mb_sysctl_sms_z(SYSCTL_HANDLER_ARGS);
 static int 	asmc_mbp_sysctl_light_left(SYSCTL_HANDLER_ARGS);
 static int 	asmc_mbp_sysctl_light_right(SYSCTL_HANDLER_ARGS);
 static int 	asmc_mbp_sysctl_light_control(SYSCTL_HANDLER_ARGS);
+static int 	asmc_mbp_sysctl_light_left_10bit(SYSCTL_HANDLER_ARGS);
 
 struct asmc_model {
 	const char 	 *smc_model;	/* smbios.system.product env var. */
@@ -150,6 +151,12 @@ static const struct asmc_model *asmc_match(device_t dev);
 #define ASMC_LIGHT_FUNCS asmc_mbp_sysctl_light_left, \
 			 asmc_mbp_sysctl_light_right, \
 			 asmc_mbp_sysctl_light_control
+
+#define ASMC_LIGHT_FUNCS_10BIT \
+			 asmc_mbp_sysctl_light_left_10bit, \
+			 NULL, \
+			 asmc_mbp_sysctl_light_control
+
 
 #define ASMC_LIGHT_FUNCS_DISABLED NULL, NULL, NULL
 
@@ -425,7 +432,7 @@ static const struct asmc_model asmc_models[] = {
 	  "MacBookAir6,2", "Apple SMC MacBook Air 13-inch (Early 2013)",
 	  ASMC_SMS_FUNCS_DISABLED,
 	  ASMC_FAN_FUNCS2,
-	  ASMC_LIGHT_FUNCS,
+	  ASMC_LIGHT_FUNCS_10BIT,
 	  ASMC_MBA6_TEMPS, ASMC_MBA6_TEMPNAMES, ASMC_MBA6_TEMPDESCS
 	},
 	{
@@ -1508,6 +1515,7 @@ asmc_mbp_sysctl_light_right(SYSCTL_HANDLER_ARGS)
 
 	asmc_key_read(dev, ASMC_KEY_LIGHTRIGHT, buf, sizeof buf);
 	v = buf[2];
+	device_printf(dev, "%s: buf=%6D\n", __func__, buf, ":");
 	error = sysctl_handle_int(oidp, &v, 0, req);
 
 	return (error);
@@ -1532,5 +1540,32 @@ asmc_mbp_sysctl_light_control(SYSCTL_HANDLER_ARGS)
 		buf[1] = 0x00;
 		asmc_key_write(dev, ASMC_KEY_LIGHTVALUE, buf, sizeof buf);
 	}
+	return (error);
+}
+
+static int
+asmc_mbp_sysctl_light_left_10bit(SYSCTL_HANDLER_ARGS)
+{
+	device_t dev = (device_t) arg1;
+	uint8_t buf[10];
+	int error;
+	int32_t v;
+
+	asmc_key_read(dev, ASMC_KEY_LIGHTLEFT, buf, sizeof buf);
+
+	/*
+	 * This seems to be a 32 bit big endian value from buf[6] -> buf[9].
+	 *
+	 * The range may be a little err, large; let's figure out what to
+	 * divide it by before landing it upstream.
+	 */
+	v = (((uint32_t) buf[6]) << 24)
+	  | (((uint32_t) buf[7]) << 16)
+	  | (((uint32_t) buf[8]) << 8)
+	  | (((uint32_t) buf[9]));
+
+	device_printf(dev, "%s: buf=%10D\n", __func__, buf, ":");
+	error = sysctl_handle_int(oidp, &v, 0, req);
+
 	return (error);
 }

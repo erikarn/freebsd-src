@@ -70,6 +70,8 @@ struct asmc_softc {
 	bus_write_1(sc->sc_ioport, 0x04, val)
 #define ASMC_CMDREAD		0x10
 #define ASMC_CMDWRITE		0x11
+#define	ASMC_CMD_GET_KEY_BY_INDEX	0x12
+#define	ASMC_CMD_GET_KEY_BY_TYPE	0x13
 
 /*
  * Interrupt port.
