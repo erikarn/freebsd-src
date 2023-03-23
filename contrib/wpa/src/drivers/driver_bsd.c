@@ -311,11 +311,11 @@ bsd_ctrl_iface(void *priv, int enable)
 
 	if (enable) {
 		if (ifr.ifr_flags & IFF_UP)
-			return 0;
+			goto nochange;
 		ifr.ifr_flags |= IFF_UP;
 	} else {
 		if (!(ifr.ifr_flags & IFF_UP))
-			return 0;
+			goto nochange;
 		ifr.ifr_flags &= ~IFF_UP;
 	}
 
@@ -325,7 +325,15 @@ bsd_ctrl_iface(void *priv, int enable)
 		return -1;
 	}
 
+	wpa_printf(MSG_DEBUG, "%s: if %s (changed) enable %d IFF_UP %d ",
+	    __func__, drv->ifname, enable, ((ifr.ifr_flags & IFF_UP) != 0));
+
 	drv->flags = ifr.ifr_flags;
+	return 0;
+
+nochange:
+	wpa_printf(MSG_DEBUG, "%s: if %s (no change) enable %d IFF_UP %d ",
+	    __func__, drv->ifname, enable, ((ifr.ifr_flags & IFF_UP) != 0));
 	return 0;
 }
 
@@ -906,7 +914,6 @@ bsd_deinit(void *priv)
 		l2_packet_deinit(drv->sock_xmit);
 	os_free(drv);
 }
-
 
 static int
 bsd_commit(void *priv)
