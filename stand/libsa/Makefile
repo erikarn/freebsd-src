@@ -63,6 +63,8 @@ SRCS+=	aeabi_memcmp.S aeabi_memcpy.S aeabi_memmove.S aeabi_memset.S
 .PATH: ${SRCTOP}/contrib/llvm-project/compiler-rt/lib/builtins/
 # __clzsi2 and ctzsi2 for various builtin functions
 SRCS+=	clzsi2.c ctzsi2.c
+# [adrian] this is for MIPS
+SRCS+=	clzdi2.c
 # Divide and modulus functions called by the compiler
 SRCS+=	divmoddi4.c  divmodsi4.c  divdi3.c  divsi3.c  moddi3.c  modsi3.c
 SRCS+=	udivmoddi4.c udivmodsi4.c udivdi3.c udivsi3.c umoddi3.c umodsi3.c
