@@ -59,6 +59,7 @@ strtoll(const char * nptr, char ** endptr, int base)
 {
     const char *s;
     unsigned long long acc;
+    long long ret = 0;
     char c;
     unsigned long long cutoff;
     int neg, any, cutlim;
@@ -137,15 +138,18 @@ strtoll(const char * nptr, char ** endptr, int base)
 	}
     }
     if (any < 0) {
-	acc = neg ? LLONG_MIN : LLONG_MAX;
+	ret = neg ? LLONG_MIN : LLONG_MAX;
 	errno = ERANGE;
     } else if (!any) {
 noconv:
 	errno = EINVAL;
-    } else if (neg)
-	acc = -acc;
+    } else if (neg) {
+	ret = -(long long)acc;
+    } else {
+	ret = acc;
+    }
     if (endptr != NULL)
 	*endptr = (char *)(any ? s - 1 : nptr);
-    return (acc);
+    return ret;
 }
 #endif /* !HAVE_STRTOLL */

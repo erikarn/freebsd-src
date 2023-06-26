@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Kungliga Tekniska Högskolan
+ * Copyright (c) 2009 Kungliga Tekniska HÃ¶gskolan
  * (Royal Institute of Technology, Stockholm, Sweden).
  * All rights reserved.
  *
@@ -119,6 +119,9 @@ int
 heim_sipc_service_unix(const char *, heim_ipc_callback,
 		       void *, heim_sipc *);
 
+int
+heim_sipc_service_door(const char *, heim_ipc_callback,
+		       void *, heim_sipc *);
 
 void
 heim_sipc_timeout(time_t);

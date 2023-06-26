@@ -61,8 +61,8 @@ int yydebug = 1;
 #endif
 
 char *filename;
-char hfn[128];
-char cfn[128];
+char hfn[130];
+char cfn[130];
 
 struct error_code *codes = NULL;
 
@@ -87,7 +87,7 @@ generate_c(void)
     fprintf(c_file, "#define N_(x) (x)\n");
     fprintf(c_file, "\n");
 
-    fprintf(c_file, "static const char *%s_error_strings[] = {\n", name);
+    fprintf(c_file, "static const char *const %s_error_strings[] = {\n", name);
 
     for(ec = codes, n = 0; ec; ec = ec->next, n++) {
 	while(n < ec->number) {
@@ -129,7 +129,7 @@ static int
 generate_h(void)
 {
     struct error_code *ec;
-    char fn[128];
+    char fn[134];
     FILE *h_file = fopen(hfn, "w");
     char *p;
 

@@ -69,6 +69,8 @@ principal to authenticate as
 keytab for authentication principal
 .It Fl c Ar file , Fl Fl config-file= Ns Ar file
 location of config file
+.It Fl H Ar HDB , Fl Fl hdb= Ns Ar HDB
+location of HDB
 .It Fl k Ar file , Fl Fl key-file= Ns Ar file
 location of master key file
 .It Fl r Ar realm , Fl Fl realm= Ns Ar realm
@@ -102,6 +104,7 @@ Commands include:
 .Pp
 .Nm add
 .Op Fl r | Fl Fl random-key
+.Op Fl Fl enctypes= Ns Ar string
 .Op Fl Fl random-password
 .Op Fl p Ar string \*(Ba Fl Fl password= Ns Ar string
 .Op Fl Fl key= Ns Ar string
@@ -111,12 +114,162 @@ Commands include:
 .Op Fl Fl expiration-time= Ns Ar time
 .Op Fl Fl pw-expiration-time= Ns Ar time
 .Op Fl Fl policy= Ns Ar policy-name
+.Op Fl Fl use-defaults
 .Ar principal...
 .Bd -ragged -offset indent
 Adds a new principal to the database. The options not passed on the
 command line will be promped for.
+If enctypes to use are not given, then the
+.Ar [libdefaults] supported_enctypes
+configuration parameter will be used on the client side to select
+enctypes, defaulting to
+.Ar aes128-cts-hmac-sha1-96.
+For compatibility with MIT, the enctypes string is a space- or
+comma-separated list of enctype:salttype.
+If
+.Fl Fl keepold
+is given, then old keys needed to decrypt extant tickets are
+kept, and all other old keys are deleted.
+If
+.Fl Fl keepallold
+is given then all old keys are kept.  If
+.Fl Fl pruneall is given then all old keys are removed.
+The
+.Fl Fl keepold
+behavior is the default if none of these are given.
 The only policy supported by Heimdal servers is
 .Ql default .
+.Pp
+If some parameters are not given then they will be prompted for
+unless the
+.Fl Fl use-defaults
+option is given, in which case defaults will be taken from the
+principal named
+.Dq default .
+.Pp
+This command has the following aliases:
+.Nm ank ,
+.Nm add_new_key .
+.Ed
+.Pp
+.Nm add_alias
+.Ar principal
+.Ar alias...
+.Bd -ragged -offset indent
+Adds one or more aliases to the given principal.
+.Pp
+There are two types of aliases: hard, and soft.
+A soft alias is an alias of a principal of the form
+.Ar WELLKNOWN/REFERRALS/TARGET@target_realm
+or
+.Ar WELLKNOWN/REFERRALS/TARGET/arbitrary-component@target_realm .
+A hard alias is an alias of any normal principal, even if in a
+different realm.
+.Pp
+Hard aliases are treated as distinct principals sharing
+attributes and keys with their canonical principals.
+If a client requests canonicalization of a hard alias name, the
+KDC will use the canonical name in the ticket issued as long as
+the alias and canonical names are in the same realm.
+Conversely, if a client does not request canonicalization, or if
+the hard alias and the canonical name have different realms, then
+the KDC will issue a ticket for the alias name.
+.Pp
+Soft aliases can only be used to configure the production of
+referrals by the KDC.
+When a client requests a ticket for a principal that turns out to
+be a soft alias, the KDC will respond with a referral to the
+alias' canonical name's realm.
+.Pp
+Soft aliasing compares favorably to using
+.Ar [domain_realm]
+entries in the KDC's
+.Ar krb5.conf :
+soft aliases may be managed via the
+.Nm kadmin
+command and its
+.Nm add_alias
+and
+.Nm del_alias
+sub-commands rather than having to edit the KDC's configuration
+file and having to restart the KDC.
+.Pp
+There are two methods for configuring the issuance of referrals
+for entire namespaces of hostnames.
+A soft alias of the form
+.Ar  WELLKNOWN/HOSTBASED-NAMESPACE/service/namespace-fqdn@REALM
+(see
+.Nm add_namespace
+below) will cause all requests for host-based principals in the
+given namespace to be referred to the given realm.
+Alternatively, the KDC will issue referrals for all host-based
+service principals whose hostname component matches a
+.Ar [domain_realm]
+entry in the KDC's
+.Ar krb5.conf
+file referring to a different realm.
+.Ed
+.Pp
+.Nm add_namespace
+.Ar Fl Fl key-rotation-epoch= Ns Ar time
+.Ar Fl Fl key-rotation-period= Ns Ar time
+.Op Fl Fl enctypes= Ns Ar string
+.Op Fl Fl max-ticket-life= Ns Ar lifetime
+.Op Fl Fl max-renewable-life= Ns Ar lifetime
+.Op Fl Fl attributes= Ns Ar attributes
+.Ar host-based-principal...
+.Bd -ragged -offset indent
+Adds a new namespace of virtual host-based or domain-based
+principals to the database, whose keys will be automatically
+derived from base keys stored in the namespace record, and which
+keys will be rotated automatically.
+The namespace names are of the same form as host-based principal
+names:
+.Ar service/hostname@REALM
+and these will match all host-based or domain-based service names
+where hostname component of such a principal ends in the labels
+of the hostname in the namespace name.
+.Pp
+The service name component may be a wild-card (underscore,
+.Ar _ ),
+in which case it will match any service.
+.Pp
+For example,
+.Ar bar.baz.example@BAZ.EXAMPLE
+will match
+.Ar host/foo.bar.baz.example@BAZ.EXAMPLE
+but not
+.Ar host/foobar.baz.example@BAZ.EXAMPLE .
+.Pp
+Note well that services are expected to
+.Ar ext_keytab
+or otherwise re-fetch their keytabs at least as often as one
+quarter of the key rotation period, otherwise they risk not
+having keys they need to decrypt tickets with.
+.Pp
+The epoch must be given as either an absolute time,
+.Ar "now",
+or as
+.Ar "+<N>[<unit>]"
+where
+.Ar N
+is a natural and
+.Ar unit
+is one "s", "m", "h", "day", "week", "month", defaulting to
+"month".
+The default key rotation period is
+.Ar 7d .
+The default enctypes is as for the
+.Nm add
+command.
+.Pp
+Note that namespaces are stored as principals whose names are of the form
+.Ar WELLKNOWN/HOSTBASED-NAMESPACE/service/namespace.fqdn@REALM ,
+with the
+.Ar service
+.Pp
+This command has the following alias:
+.Nm add_ns .
 .Ed
 .Pp
 .Nm add_enctype
@@ -132,6 +285,23 @@ supported.
 .Ar principal...
 .Bd -ragged -offset indent
 Removes a principal.
+It is an error to delete an alias.
+To remove a principal's alias or aliases, use the
+.Nm del_alias
+command.
+To remove a principal given an alias, first
+.Nm get
+the principal to get its canonical name and then delete that.
+.Ed
+.Pp
+.Nm del_alias
+.Ar alias...
+.Bd -ragged -offset indent
+Deletes the given aliases, but not their canonical principals.
+.Pp
+This command has the following aliases:
+.Nm del ,
+.Nm del_entry .
 .Ed
 .Pp
 .Nm del_enctype
@@ -142,8 +312,26 @@ service belonging to the principal is known to not handle certain
 enctypes.
 .Ed
 .Pp
+.Nm prune
+.Oo Fl Fl kvno= Ns Ar number
+.Oc
+.Ar principal
+.Bd -ragged -offset indent
+Deletes the named principal's keys of the given kvno.  If a kvno is
+not given then this deletes all the named principal's keys that are
+too old to be needed for decrypting tickets issued using those keys
+(i.e., any such tickets are necessarily expired).  The determination
+of "too old" is made using the max-ticket-life attribute of the
+principal; though in practice that max ticket life is also constrained
+by the max-ticket-life of the client principals and the krbtgt
+principals, those are not consulted here.
+.Ed
+.Pp
 .Nm ext_keytab
-.Oo Fl k Ar string \*(Ba Xo
+.Oo Fl k Ar keytab \*(Ba Xo
+.Op Fl Fl random-key
+.Op Fl Fl keepold | Fl Fl keepallold | Fl Fl pruneall
+.Op Fl Fl enctypes= Ns Ar string
 .Fl Fl keytab= Ns Ar string
 .Xc
 .Oc
@@ -152,6 +340,30 @@ enctypes.
 Creates a keytab with the keys of the specified principals.  Requires
 get-keys rights, otherwise the principal's keys are changed and saved in
 the keytab.
+.Pp
+If the
+.Fl Fl random-key
+option is given then new randomly-generated keys will be set on
+the principal.
+.Pp
+If enctypes to use are not given, then the
+.Ar [libdefaults] supported_enctypes
+configuration parameter will be used on the client side to select
+enctypes, defaulting to
+.Ar aes128-cts-hmac-sha1-96.
+For compatibility with MIT, the enctypes string is a space- or
+comma-separated list of enctype:salttype.
+If
+.Fl Fl keepold
+is given, then old keys needed to decrypt extant tickets are
+kept, and all other old keys are deleted.
+If
+.Fl Fl keepallold
+is given then all old keys are kept.  If
+.Fl Fl pruneall is given then all old keys are removed.
+The
+.Fl Fl keepold
+behavior is the default if none of these are given.
 .Ed
 .Pp
 .Nm get
@@ -159,11 +371,18 @@ the keytab.
 .Op Fl s | Fl Fl short
 .Op Fl t | Fl Fl terse
 .Op Fl o Ar string | Fl Fl column-info= Ns Ar string
+.Op Fl C Ar path | Fl Fl krb5-config-file= Ns Ar path
+.Op Fl Fl upto= Ns Ar number
 .Ar principal...
 .Bd -ragged -offset indent
 Lists the matching principals, short prints the result as a table,
-while long format produces a more verbose output. Which columns to
-print can be selected with the
+while long format produces a more verbose output.
+If the
+.Fl Fl upto= Ns Ar number
+option is given, then only up to that many principals will be
+listed.
+.Pp
+Which columns to print can be selected with the
 .Fl o
 option. The argument is a comma separated list of column names
 optionally appended with an equal sign
@@ -174,6 +393,16 @@ slightly between short and long output.
 The default terse output format is similar to
 .Fl s o Ar principal= ,
 just printing the names of matched principals.
+.Pp
+If
+.Fl C
+or
+.Fl Fl krb5-config-file
+is given and the principal has krb5 config file contents saved
+in its HDB entry, then that will be saved in the given file.
+Note that if multiple principals are requested, then the second,
+third, and so on will have -1, -2, and so on appended to the
+given filename unless the given filename is a device name.
 .Pp
 Possible column names include:
 .Li principal ,
@@ -206,38 +435,123 @@ and
 .Op Fl Fl pw-expiration-time= Ns Ar time
 .Op Fl Fl kvno= Ns Ar number
 .Op Fl Fl policy= Ns Ar policy-name
+.Op Fl Fl alias= Ns Ar alias-name
+.Op Fl Fl constrained-delegation= Ns Ar principal-name
+.Op Fl Fl pkinit-acl= Ns Ar subject-name
+.Op Fl Fl service-enctypes= Ns Ar enctype
+.Op Fl C Ar path | Fl Fl krb5-config-file= Ns Ar path
 .Ar principal...
 .Bd -ragged -offset indent
 Modifies certain attributes of a principal. If run without command
 line options, you will be prompted. With command line options, it will
 only change the ones specified.
 .Pp
-Only policy supported by Heimdal is
+The
+.Fl Fl alias= Ns Ar alias-name
+option may be given multiple times.
+If this option is used at all, the complete list of aliases must
+be given, with one option per-alias.
+If the list given has fewer aliases than the principal had prior
+to the modification, then the missing aliases will be deleted.
+.Pp
+Use the
+.Nm add_alias
+command instead to add an alias to avoid having to list all
+existing aliases to keep.
+.Pp
+The
+.Fl Fl alias=
+option without a value allows the user to set an empty list of
+aliases.
+Use the
+.Nm del_alias
+command to delete one or more aliases.
+.Pp
+The only policy supported by Heimdal is
 .Ql default .
 .Pp
+If a krb5 config file is given, it will be saved in the entry.
+.Pp
 Possible attributes are:
-.Li new-princ ,
-.Li support-desmd5 ,
-.Li pwchange-service ,
-.Li disallow-svr ,
-.Li requires-pw-change ,
-.Li requires-hw-auth ,
-.Li requires-pre-auth ,
-.Li disallow-all-tix ,
-.Li disallow-dup-skey ,
-.Li disallow-proxiable ,
-.Li disallow-renewable ,
-.Li disallow-tgt-based ,
-.Li disallow-forwardable ,
-.Li disallow-postdated
+.Bl -tag -width Ds
+.It new-princ
+not used
+.It support-desmd5
+not used
+.It pwchange-service
+for kadmin/admin style service principals
+.It requires-pw-change
+force the user to change their password
+.It requires-hw-auth
+.It requires-pre-auth
+.It allow-digest
+allow NTLM for this user in the KDC's digest service
+.It trusted-for-delegation
+.It ok-as-delegate
+allow forwarding of tickets to this service principal
+.It disallow-client
+disallow issuance of tickets for this principal as a client
+.It disallow-svr
+disallow issuance of tickets for this principal as a server
+.It disallow-all-tix
+disallow issuance of tickets for this principal as a client or
+server
+.It disallow-dup-skey
+not used
+.It disallow-proxiable
+disallow proxiable tickets
+.It disallow-renewable ,
+disallow reneable tickets
+.It disallow-tgt-based ,
+require initial tickets for this service, such as password
+changing services
+.It disallow-forwardable
+disallow forwardable tickets
+.It disallow-postdated
+disallow postdated tickets
+.It no-auth-data-reqd
+do not include a PAC in tickets issued to this service
+.It auth-data-reqd
+do include a PAC in tickets issued to this service even if the
+.Li disable_pac
+KDC configuration parameter is set to true
+.El
 .Pp
 Attributes may be negated with a "-", e.g.,
 .Pp
 kadmin -l modify -a -disallow-proxiable user
+.Pp
+The
+.Fl Fl constrained-delegation= Ns Ar principal-name
+option is not currently implemented.
+.Pp
+The
+.Fl Fl pkinit-acl= Ns Ar subject-name
+option authorizes clients with certificates with the given
+subject distinguished name to get tickets for the principal using
+PKINIT.
+This option can be given multiple times.
+The PKINIT ACLs set with this option will replace the existing
+ones.
+.Pp
+The
+.Fl Fl service-enctypes= Ns Ar enctype
+option indicates that the service supports the given enctype
+regardless of whether the service has long-term keys of that
+enctype.
+This option can be given multiple times and will replace the
+existing set of enctypes supported by the service.
+If a service principal does not have any supported enctypes then
+the KDC will assume that it supports only the enctypes of all of
+its long-term keys.
+.Pp
+This command has the following alias:
+.Nm mod .
 .Ed
 .Pp
 .Nm passwd
-.Op Fl Fl keepold
+.Op Fl Fl keepold | Fl Fl keepallold | Fl Fl pruneall
+.Op Fl Fl enctypes= Ns Ar string
 .Op Fl r | Fl Fl random-key
 .Op Fl Fl random-password
 .Oo Fl p Ar string \*(Ba Xo
@@ -248,6 +562,28 @@ kadmin -l modify -a -disallow-proxiable user
 .Ar principal...
 .Bd -ragged -offset indent
 Changes the password of an existing principal.
+If enctypes to use are not given, then the
+.Ar [libdefaults] supported_enctypes
+configuration parameter will be used on the client side to select
+enctypes, defaulting to
+.Ar aes128-cts-hmac-sha1-96.
+For compatibility with MIT, the enctypes string is a space- or
+comma-separated list of enctype:salttype.
+If
+.Fl Fl keepold
+is given, then old keys needed to decrypt extant tickets are
+kept, and all other old keys are deleted.
+If
+.Fl Fl keepallold
+is given then all old keys are kept.  If
+.Fl Fl pruneall is given then all old keys are removed.
+The
+.Fl Fl keepold
+behavior is the default if none of these are given.
+.Pp
+This command has the following aliases:
+.Nm cpw ,
+.Nm change_password .
 .Ed
 .Pp
 .Nm verify-password-quality
@@ -265,6 +601,9 @@ verify-quality-password will cause an update to the password
 database meaning that merely verifying the quality of the password
 using verify-quality-password invalidates the use of that
 principal/password in the future.
+.Pp
+This command has the following alias:
+.Nm pwq .
 .Ed
 .Pp
 .Nm privileges
@@ -280,6 +619,9 @@ Lists the operations you are allowed to perform. These include
 .Li list ,
 and
 .Li modify .
+.Pp
+This command has the following alias:
+.Nm privs .
 .Ed
 .Pp
 .Nm rename
@@ -320,10 +662,17 @@ Heimdal format.
 .Nm init
 .Op Fl Fl realm-max-ticket-life= Ns Ar string
 .Op Fl Fl realm-max-renewable-life= Ns Ar string
+.Op Fl Fl bare
 .Ar realm
 .Bd -ragged -offset indent
-Initializes the Kerberos database with entries for a new realm. It's
-possible to have more than one realm served by one server.
+Initializes the Kerberos database with entries for a new realm.
+It's possible to have more than one realm served by one server
+with the same database.
+.Pp
+If the
+.Fl Fl bare
+option is given, then only the root krbtgt principal for that
+realm will be created.
 .Ed
 .Pp
 .Nm load
@@ -352,8 +701,32 @@ but just modifies the database with the entries in the dump file.
 .Oc
 .Op Fl Fl convert-file
 .Op Fl Fl master-key-fd= Ns Ar fd
+.Op Fl Fl random-password
 .Bd -ragged -offset indent
 Writes the Kerberos master key to a file used by the KDC.
+.Pp
+If the
+.Fl Fl convert-file
+option is given then convert an existing file to the new format.
+If the
+.Fl Fl master-key-fd= Ns Ar fd
+option is given the the password will be read from the given file
+descriptor.
+If the
+.Fl Fl random-password
+option is given then a password will be generated randomly.
+.Pp
+This command has the following alias:
+.Nm kstash .
+.Ed
+.Pp
+.Nm exit
+.Bd -ragged -offset indent
+Exits
+.Nm kadmin .
+.Pp
+This command has the following alias:
+.Nm quit .
 .Ed
 .\".Sh ENVIRONMENT
 .\".Sh FILES

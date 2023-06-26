@@ -48,6 +48,19 @@
 #include "check-common.h"
 #include "der_locl.h"
 
+int
+my_copy_vers(const my_vers *from, my_vers *to)
+{
+    *to = *from;
+    return 0;
+}
+
+void
+my_free_vers(my_vers *v)
+{
+    v->v = -1;
+}
+
 static int
 cmp_dummy (void *a, void *b)
 {
@@ -362,14 +375,14 @@ test_seqof4(void)
     b1val[3].u1 = 1LL;
     b1val[3].s2.data = "\x01\x02";
     b1val[3].s2.length = 2;
-    b1val[3].u2 = -1LL;
+    b1val[3].u2 = (TESTuint64)-1LL;
 
     b2val[3].s1.data = "";
     b2val[3].s1.length = 0;
     b2val[3].u1 = 1LL;
     b2val[3].s2.data = "\x01\x02";
     b2val[3].s2.length = 2;
-    b2val[3].u2 = -1LL;
+    b2val[3].u2 = (TESTuint64)-1LL;
     b2val[3].s3.data = "\x00\x01\x02\x03";
     b2val[3].s3.length = 4;
     b2val[3].u3 = 1ULL<<63;
@@ -379,7 +392,7 @@ test_seqof4(void)
     b3val[3].u1 = 1LL;
     b3val[3].s2.data = "\x01\x02";
     b3val[3].s2.length = 2;
-    b3val[3].u2 = -1LL;
+    b3val[3].u2 = (TESTuint64)-1LL;
     b3val[3].s3.data = "\x00\x01\x02\x03";
     b3val[3].s3.length = 4;
     b3val[3].u3 = 1ULL<<63;

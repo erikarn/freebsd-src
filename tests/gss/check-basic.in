@@ -94,10 +94,10 @@ echo "Doing database check"
 ${kadmin} check ${R} || exit 1
 
 echo Starting kdc
-${kdc} --testing --detach || { echo "kdc failed to start"; exit 1; }
+${kdc} --detach --testing || { echo "kdc failed to start"; cat messages.log; exit 1; }
 kdcpid=`getpid kdc`
 
-trap "kill ${kdcpid}; echo signal killing kdc; exit 1;" EXIT
+trap "kill -9 ${kdcpid}; echo signal killing kdc; cat messages.log; exit 1;" EXIT
 
 exitcode=0
 
@@ -105,7 +105,8 @@ echo "initial ticket"
 ${kinit} -c ${cache} --password-file=${objdir}/foopassword user@${R} || exitcode=1
 
 echo "copy ccache with gss_store_cred"
-${test_add_store_cred} ${cache} ${cache2} || exit 1
+# Note we test that the ccache used for storing is token-expanded
+${test_add_store_cred} --default --overwrite --env ${cache} "${cache2}%{null}" || exit 1
 ${klist} -c ${cache2} || exit 1
 
 echo "keytab"
@@ -124,22 +125,25 @@ ${acquire_cred} \
 
 echo "keytab w/ wrong name"
 ${acquire_cred} \
-    --acquire-type=accept \
+    --acquire-type=accept --kerberos \
     --acquire-name=host@host2.test.h5l.se 2>/dev/null && exit 1
 
 echo "init using keytab"
 ${acquire_cred} \
+    --kerberos \
     --acquire-type=initiate \
     --acquire-name=host@host.test.h5l.se > /dev/null || exit 1
 
 echo "init using keytab (loop 10)"
 ${acquire_cred} \
+    --kerberos \
     --acquire-type=initiate \
     --loops=10 \
     --acquire-name=host@host.test.h5l.se > /dev/null || exit 1
 
 echo "init using keytab (loop 10, target)"
 ${acquire_cred} \
+    --kerberos \
     --acquire-type=initiate \
     --loops=10 \
     --target=host@host.test.h5l.se \
@@ -162,6 +166,7 @@ ${acquire_cred} \
 
 echo "init using existing cc"
 ${acquire_cred} \
+    --kerberos \
     --name-type=user-name \
     --acquire-type=initiate \
     --acquire-name=user || exit 1
@@ -170,12 +175,14 @@ KRB5CCNAME=${nocache}
 
 echo "fail init using existing cc"
 ${acquire_cred} \
+    --kerberos \
     --name-type=user-name \
     --acquire-type=initiate \
     --acquire-name=user 2>/dev/null && exit 1
 
 echo "use gss_krb5_ccache_name for user"
 ${acquire_cred} \
+    --kerberos \
     --name-type=user-name \
     --ccache=${cache} \
     --acquire-type=initiate \
@@ -193,11 +200,13 @@ KRB5_KTNAME="${keytab}"
 
 echo "init using keytab"
 ${acquire_cred} \
+    --kerberos \
     --acquire-type=initiate \
     --acquire-name=host@host.test.h5l.se 2>/dev/null || exit 1
 
 echo "init using keytab (ccache)"
 ${acquire_cred} \
+    --kerberos \
     --acquire-type=initiate \
     --ccache=${cache} \
     --acquire-name=host@host.test.h5l.se 2>/dev/null || exit 1

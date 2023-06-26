@@ -64,19 +64,15 @@ get_ccache(krb5_context context, int *destroy, krb5_ccache *id)
     krb5_principal principal = NULL;
     krb5_error_code ret;
     krb5_keytab kt = NULL;
+    const char *cache = secure_getenv("NTLM_ACCEPTOR_CCACHE");
 
     *id = NULL;
 
-    if (!issuid()) {
-	const char *cache;
-
-	cache = getenv("NTLM_ACCEPTOR_CCACHE");
-	if (cache) {
-	    ret = krb5_cc_resolve(context, cache, id);
-	    if (ret)
-		goto out;
-	    return 0;
-	}
+    if (cache) {
+        ret = krb5_cc_resolve(context, cache, id);
+        if (ret)
+            goto out;
+        return 0;
     }
 
     ret = krb5_sname_to_principal(context, NULL, "host",
@@ -86,7 +82,7 @@ get_ccache(krb5_context context, int *destroy, krb5_ccache *id)
 
     ret = krb5_cc_cache_match(context, principal, id);
     if (ret == 0)
-	return 0;
+	goto out;
 
     /* did not find in default credcache, lets try default keytab */
     ret = krb5_kt_default(context, &kt);
@@ -256,6 +252,7 @@ kdc_type2(OM_uint32 *minor_status,
     krb5_data ti;
 
     memset(&type2, 0, sizeof(type2));
+    memset(out, 0, sizeof(*out));
 
     /*
      * Request data for type 2 packet from the KDC.

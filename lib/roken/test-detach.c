@@ -50,14 +50,21 @@
 
 int main(int argc, char **argv)
 {
+/*
+ * XXXrcd: let's see how much further the tests get when we disable this
+ *         on Windows.
+ */
+#ifndef WIN32
     char *ends;
     long n;
     int fd = -1;
+    pid_t parent = getpid();
+    pid_t child;
 
-    if (argc > 1) {
-	if (argc != 3)
-	    errx(1, "Usage: test-detach [--daemon-child fd]");
-	fprintf(stderr, "Child started (argv[1] = %s, argv[2] = %s)!\n", argv[1], argv[2]);
+    if (argc == 2 && strcmp(argv[1], "--reexec") != 0)
+        errx(1, "Usage: test-detach [--reexec] [--daemon-child FD]");
+    if (argc == 3 || argc == 4) {
+        parent = getppid();
         errno = 0;
         n = strtol(argv[2], &ends, 10);
         fd = n;
@@ -66,11 +73,19 @@ int main(int argc, char **argv)
         if (n < 0 || ends == NULL || *ends != '\0' || n != fd)
 	    errx(1, "Usage: test-detach [--daemon-child fd]");
     } else {
-	fprintf(stderr, "Parent started as %ld\n", (long)getpid());
-	roken_detach_prep(argc, argv, "--daemon-child");
+        if (argc == 2)
+            /* Make sure we re-exec on the child-side of fork() (not WIN32) */
+            putenv("ROKEN_DETACH_USE_EXEC=1");
+	fd = roken_detach_prep(argc, argv, "--daemon-child");
+        if (fd == -1)
+            errx(1, "bad");
     }
-    fprintf(stderr, "Now should be the child: %ld\n", (long)getpid());
+    if (parent == getpid())
+        errx(1, "detach prep failed");
+    child = getpid();
     roken_detach_finish(NULL, fd);
+    if (child != getpid())
+        errx(1, "detach finish failed");
     /*
      * These printfs will not appear: stderr will have been replaced
      * with /dev/null.
@@ -79,4 +94,7 @@ int main(int argc, char **argv)
     sleep(5);
     fprintf(stderr, "Daemon child done\n");
     return 0;
+#else
+    return 0;
+#endif
 }

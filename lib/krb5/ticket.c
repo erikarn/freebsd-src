@@ -147,7 +147,7 @@ krb5_ticket_get_server(krb5_context context,
 }
 
 /**
- * Return end time of ticket
+ * Return end time of a ticket
  *
  * @param context a Kerberos 5 context
  * @param ticket ticket to copy
@@ -162,6 +162,29 @@ krb5_ticket_get_endtime(krb5_context context,
 			const krb5_ticket *ticket)
 {
     return ticket->ticket.endtime;
+}
+
+/**
+ * Return authentication, start, end, and renew limit times of a ticket
+ *
+ * @param context a Kerberos 5 context
+ * @param ticket ticket to copy
+ * @param t pointer to krb5_times structure
+ *
+ * @ingroup krb5
+ */
+
+KRB5_LIB_FUNCTION void KRB5_LIB_CALL
+krb5_ticket_get_times(krb5_context context,
+                      const krb5_ticket *ticket,
+                      krb5_times *t)
+{
+    t->authtime   = ticket->ticket.authtime;
+    t->starttime  = ticket->ticket.starttime  ? *ticket->ticket.starttime  :
+                                                t->authtime;
+    t->endtime    = ticket->ticket.endtime;
+    t->renew_till = ticket->ticket.renew_till ? *ticket->ticket.renew_till :
+                                                t->endtime;
 }
 
 /**
@@ -181,13 +204,38 @@ krb5_ticket_get_flags(krb5_context context,
     return TicketFlags2int(ticket->ticket.flags);
 }
 
+/*
+ * Find an authz-data element in the given `ad'.  If `failp', then validate any
+ * containing AD-KDC-ISSUED's keyed checksum with the `sessionkey' (if given).
+ *
+ * All AD-KDC-ISSUED will be validated (if requested) even when `type' is
+ * `KRB5_AUTHDATA_KDC_ISSUED'.
+ *
+ * Only the first matching element will be output (via `data').
+ *
+ * Note that all AD-KDC-ISSUEDs found while traversing the authz-data will be
+ * validated, though only the first one will be returned.
+ *
+ * XXX We really need a better interface though.  First, forget AD-AND-OR --
+ * just remove it.  Second, probably forget AD-KDC-ISSUED, but still, between
+ * that, the PAC, and the CAMMAC, we need an interface that can:
+ *
+ * a) take the derived keys instead of the service key or the session key,
+ * b) can indicate whether the element was marked critical,
+ * c) can indicate whether the element was authenticated to the KDC,
+ * d) can iterate over all the instances found (if more than one is found).
+ *
+ * Also, we need to know here if the authz-data is from a Ticket or from an
+ * Authenticator -- if the latter then we must refuse to find AD-KDC-ISSUED /
+ * PAC / CAMMAC or anything of the sort, ever.
+ */
 static int
 find_type_in_ad(krb5_context context,
 		int type,
-		krb5_data *data,
+		krb5_data *data,                /* optional */
 		krb5_boolean *found,
-		krb5_boolean failp,
-		krb5_keyblock *sessionkey,
+		krb5_boolean failp,             /* validate AD-KDC-ISSUED */
+		krb5_keyblock *sessionkey,      /* ticket session key */
 		const AuthorizationData *ad,
 		int level)
 {
@@ -210,14 +258,19 @@ find_type_in_ad(krb5_context context,
      */
     for (i = 0; i < ad->len; i++) {
 	if (!*found && ad->val[i].ad_type == type) {
-	    ret = der_copy_octet_string(&ad->val[i].ad_data, data);
-	    if (ret) {
-		krb5_set_error_message(context, ret,
-				       N_("malloc: out of memory", ""));
-		goto out;
-	    }
+            if (data) {
+                ret = der_copy_octet_string(&ad->val[i].ad_data, data);
+                if (ret) {
+                    krb5_set_error_message(context, ret,
+                                           N_("malloc: out of memory", ""));
+                    goto out;
+                }
+            }
 	    *found = TRUE;
-	    continue;
+            if (type != KRB5_AUTHDATA_KDC_ISSUED ||
+                !failp || !sessionkey || !sessionkey->keyvalue.length)
+                continue;
+            /* else go on to validate the AD-KDC-ISSUED's keyed checksum */
 	}
 	switch (ad->val[i].ad_type) {
 	case KRB5_AUTHDATA_IF_RELEVANT: {
@@ -240,7 +293,6 @@ find_type_in_ad(krb5_context context,
 		goto out;
 	    break;
 	}
-#if 0 /* XXX test */
 	case KRB5_AUTHDATA_KDC_ISSUED: {
 	    AD_KDCIssued child;
 
@@ -255,7 +307,7 @@ find_type_in_ad(krb5_context context,
 				       ret);
 		goto out;
 	    }
-	    if (failp) {
+	    if (failp && sessionkey && sessionkey->keyvalue.length) {
 		krb5_boolean valid;
 		krb5_data buf;
 		size_t len;
@@ -283,7 +335,12 @@ find_type_in_ad(krb5_context context,
 		    free_AD_KDCIssued(&child);
 		    goto out;
 		}
-	    }
+	    } else if (failp) {
+		    krb5_clear_error_message(context);
+		    ret = ENOENT;
+		    free_AD_KDCIssued(&child);
+		    goto out;
+            }
 	    ret = find_type_in_ad(context, type, data, found, failp, sessionkey,
 				  &child.elements, level + 1);
 	    free_AD_KDCIssued(&child);
@@ -291,7 +348,6 @@ find_type_in_ad(krb5_context context,
 		goto out;
 	    break;
 	}
-#endif
 	case KRB5_AUTHDATA_AND_OR:
 	    if (!failp)
 		break;
@@ -315,7 +371,8 @@ find_type_in_ad(krb5_context context,
 out:
     if (ret) {
 	if (*found) {
-	    krb5_data_free(data);
+            if (data)
+                krb5_data_free(data);
 	    *found = 0;
 	}
     }
@@ -332,7 +389,8 @@ _krb5_get_ad(krb5_context context,
     krb5_boolean found = FALSE;
     krb5_error_code ret;
 
-    krb5_data_zero(data);
+    if (data)
+        krb5_data_zero(data);
 
     if (ad == NULL) {
 	krb5_set_error_message(context, ENOENT,
@@ -376,12 +434,13 @@ krb5_ticket_get_authorization_data_type(krb5_context context,
     krb5_error_code ret;
     krb5_boolean found = FALSE;
 
-    krb5_data_zero(data);
+    if (data)
+        krb5_data_zero(data);
 
     ad = ticket->ticket.authorization_data;
     if (ticket->ticket.authorization_data == NULL) {
 	krb5_set_error_message(context, ENOENT,
-			       N_("Ticket have not authorization data", ""));
+			       N_("Ticket has no authorization data", ""));
 	return ENOENT; /* XXX */
     }
 
@@ -391,7 +450,7 @@ krb5_ticket_get_authorization_data_type(krb5_context context,
 	return ret;
     if (!found) {
 	krb5_set_error_message(context, ENOENT,
-			       N_("Ticket have not "
+			       N_("Ticket has no "
 				  "authorization data of type %d", ""),
 			       type);
 	return ENOENT; /* XXX */
@@ -729,9 +788,9 @@ _krb5_extract_ticket(krb5_context context,
 
     /* compare client and save */
     ret = _krb5_principalname2krb5_principal(context,
-					     &tmp_principal,
-					     rep->kdc_rep.cname,
-					     rep->kdc_rep.crealm);
+                                             &tmp_principal,
+                                             rep->kdc_rep.cname,
+                                             rep->kdc_rep.crealm);
     if (ret)
 	goto out;
 
@@ -762,12 +821,19 @@ _krb5_extract_ticket(krb5_context context,
     creds->client = tmp_principal;
 
     /* check server referral and save principal */
-    ret = _krb5_principalname2krb5_principal (context,
-					      &tmp_principal,
-					      rep->enc_part.sname,
-					      rep->enc_part.srealm);
+    ret = _krb5_kdcrep2krb5_principal(context, &tmp_principal, &rep->enc_part);
     if (ret)
 	goto out;
+
+    tmp_principal->nameattrs->peer_realm =
+        calloc(1, sizeof(tmp_principal->nameattrs->peer_realm[0]));
+    if (tmp_principal->nameattrs->peer_realm == NULL) {
+        ret = krb5_enomem(context);
+        goto out;
+    }
+    ret = copy_Realm(&creds->client->realm, tmp_principal->nameattrs->peer_realm);
+    if (ret) goto out;
+
     if((flags & EXTRACT_TICKET_ALLOW_SERVER_MISMATCH) == 0){
 	ret = check_server_referral(context,
 				    rep,
@@ -827,11 +893,11 @@ _krb5_extract_ticket(krb5_context context,
 	tmp_time = rep->enc_part.authtime;
 
     if (creds->times.starttime == 0
-	&& labs(tmp_time - sec_now) > context->max_skew) {
+	&& krb5_time_abs(tmp_time, sec_now) > context->max_skew) {
 	ret = KRB5KRB_AP_ERR_SKEW;
 	krb5_set_error_message (context, ret,
 				N_("time skew (%ld) larger than max (%ld)", ""),
-			       labs(tmp_time - sec_now),
+			       (long)krb5_time_abs(tmp_time, sec_now),
 			       (long)context->max_skew);
 	goto out;
     }

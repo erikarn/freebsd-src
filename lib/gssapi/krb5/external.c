@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997 - 2000 Kungliga Tekniska Högskolan
+ * Copyright (c) 1997 - 2018 Kungliga Tekniska Högskolan
  * (Royal Institute of Technology, Stockholm, Sweden).
  * All rights reserved.
  *
@@ -153,6 +153,13 @@ gss_OID_desc GSSAPI_LIB_VARIABLE __gss_krb5_nt_principal_name_oid_desc =
     {10, rk_UNCONST("\x2a\x86\x48\x86\xf7\x12\x01\x02\x02\x01") };
 
 /*
+ * GSS_C_NT_COMPOSITE_EXPORT [RFC6680], OID {iso(1) identified-organization(3)
+ * dod(6) internet(1) security(5) nametypes(6) gss-composite-export(6)}.
+ */
+gss_OID_desc GSSAPI_LIB_VARIABLE __gss_c_nt_composite_export_oid_desc =
+    {6, rk_UNCONST("\x2b\x06\x01\x05\x06\x06")};
+
+/*
  * draft-ietf-cat-iakerb-09, IAKERB:
  *   The mechanism ID for IAKERB proxy GSS-API Kerberos, in accordance
  *   with the mechanism proposed by SPNEGO [7] for negotiating protocol
@@ -226,14 +233,6 @@ static gss_mo_desc krb5_mo[] = {
     },
     {
 	GSS_C_MA_AUTH_TARG,
-	GSS_MO_MA,
-	NULL,
-	NULL,
-	NULL,
-	NULL
-    },
-    {
-	GSS_C_MA_AUTH_INIT_ANON,
 	GSS_MO_MA,
 	NULL,
 	NULL,
@@ -336,10 +335,10 @@ static gss_mo_desc krb5_mo[] = {
 
 static gssapi_mech_interface_desc krb5_mech = {
     GMI_VERSION,
-    "kerberos 5",
+    "krb5",
     {9, rk_UNCONST("\x2a\x86\x48\x86\xf7\x12\x01\x02\x02") },
     0,
-    _gsskrb5_acquire_cred,
+    NULL, /* gm_acquire_cred */
     _gsskrb5_release_cred,
     _gsskrb5_init_sec_context,
     _gsskrb5_accept_sec_context,
@@ -360,7 +359,7 @@ static gssapi_mech_interface_desc krb5_mech = {
     _gsskrb5_inquire_cred,
     _gsskrb5_inquire_context,
     _gsskrb5_wrap_size_limit,
-    _gsskrb5_add_cred,
+    NULL, /* gm_add_cred */
     _gsskrb5_inquire_cred_by_mech,
     _gsskrb5_export_sec_context,
     _gsskrb5_import_sec_context,
@@ -376,10 +375,11 @@ static gssapi_mech_interface_desc krb5_mech = {
     _gk_wrap_iov,
     _gk_unwrap_iov,
     _gk_wrap_iov_length,
-    _gsskrb5_store_cred,
+    NULL, /* gm_store_cred */
     _gsskrb5_export_cred,
     _gsskrb5_import_cred,
-    _gsskrb5_acquire_cred_ext,
+    _gsskrb5_acquire_cred_from,
+    NULL, /* gm_acquire_cred_impersonate_name */
     NULL,
     NULL,
     NULL,
@@ -390,13 +390,20 @@ static gssapi_mech_interface_desc krb5_mech = {
     sizeof(krb5_mo) / sizeof(krb5_mo[0]),
     _gsskrb5_localname,
     _gsskrb5_authorize_localname,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL
+    _gsskrb5_display_name_ext,
+    _gsskrb5_inquire_name,
+    _gsskrb5_get_name_attribute,
+    _gsskrb5_set_name_attribute,
+    _gsskrb5_delete_name_attribute,
+    _gsskrb5_export_name_composite,
+    _gsskrb5_duplicate_cred,
+    _gsskrb5_add_cred_from,
+    _gsskrb5_store_cred_into,
+    NULL, /* gm_query_mechanism_info */
+    NULL, /* gm_query_meta_data */
+    NULL, /* gm_exchange_meta_data */
+    _gsskrb5_store_cred_into2,
+    NULL  /* gm_compat */
 };
 
 gssapi_mech_interface

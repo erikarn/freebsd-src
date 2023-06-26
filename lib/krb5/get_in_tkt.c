@@ -115,7 +115,7 @@ add_padata(krb5_context context,
     if (!enctypes) {
 	enctypes = context->etypes;
 	netypes = 0;
-	for (ep = enctypes; *ep != (krb5_enctype)ETYPE_NULL; ep++)
+	for (ep = enctypes; *ep != ETYPE_NULL; ep++)
 	    netypes++;
     }
     pa2 = realloc (md->val, (md->len + netypes) * sizeof(*md->val));
@@ -319,7 +319,9 @@ set_ptypes(krb5_context context,
 	   krb5_preauthdata **preauth)
 {
     static krb5_preauthdata preauth2;
-    static krb5_preauthtype ptypes2[] = { KRB5_PADATA_ENC_TIMESTAMP, KRB5_PADATA_NONE };
+    static const krb5_preauthtype ptypes2[] = {
+	    KRB5_PADATA_ENC_TIMESTAMP, KRB5_PADATA_NONE
+    };
 
     if(error->e_data) {
 	METHOD_DATA md;
@@ -438,9 +440,6 @@ krb5_get_in_cred(krb5_context context,
                    one more try */
 		if (!ptypes && !preauth
 		    && ret == KRB5KDC_ERR_PREAUTH_REQUIRED
-#if 0
-			|| ret == KRB5KDC_ERR_BADOPTION
-#endif
 		    && set_ptypes(context, &error, &ptypes, &my_preauth)) {
 		    done = 0;
 		    preauth = my_preauth;

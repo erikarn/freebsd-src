@@ -36,16 +36,18 @@
 #include <getarg.h>
 #include <parse_bytes.h>
 
+#define MAX_REQUEST_MAX 67108864ll /* 64MB, the maximum accepted value of max_request */
+
 static const char *config_file;	/* location of kcm config file */
 
 size_t max_request = 0;		/* maximal size of a request */
 char *socket_path = NULL;
-char *door_path = NULL;
 
 static char *max_request_str;	/* `max_request' as a string */
 
 int detach_from_console = -1;
 int daemon_child = -1;
+int automatic_renewal = -1;
 
 static const char *system_cache_name = NULL;
 static const char *system_keytab = NULL;
@@ -94,6 +96,10 @@ static struct getargs args[] = {
         "daemon-child",       0 ,      arg_integer, &daemon_child,
         "private argument, do not use", NULL
     },
+    {
+	"automatic-renewal",	0 , arg_negative_flag, &automatic_renewal,
+	"disable automatic TGT renewal", NULL
+    },
     {	"help",		'h',	arg_flag,   &help_flag, NULL, NULL },
     {
 	"system-principal",	'k',	arg_string,	&system_principal,
@@ -120,15 +126,13 @@ static struct getargs args[] = {
     	"renewable lifetime of system tickets", "time"
     },
     {
+	"max-request",	'r', arg_integer, &max_request_str,
+	"max request size", "bytes"
+    },
+    {
 	"socket-path",		's', arg_string, &socket_path,
     	"path to kcm domain socket", "path"
     },
-#ifdef HAVE_DOOR_CREATE
-    {
-	"door-path",		's', arg_string, &door_path,
-    	"path to kcm door", "path"
-    },
-#endif
     {
 	"server",		'S', arg_string, &system_server,
     	"server to get system ticket for", "principal"
@@ -336,9 +340,7 @@ kcm_configure(int argc, char **argv)
     }
 
     argc -= optidx;
-#ifndef __clang_analyzer__
     argv += optidx;
-#endif
 
     if (argc != 0)
 	usage(1);
@@ -359,8 +361,18 @@ kcm_configure(int argc, char **argv)
 	    krb5_err(kcm_context, 1, ret, "reading configuration files");
     }
 
-    if(max_request_str)
-	max_request = parse_bytes(max_request_str, NULL);
+    if (max_request_str) {
+        int64_t bytes;
+
+        if ((bytes = parse_bytes(max_request_str, NULL)) < 0)
+            krb5_errx(kcm_context, 1,
+                      "--max-request size must be non-negative");
+        if (bytes > MAX_REQUEST_MAX)
+            krb5_errx(kcm_context, 1, "--max-request size is too big "
+                      "(must be smaller than %lld)", MAX_REQUEST_MAX);
+
+        max_request = bytes;
+    }
 
     if(max_request == 0){
 	p = krb5_config_get_string (kcm_context,
@@ -368,8 +380,18 @@ kcm_configure(int argc, char **argv)
 				    "kcm",
 				    "max-request",
 				    NULL);
-	if(p)
-	    max_request = parse_bytes(p, NULL);
+        if (p) {
+            int64_t bytes;
+
+            if ((bytes = parse_bytes(max_request_str, NULL)) < 0)
+                krb5_errx(kcm_context, 1,
+                          "[kcm] max-request size must be non-negative");
+            if (bytes > MAX_REQUEST_MAX)
+                krb5_errx(kcm_context, 1, "[kcm] max-request size is too big "
+                          "(must be smaller than %lld)", MAX_REQUEST_MAX);
+
+            max_request = bytes;
+        }
     }
 
     if (system_principal == NULL) {
@@ -381,6 +403,13 @@ kcm_configure(int argc, char **argv)
 	if (ret)
 	    krb5_err(kcm_context, 1, ret, "initializing system ccache");
     }
+
+    if(automatic_renewal == -1)
+	automatic_renewal = krb5_config_get_bool_default(kcm_context, NULL,
+							 TRUE,
+							 "kcm",
+							 "automatic_renewal",
+							 NULL);
 
     if(detach_from_console == -1)
 	detach_from_console = krb5_config_get_bool_default(kcm_context, NULL,

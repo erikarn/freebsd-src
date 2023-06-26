@@ -144,7 +144,7 @@ test_simple_echo_client(void)
 	}
 
 	if (rv != strlen(test_strings[i])) {
-	    fprintf (stderr, "[%s] Data length mismatch %d != %d\n", prog, rv, strlen(test_strings[i]));
+	    fprintf (stderr, "[%s] Data length mismatch %d != %zu\n", prog, rv, strlen(test_strings[i]));
 	    rk_closesocket(s);
 	    return 1;
 	}
@@ -195,7 +195,7 @@ test_simple_echo_socket(void)
 				getprogname(), srv, rv);
 		}
 
-		if (!strcmp(buf, "exit")) {
+		if (strcmp(buf, "exit") == 0) {
 		    fprintf(stderr, "[%s] Exiting...\n", prog);
 		    shutdown(s, SD_SEND);
 		    rk_closesocket(s);
@@ -234,7 +234,7 @@ test_simple_echo(void)
 	    while (gets(buf)) {
 		fprintf(stderr, "[%s] Received [%s]\n", prog, buf);
 
-		if (!strcmp(buf, "exit"))
+		if (strcmp(buf, "exit") == 0)
 		    return 0;
 
 		/* simple echo */
@@ -253,7 +253,8 @@ do_client(void)
 {
     int rv = 0;
 
-    rk_SOCK_INIT();
+    if (rk_SOCK_INIT())
+	errx(1, "Failed to initialize sockets (%s)", strerror(rk_SOCK_ERRNO));
 
     prog = "Client";
     is_client = 1;
@@ -272,7 +273,8 @@ do_server(void)
 {
     int rv = 0;
 
-    rk_SOCK_INIT();
+    if (rk_SOCK_INIT())
+	errx(1, "Failed to initialize sockets (%s)", strerror(rk_SOCK_ERRNO));
 
     prog = "Server";
 

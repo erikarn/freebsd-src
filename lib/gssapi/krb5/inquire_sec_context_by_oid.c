@@ -90,7 +90,7 @@ static OM_uint32 inquire_sec_context_tkt_flags
     tkt_flags = TicketFlags2int(context_handle->ticket->ticket.flags);
     HEIMDAL_MUTEX_unlock(&context_handle->ctx_id_mutex);
 
-    _gsskrb5_encode_om_uint32(tkt_flags, buf);
+    _gss_mg_encode_le_uint32(tkt_flags, buf);
     value.length = sizeof(buf);
     value.value = buf;
 
@@ -263,39 +263,31 @@ static OM_uint32 inquire_sec_context_authz_data
     return ret;
 }
 
-static OM_uint32 inquire_sec_context_has_updated_spnego
+static OM_uint32 inquire_sec_context_has_buggy_spnego
            (OM_uint32 *minor_status,
             const gsskrb5_ctx context_handle,
             gss_buffer_set_t *data_set)
 {
-    int is_updated = 0;
+    uint8_t old_enctype;
+    gss_buffer_desc buffer;
 
     *minor_status = 0;
     *data_set = GSS_C_NO_BUFFER_SET;
 
     /*
-     * For Windows SPNEGO implementations, both the initiator and the
-     * acceptor are assumed to have been updated if a "newer" [CLAR] or
-     * different enctype is negotiated for use by the Kerberos GSS-API
-     * mechanism.
+     * For Windows SPNEGO implementations, the initiator or acceptor
+     * are presumed to be "buggy" (Windows 2003 or earlier) if an
+     * "older" (i.e. pre-AES per RFC 4121) encryption type was used.
      */
+
     HEIMDAL_MUTEX_lock(&context_handle->ctx_id_mutex);
-    is_updated = (context_handle->more_flags & IS_CFX);
-    if (is_updated == 0) {
-	krb5_keyblock *acceptor_subkey;
-
-	if (context_handle->more_flags & LOCAL)
-	    acceptor_subkey = context_handle->auth_context->remote_subkey;
-	else
-	    acceptor_subkey = context_handle->auth_context->local_subkey;
-
-	if (acceptor_subkey != NULL)
-	    is_updated = (acceptor_subkey->keytype !=
-			  context_handle->auth_context->keyblock->keytype);
-    }
+    old_enctype = ((context_handle->more_flags & IS_CFX) == 0);
     HEIMDAL_MUTEX_unlock(&context_handle->ctx_id_mutex);
 
-    return is_updated ? GSS_S_COMPLETE : GSS_S_FAILURE;
+    buffer.value = &old_enctype;
+    buffer.length = sizeof(old_enctype);
+
+    return gss_add_buffer_set_member(minor_status, &buffer, data_set);
 }
 
 /*
@@ -438,8 +430,8 @@ get_authtime(OM_uint32 *minor_status,
 
 {
     gss_buffer_desc value;
-    unsigned char buf[4];
-    OM_uint32 authtime;
+    unsigned char buf[SIZEOF_TIME_T];
+    time_t authtime;
 
     HEIMDAL_MUTEX_lock(&ctx->ctx_id_mutex);
     if (ctx->ticket == NULL) {
@@ -453,7 +445,13 @@ get_authtime(OM_uint32 *minor_status,
 
     HEIMDAL_MUTEX_unlock(&ctx->ctx_id_mutex);
 
-    _gsskrb5_encode_om_uint32(authtime, buf);
+#if SIZEOF_TIME_T == 8
+    _gss_mg_encode_le_uint64(authtime, buf);
+#elif SIZEOF_TIME_T == 4
+    _gss_mg_encode_le_uint32(authtime, buf);
+#else
+#error set SIZEOF_TIME_T for your platform
+#endif
     value.length = sizeof(buf);
     value.value = buf;
 
@@ -549,10 +547,10 @@ OM_uint32 GSSAPI_CALLCONV _gsskrb5_inquire_sec_context_by_oid
 	return inquire_sec_context_tkt_flags(minor_status,
 					     ctx,
 					     data_set);
-    } else if (gss_oid_equal(desired_object, GSS_C_PEER_HAS_UPDATED_SPNEGO)) {
-	return inquire_sec_context_has_updated_spnego(minor_status,
-						      ctx,
-						      data_set);
+    } else if (gss_oid_equal(desired_object, GSS_C_INQ_PEER_HAS_BUGGY_SPNEGO)) {
+	return inquire_sec_context_has_buggy_spnego(minor_status,
+						    ctx,
+						    data_set);
     } else if (gss_oid_equal(desired_object, GSS_KRB5_GET_SUBKEY_X)) {
 	return inquire_sec_context_get_subkey(minor_status,
 					      ctx,

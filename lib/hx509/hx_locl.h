@@ -59,6 +59,7 @@
 #include <krb5-types.h>
 
 #include <rfc2459_asn1.h>
+#include <rfc4108_asn1.h>
 #include <cms_asn1.h>
 #include <pkcs8_asn1.h>
 #include <pkcs9_asn1.h>
@@ -69,6 +70,13 @@
 #include <pkinit_asn1.h>
 
 #include <der.h>
+
+#ifndef O_CLOEXEC
+#define O_CLOEXEC 0
+#endif
+#ifndef O_BINARY
+#define O_BINARY 0
+#endif
 
 /*
  * We use OpenSSL for EC, but to do this we need to disable cross-references
@@ -180,6 +188,7 @@ struct hx509_keyset_ops {
 		     void *, int (*)(void *, const char *), void *);
     int (*getkeys)(hx509_context, hx509_certs, void *, hx509_private_key **);
     int (*addkey)(hx509_context, hx509_certs, void *, hx509_private_key);
+    int (*destroy)(hx509_context, hx509_certs, void *);
 };
 
 struct _hx509_password {
@@ -200,6 +209,8 @@ struct hx509_context_data {
     struct et_list *et_list;
     char *querystat;
     hx509_certs default_trust_anchors;
+    heim_context hcontext;
+    heim_config_section *cf;
 };
 
 /* _hx509_calculate_path flag field */

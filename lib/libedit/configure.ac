@@ -18,6 +18,7 @@ AC_CONFIG_HEADER([config.h])
 AC_USE_SYSTEM_EXTENSIONS
 
 AM_INIT_AUTOMAKE
+AM_MAINTAINER_MODE
 AC_PROG_LIBTOOL
 
 # libtool -version-info
@@ -35,7 +36,8 @@ EL_MANTYPE
 
 AC_CHECK_LIB(curses, tgetent,,
    [AC_CHECK_LIB(ncurses, tgetent,,
-      [AC_MSG_ERROR([libcurses or libncurses are required!])] )] )
+      [AC_CHECK_LIB(tinfo, tgetent,,
+         [AC_MSG_ERROR([libcurses, libncurses, or tinfo are required!])] )] )] )
 
 
 # Checks for header files.

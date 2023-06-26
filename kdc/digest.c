@@ -57,7 +57,7 @@ const struct units _kdc_digestunits[] = {
 static krb5_error_code
 get_digest_key(krb5_context context,
 	       krb5_kdc_configuration *config,
-	       hdb_entry_ex *server,
+	       hdb_entry *server,
 	       krb5_crypto *crypto)
 {
     krb5_error_code ret;
@@ -81,12 +81,12 @@ get_digest_key(krb5_context context,
 
 static char *
 get_ntlm_targetname(krb5_context context,
-		    hdb_entry_ex *client)
+		    hdb_entry *client)
 {
     char *targetname, *p;
 
     targetname = strdup(krb5_principal_get_realm(context,
-						 client->entry.principal));
+						 client->principal));
     if (targetname == NULL)
 	return NULL;
 
@@ -101,7 +101,7 @@ get_ntlm_targetname(krb5_context context,
 static krb5_error_code
 fill_targetinfo(krb5_context context,
 		char *targetname,
-		hdb_entry_ex *client,
+		hdb_entry *client,
 		krb5_data *data)
 {
     struct ntlm_targetinfo ti;
@@ -113,7 +113,7 @@ fill_targetinfo(krb5_context context,
     memset(&ti, 0, sizeof(ti));
 
     ti.domainname = targetname;
-    p = client->entry.principal;
+    p = client->principal;
     str = krb5_principal_get_comp_string(context, p, 0);
     if (str != NULL &&
 	(strcmp("host", str) == 0 ||
@@ -168,7 +168,7 @@ get_password_entry(krb5_context context,
 {
     krb5_principal clientprincipal;
     krb5_error_code ret;
-    hdb_entry_ex *user;
+    hdb_entry *user;
     HDB *db;
 
     /* get username */
@@ -182,7 +182,7 @@ get_password_entry(krb5_context context,
     if (ret)
 	return ret;
 
-    ret = hdb_entry_get_password(context, db, &user->entry, password);
+    ret = hdb_entry_get_password(context, db, user, password);
     if (ret || password == NULL) {
 	if (ret == 0) {
 	    ret = EINVAL;
@@ -190,7 +190,7 @@ get_password_entry(krb5_context context,
 	}
 	memset(user, 0, sizeof(*user));
     }
-    _kdc_free_ent (context, user);
+    _kdc_free_ent (context, db, user);
     return ret;
 }
 
@@ -217,13 +217,15 @@ _kdc_do_digest(krb5_context context,
     size_t size;
     krb5_storage *sp = NULL;
     Checksum res;
-    hdb_entry_ex *server = NULL, *user = NULL;
-    hdb_entry_ex *client = NULL;
+    HDB *serverdb, *userdb;
+    hdb_entry *server = NULL, *user = NULL;
+    HDB *clientdb;
+    hdb_entry *client = NULL;
     char *client_name = NULL, *password = NULL;
     krb5_data serverNonce;
 
     if(!config->enable_digest) {
-	kdc_log(context, config, 0,
+	kdc_log(context, config, 2,
 		"Rejected digest request (disabled) from %s", from);
 	return KRB5KDC_ERR_POLICY;
     }
@@ -236,7 +238,7 @@ _kdc_do_digest(krb5_context context,
     memset(&rep, 0, sizeof(rep));
     memset(&res, 0, sizeof(res));
 
-    kdc_log(context, config, 0, "Digest request from %s", from);
+    kdc_log(context, config, 3, "Digest request from %s", from);
 
     ret = krb5_kt_resolve(context, "HDBGET:", &id);
     if (ret) {
@@ -292,7 +294,7 @@ _kdc_do_digest(krb5_context context,
 	krb5_clear_error_message(context);
 
 	ret = _kdc_db_fetch(context, config, principal,
-			    HDB_F_GET_SERVER, NULL, NULL, &server);
+			    HDB_F_GET_SERVER, NULL, &serverdb, &server);
 	if (ret)
 	    goto out;
 
@@ -314,13 +316,13 @@ _kdc_do_digest(krb5_context context,
 	}
 
 	ret = _kdc_db_fetch(context, config, principal,
-			    HDB_F_GET_CLIENT, NULL, NULL, &client);
+			    HDB_F_GET_CLIENT, NULL, &clientdb, &client);
 	krb5_free_principal(context, principal);
 	if (ret)
 	    goto out;
 
-	if (client->entry.flags.allow_digest == 0) {
-	    kdc_log(context, config, 0,
+	if (client->flags.allow_digest == 0) {
+	    kdc_log(context, config, 2,
 		    "Client %s tried to use digest "
 		    "but is not allowed to",
 		    client_name);
@@ -364,7 +366,7 @@ _kdc_do_digest(krb5_context context,
 	goto out;
     }
 
-    kdc_log(context, config, 0, "Valid digest request from %s (%s)",
+    kdc_log(context, config, 3, "Valid digest request from %s (%s)",
 	    client_name, from);
 
     /*
@@ -498,7 +500,7 @@ _kdc_do_digest(krb5_context context,
 	    goto out;
 	}
 
-	kdc_log(context, config, 0, "Digest %s init request successful from %s",
+	kdc_log(context, config, 3, "Digest %s init request successful from %s",
 		ireq.u.init.type, from);
 
 	break;
@@ -586,9 +588,9 @@ _kdc_do_digest(krb5_context context,
 	if (ret)
 	    goto out;
 
-	ret = krb5_verify_checksum(context, crypto,
+	ret = _kdc_verify_checksum(context, crypto,
 				   KRB5_KU_DIGEST_OPAQUE,
-				   buf.data, buf.length, &res);
+				   &buf, &res);
 	free_Checksum(&res);
 	krb5_data_free(&buf);
 	krb5_crypto_destroy(context, crypto);
@@ -622,7 +624,7 @@ _kdc_do_digest(krb5_context context,
 	    char idx;
 
 	    if ((config->digests_allowed & CHAP_MD5) == 0) {
-		kdc_log(context, config, 0, "Digest CHAP MD5 not allowed");
+		kdc_log(context, config, 2, "Digest CHAP MD5 not allowed");
 		goto out;
 	    }
 
@@ -669,7 +671,7 @@ _kdc_do_digest(krb5_context context,
 	    if (ret == 0) {
 		r.u.response.success = TRUE;
 	    } else {
-		kdc_log(context, config, 0,
+		kdc_log(context, config, 2,
 			"CHAP reply mismatch for %s",
 			ireq.u.digestRequest.username);
 		r.u.response.success = FALSE;
@@ -682,7 +684,7 @@ _kdc_do_digest(krb5_context context,
 	    char *A1, *A2;
 
 	    if ((config->digests_allowed & DIGEST_MD5) == 0) {
-		kdc_log(context, config, 0, "Digest SASL MD5 not allowed");
+		kdc_log(context, config, 2, "Digest SASL MD5 not allowed");
 		goto out;
 	    }
 
@@ -794,7 +796,7 @@ _kdc_do_digest(krb5_context context,
 	    if (ret == 0) {
 		r.u.response.success = TRUE;
 	    } else {
-		kdc_log(context, config, 0,
+		kdc_log(context, config, 2,
 			"DIGEST-MD5 reply mismatch for %s",
 			ireq.u.digestRequest.username);
 		r.u.response.success = FALSE;
@@ -810,7 +812,7 @@ _kdc_do_digest(krb5_context context,
 	    EVP_MD_CTX *ctp;
 
 	    if ((config->digests_allowed & MS_CHAP_V2) == 0) {
-		kdc_log(context, config, 0, "MS-CHAP-V2 not allowed");
+		kdc_log(context, config, 2, "MS-CHAP-V2 not allowed");
 		goto failed;
 	    }
 
@@ -877,7 +879,7 @@ _kdc_do_digest(krb5_context context,
 		goto failed;
 
 	    ret = _kdc_db_fetch(context, config, clientprincipal,
-				HDB_F_GET_CLIENT, NULL, NULL, &user);
+				HDB_F_GET_CLIENT, NULL, &userdb, &user);
 	    krb5_free_principal(context, clientprincipal);
 	    if (ret) {
 		krb5_set_error_message(context, ret,
@@ -886,7 +888,7 @@ _kdc_do_digest(krb5_context context,
 		goto failed;
 	    }
 
-	    ret = hdb_enctype2key(context, &user->entry, NULL,
+	    ret = hdb_enctype2key(context, user, NULL,
 				  ETYPE_ARCFOUR_HMAC_MD5, &key);
 	    if (ret) {
 		krb5_set_error_message(context, ret,
@@ -917,7 +919,7 @@ _kdc_do_digest(krb5_context context,
 	    if (ret == 0) {
 		r.u.response.success = TRUE;
 	    } else {
-		kdc_log(context, config, 0,
+		kdc_log(context, config, 2,
 			"MS-CHAP-V2 hash mismatch for %s",
 			ireq.u.digestRequest.username);
 		r.u.response.success = FALSE;
@@ -1013,7 +1015,7 @@ _kdc_do_digest(krb5_context context,
 	    r.u.error.code = EINVAL;
 	}
 
-	kdc_log(context, config, 0, "Digest %s request successful %s",
+	kdc_log(context, config, 3, "Digest %s request successful %s",
 		ireq.u.digestRequest.type, ireq.u.digestRequest.username);
 
 	break;
@@ -1021,7 +1023,7 @@ _kdc_do_digest(krb5_context context,
     case choice_DigestReqInner_ntlmInit:
 
 	if ((config->digests_allowed & (NTLM_V1|NTLM_V1_SESSION|NTLM_V2)) == 0) {
-	    kdc_log(context, config, 0, "NTLM not allowed");
+	    kdc_log(context, config, 2, "NTLM not allowed");
 	    goto failed;
 	}
 
@@ -1030,14 +1032,14 @@ _kdc_do_digest(krb5_context context,
 	r.u.ntlmInitReply.flags = NTLM_NEG_UNICODE;
 
 	if ((ireq.u.ntlmInit.flags & NTLM_NEG_UNICODE) == 0) {
-	    kdc_log(context, config, 0, "NTLM client have no unicode");
+	    kdc_log(context, config, 2, "NTLM client have no unicode");
 	    goto failed;
 	}
 
 	if (ireq.u.ntlmInit.flags & NTLM_NEG_NTLM)
 	    r.u.ntlmInitReply.flags |= NTLM_NEG_NTLM;
 	else {
-	    kdc_log(context, config, 0, "NTLM client doesn't support NTLM");
+	    kdc_log(context, config, 2, "NTLM client doesn't support NTLM");
 	    goto failed;
 	}
 
@@ -1137,7 +1139,7 @@ _kdc_do_digest(krb5_context context,
 	if (ret)
 	    goto out;
 
-	kdc_log(context, config, 0, "NTLM init from %s", from);
+	kdc_log(context, config, 3, "NTLM init from %s", from);
 
 	break;
 
@@ -1163,7 +1165,7 @@ _kdc_do_digest(krb5_context context,
 	    goto failed;
 
 	ret = _kdc_db_fetch(context, config, clientprincipal,
-			    HDB_F_GET_CLIENT, NULL, NULL, &user);
+			    HDB_F_GET_CLIENT, NULL, &userdb, &user);
 	krb5_free_principal(context, clientprincipal);
 	if (ret) {
 	    krb5_set_error_message(context, ret, "NTLM user %s not in database",
@@ -1181,7 +1183,7 @@ _kdc_do_digest(krb5_context context,
 	krb5_crypto_destroy(context, crypto);
 	crypto = NULL;
 	if (ret) {
-	    kdc_log(context, config, 0,
+	    kdc_log(context, config, 2,
 		    "Failed to decrypt nonce from %s", from);
 	    goto failed;
 	}
@@ -1214,7 +1216,7 @@ _kdc_do_digest(krb5_context context,
 	    goto out;
 	}
 
-	ret = hdb_enctype2key(context, &user->entry, NULL,
+	ret = hdb_enctype2key(context, user, NULL,
 			      ETYPE_ARCFOUR_HMAC_MD5, &key);
 	if (ret) {
 	    krb5_set_error_message(context, ret, "NTLM missing arcfour key");
@@ -1227,7 +1229,7 @@ _kdc_do_digest(krb5_context context,
 	    char *targetname;
 
 	    if ((config->digests_allowed & NTLM_V2) == 0) {
-		kdc_log(context, config, 0, "NTLM v2 not allowed");
+		kdc_log(context, config, 2, "NTLM v2 not allowed");
 		goto out;
 	    }
 
@@ -1273,7 +1275,7 @@ _kdc_do_digest(krb5_context context,
 		EVP_MD_CTX *ctx;
 
 		if ((config->digests_allowed & NTLM_V1_SESSION) == 0) {
-		    kdc_log(context, config, 0, "NTLM v1-session not allowed");
+		    kdc_log(context, config, 2, "NTLM v1-session not allowed");
 		    ret = EINVAL;
 		    goto failed;
 		}
@@ -1298,7 +1300,7 @@ _kdc_do_digest(krb5_context context,
 
 	    } else {
 		if ((config->digests_allowed & NTLM_V1) == 0) {
-		    kdc_log(context, config, 0, "NTLM v1 not allowed");
+		    kdc_log(context, config, 2, "NTLM v1 not allowed");
 		    goto failed;
 		}
 	    }
@@ -1312,7 +1314,7 @@ _kdc_do_digest(krb5_context context,
 	    }
 
 	    if (ireq.u.ntlmRequest.ntlm.length != answer.length ||
-		memcmp(ireq.u.ntlmRequest.ntlm.data, answer.data, answer.length) != 0)
+		ct_memcmp(ireq.u.ntlmRequest.ntlm.data, answer.data, answer.length) != 0)
 		{
 		    free(answer.data);
 		    ret = EINVAL;
@@ -1389,7 +1391,7 @@ _kdc_do_digest(krb5_context context,
     }
     case choice_DigestReqInner_supportedMechs:
 
-	kdc_log(context, config, 0, "digest supportedMechs from %s", from);
+	kdc_log(context, config, 4, "digest supportedMechs from %s", from);
 
 	r.element = choice_DigestRepInner_supportedMechs;
 	memset(&r.u.supportedMechs, 0, sizeof(r.u.supportedMechs));
@@ -1421,7 +1423,7 @@ _kdc_do_digest(krb5_context context,
 	    goto out;
 	}
 
-	kdc_log(context, config, 0, "Digest failed with: %s", s);
+	kdc_log(context, config, 2, "Digest failed with: %s", s);
 
 	r.element = choice_DigestRepInner_error;
 	r.u.error.reason = strdup("unknown error");
@@ -1494,11 +1496,11 @@ _kdc_do_digest(krb5_context context,
     if (sp)
 	krb5_storage_free(sp);
     if (user)
-	_kdc_free_ent (context, user);
+	_kdc_free_ent (context, userdb, user);
     if (server)
-	_kdc_free_ent (context, server);
+	_kdc_free_ent (context, serverdb, server);
     if (client)
-	_kdc_free_ent (context, client);
+	_kdc_free_ent (context, clientdb, client);
     if (password) {
 	memset(password, 0, strlen(password));
 	free (password);

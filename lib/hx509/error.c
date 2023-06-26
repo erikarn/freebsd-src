@@ -53,7 +53,7 @@ struct hx509_error_data {
  * @ingroup hx509_error
  */
 
-void
+HX509_LIB_FUNCTION void HX509_LIB_CALL
 hx509_clear_error_string(hx509_context context)
 {
     if (context) {
@@ -76,7 +76,7 @@ hx509_clear_error_string(hx509_context context)
  * @ingroup hx509_error
  */
 
-void
+HX509_LIB_FUNCTION void HX509_LIB_CALL
 hx509_set_error_stringv(hx509_context context, int flags, int code,
 			const char *fmt, va_list ap)
 {
@@ -108,7 +108,7 @@ hx509_set_error_stringv(hx509_context context, int flags, int code,
  * @ingroup hx509_error
  */
 
-void
+HX509_LIB_FUNCTION void HX509_LIB_CALL
 hx509_set_error_string(hx509_context context, int flags, int code,
 		       const char *fmt, ...)
 {
@@ -117,6 +117,20 @@ hx509_set_error_string(hx509_context context, int flags, int code,
     va_start(ap, fmt);
     hx509_set_error_stringv(context, flags, code, fmt, ap);
     va_end(ap);
+}
+
+/**
+ * Sets ENOMEM as the error on a hx509 context.
+ *
+ * @param context A hx509 context.
+ *
+ * @ingroup hx509_error
+ */
+
+HX509_LIB_FUNCTION int HX509_LIB_CALL
+hx509_enomem(hx509_context context)
+{
+    return heim_enomem(context->hcontext);
 }
 
 /**
@@ -130,34 +144,31 @@ hx509_set_error_string(hx509_context context, int flags, int code,
  * @ingroup hx509_error
  */
 
-char *
+HX509_LIB_FUNCTION char * HX509_LIB_CALL
 hx509_get_error_string(hx509_context context, int error_code)
 {
-    heim_error_t msg = context->error;
-    heim_string_t s;
-    char *str = NULL;
+    heim_string_t s = NULL;
+    const char *cstr = NULL;
+    char *str;
 
-    if (msg == NULL || heim_error_get_code(msg) != error_code) {
-	const char *cstr;
+    if (context) {
+        if (context->error &&
+            heim_error_get_code(context->error) == error_code &&
+            (s = heim_error_copy_string(context->error)))
+            cstr = heim_string_get_utf8(s);
 
-	cstr = com_right(context->et_list, error_code);
-	if (cstr)
-	    return strdup(cstr);
-	cstr = strerror(error_code);
-	if (cstr)
-	    return strdup(cstr);
-	if (asprintf(&str, "<unknown error: %d>", error_code) == -1)
-	    return NULL;
-	return str;
-    }
+        if (cstr == NULL)
+            cstr = com_right(context->et_list, error_code);
 
-    s = heim_error_copy_string(msg);
-    if (s) {
-	const char *cstr = heim_string_get_utf8(s);
-	if (cstr)
-	    str = strdup(cstr);
-	heim_release(s);
-    }
+        if (cstr == NULL && error_code > -1)
+            cstr = strerror(error_code);
+    } /* else this could be an error in hx509_context_init() */
+
+    if (cstr == NULL)
+        cstr = error_message(error_code); /* never returns NULL */
+
+    str = strdup(cstr);
+    heim_release(s);
     return str;
 }
 
@@ -169,7 +180,7 @@ hx509_get_error_string(hx509_context context, int error_code)
  * @ingroup hx509_error
  */
 
-void
+HX509_LIB_FUNCTION void HX509_LIB_CALL
 hx509_free_error_string(char *str)
 {
     free(str);
@@ -187,9 +198,11 @@ hx509_free_error_string(char *str)
  * @ingroup hx509_error
  */
 
-void
+HX509_LIB_NORETURN_FUNCTION
+     __attribute__ ((__noreturn__, __format__ (__printf__, 4, 5)))
+void HX509_LIB_CALL
 hx509_err(hx509_context context, int exit_code,
-	  int error_code, const char *fmt, ...)
+          int error_code, const char *fmt, ...)
 {
     va_list ap;
     const char *msg;

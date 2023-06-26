@@ -31,10 +31,11 @@
  * SUCH DAMAGE.
  */
 
-#include <string.h>
 #include "krb5_locl.h"
 #include "an2ln_plugin.h"
 #include "db_plugin.h"
+
+#include <string.h>
 
 /* Default plugin (DB using binary search of sorted text file) follows */
 static krb5_error_code KRB5_LIB_CALL an2ln_def_plug_init(krb5_context, void **);
@@ -43,7 +44,7 @@ static krb5_error_code KRB5_LIB_CALL an2ln_def_plug_an2ln(void *, krb5_context, 
 					    krb5_const_principal, set_result_f,
 					    void *);
 
-static krb5plugin_an2ln_ftable an2ln_def_plug = {
+static const krb5plugin_an2ln_ftable an2ln_def_plug = {
     0,
     an2ln_def_plug_init,
     an2ln_def_plug_fini,
@@ -80,6 +81,17 @@ plcallback(krb5_context context,
     return locate->an2ln(plugctx, context, plctx->rule, plctx->aname, set_res, plctx);
 }
 
+static const char *const an2ln_plugin_deps[] = { "krb5", NULL };
+
+static const struct heim_plugin_data
+an2ln_plugin_data = {
+    "krb5",
+    KRB5_PLUGIN_AN2LN,
+    KRB5_PLUGIN_AN2LN_VERSION_0,
+    an2ln_plugin_deps,
+    krb5_get_instance
+};
+
 static krb5_error_code
 an2ln_plugin(krb5_context context, const char *rule, krb5_const_principal aname,
 	     size_t lnsize, char *lname)
@@ -96,8 +108,8 @@ an2ln_plugin(krb5_context context, const char *rule, krb5_const_principal aname,
      * really be no more than one plugin that can handle any given kind
      * rule, so the effect should be deterministic anyways.
      */
-    ret = _krb5_plugin_run_f(context, "krb5", KRB5_PLUGIN_AN2LN,
-			     KRB5_PLUGIN_AN2LN_VERSION_0, 0, &ctx, plcallback);
+    ret = _krb5_plugin_run_f(context, &an2ln_plugin_data,
+			     0, &ctx, plcallback);
     if (ret != 0) {
 	heim_release(ctx.luser);
 	return ret;
@@ -409,6 +421,7 @@ an2ln_def_plug_an2ln(void *plug_ctx, krb5_context context,
 	heim_dict_set_value(db_options, HSTR("read-only"),
 			    heim_number_create(1));
     dbh = heim_db_create(NULL, an2ln_db_fname, db_options, &error);
+    heim_release(db_options);
     if (dbh == NULL) {
 	krb5_set_error_message(context, heim_error_get_code(error),
 			       N_("Couldn't open aname2lname-text-db", ""));

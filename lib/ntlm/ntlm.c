@@ -354,7 +354,7 @@ ret_string(krb5_storage *sp, int ucs2, size_t len, char **s)
 	utf8len += 1;
 	
 	*s = malloc(utf8len);
-	if (s == NULL) {
+	if (*s == NULL) {
 	    ret = ENOMEM;
 	    goto out;
 	}
@@ -636,10 +636,10 @@ encode_os_version(krb5_storage *out)
     CHECK(krb5_store_uint8(out, 0x06), 0);
     CHECK(krb5_store_uint8(out, 0x01), 0);
     CHECK(krb5_store_uint16(out, 0x1db0), 0);
+    CHECK(krb5_store_uint8(out, 0x00), 0);
+    CHECK(krb5_store_uint8(out, 0x00), 0);
+    CHECK(krb5_store_uint8(out, 0x00), 0);
     CHECK(krb5_store_uint8(out, 0x0f), 0); /* ntlm version 15 */
-    CHECK(krb5_store_uint8(out, 0x00), 0);
-    CHECK(krb5_store_uint8(out, 0x00), 0);
-    CHECK(krb5_store_uint8(out, 0x00), 0);
  out:
     return ret;
 }
@@ -682,7 +682,7 @@ heim_ntlm_decode_type1(const struct ntlm_buf *buf, struct ntlm_type1 *data)
     krb5_storage_set_byteorder(in, KRB5_STORAGE_BYTEORDER_LE);
 
     CHECK_SIZE(krb5_storage_read(in, sig, sizeof(sig)), sizeof(sig));
-    CHECK(memcmp(ntlmsigature, sig, sizeof(ntlmsigature)), 0);
+    CHECK(ct_memcmp(ntlmsigature, sig, sizeof(ntlmsigature)), 0);
     CHECK(krb5_ret_uint32(in, &type), 0);
     CHECK(type, 1);
     CHECK(krb5_ret_uint32(in, &data->flags), 0);
@@ -844,7 +844,7 @@ heim_ntlm_decode_type2(const struct ntlm_buf *buf, struct ntlm_type2 *type2)
     krb5_storage_set_byteorder(in, KRB5_STORAGE_BYTEORDER_LE);
 
     CHECK_SIZE(krb5_storage_read(in, sig, sizeof(sig)), sizeof(sig));
-    CHECK(memcmp(ntlmsigature, sig, sizeof(ntlmsigature)), 0);
+    CHECK(ct_memcmp(ntlmsigature, sig, sizeof(ntlmsigature)), 0);
     CHECK(krb5_ret_uint32(in, &type), 0);
     CHECK(type, 2);
 
@@ -1001,7 +1001,7 @@ heim_ntlm_decode_type3(const struct ntlm_buf *buf,
     krb5_storage_set_byteorder(in, KRB5_STORAGE_BYTEORDER_LE);
 
     CHECK_SIZE(krb5_storage_read(in, sig, sizeof(sig)), sizeof(sig));
-    CHECK(memcmp(ntlmsigature, sig, sizeof(ntlmsigature)), 0);
+    CHECK(ct_memcmp(ntlmsigature, sig, sizeof(ntlmsigature)), 0);
     CHECK(krb5_ret_uint32(in, &type), 0);
     CHECK(type, 3);
     CHECK(ret_sec_buffer(in, &lm), 0);
@@ -1324,7 +1324,10 @@ heim_ntlm_v2_base_session(void *key, size_t len,
 
     /* Note: key is the NTLMv2 key */
     HMAC_CTX_init(&c);
-    HMAC_Init_ex(&c, key, len, EVP_md5(), NULL);
+    if (HMAC_Init_ex(&c, key, len, EVP_md5(), NULL) == 0) {
+        HMAC_CTX_cleanup(&c);
+        return ENOMEM;
+    }
     HMAC_Update(&c, ntlmResponse->data, 16);
     HMAC_Final(&c, session->data, &hmaclen);
     HMAC_CTX_cleanup(&c);
@@ -1443,7 +1446,7 @@ heim_ntlm_build_ntlm2_master(void *key, size_t len,
 
     ret = heim_ntlm_v2_base_session(key, len, blob, &sess);
     if (ret)
-	return ret;
+        return ret;
 
     ret = heim_ntlm_keyex_wrap(&sess, session, master);
     heim_ntlm_free_buf(&sess);
@@ -1523,25 +1526,26 @@ heim_ntlm_ntlmv2_key(const void *key, size_t len,
 {
     int ret;
     unsigned int hmaclen;
+    struct ntlm_buf buf;
     HMAC_CTX c;
 
     HMAC_CTX_init(&c);
-    HMAC_Init_ex(&c, key, len, EVP_md5(), NULL);
-    {
-	struct ntlm_buf buf;
-	/* uppercase username and turn it into ucs2-le */
-	ret = ascii2ucs2le(username, 1, &buf);
-	if (ret)
-	    goto out;
-	HMAC_Update(&c, buf.data, buf.length);
-	free(buf.data);
-	/* turn target into ucs2-le */
-	ret = ascii2ucs2le(target, upper_case_target, &buf);
-	if (ret)
-	    goto out;
-	HMAC_Update(&c, buf.data, buf.length);
-	free(buf.data);
+    if (HMAC_Init_ex(&c, key, len, EVP_md5(), NULL) == 0) {
+        ret = ENOMEM;
+        goto out;
     }
+    /* uppercase username and turn it into ucs2-le */
+    ret = ascii2ucs2le(username, 1, &buf);
+    if (ret)
+        goto out;
+    HMAC_Update(&c, buf.data, buf.length);
+    free(buf.data);
+    /* turn target into ucs2-le */
+    ret = ascii2ucs2le(target, upper_case_target, &buf);
+    if (ret)
+        goto out;
+    HMAC_Update(&c, buf.data, buf.length);
+    free(buf.data);
     HMAC_Final(&c, ntlmv2, &hmaclen);
  out:
     HMAC_CTX_cleanup(&c);
@@ -1599,6 +1603,7 @@ heim_ntlm_calculate_lm2(const void *key, size_t len,
 			struct ntlm_buf *answer)
 {
     unsigned char clientchallenge[8];
+    krb5_error_code ret;
 
     if (RAND_bytes(clientchallenge, sizeof(clientchallenge)) != 1)
 	return HNTLM_ERR_RAND;
@@ -1612,12 +1617,12 @@ heim_ntlm_calculate_lm2(const void *key, size_t len,
         return ENOMEM;
     answer->length = 24;
 
-    heim_ntlm_derive_ntlm2_sess(ntlmv2, clientchallenge, 8,
-				serverchallenge, answer->data);
+    ret = heim_ntlm_derive_ntlm2_sess(ntlmv2, clientchallenge, 8,
+                                      serverchallenge, answer->data);
+    if (ret == 0)
+        memcpy(((unsigned char *)answer->data) + 16, clientchallenge, 8);
 
-    memcpy(((unsigned char *)answer->data) + 16, clientchallenge, 8);
-
-    return 0;
+    return ret;
 }
 
 
@@ -1695,7 +1700,10 @@ heim_ntlm_calculate_ntlm2(const void *key, size_t len,
     krb5_storage_free(sp);
     sp = NULL;
 
-    heim_ntlm_derive_ntlm2_sess(ntlmv2, data.data, data.length, serverchallenge, ntlmv2answer);
+    ret = heim_ntlm_derive_ntlm2_sess(ntlmv2, data.data, data.length,
+                                      serverchallenge, ntlmv2answer);
+    if (ret)
+        return ret;
 
     sp = krb5_storage_emem();
     if (sp == NULL) {
@@ -1809,12 +1817,15 @@ verify_ntlm2(const void *key, size_t len,
 	goto out;
     }
 
-    heim_ntlm_derive_ntlm2_sess(ntlmv2,
-				((unsigned char *)answer->data) + 16, answer->length - 16,
-				serverchallenge,
-				serveranswer);
+    ret = heim_ntlm_derive_ntlm2_sess(ntlmv2,
+                                      ((unsigned char *)answer->data) + 16,
+                                      answer->length - 16,
+                                      serverchallenge,
+                                      serveranswer);
+    if (ret)
+        goto out;
 
-    if (memcmp(serveranswer, clientanswer, 16) != 0) {
+    if (ct_memcmp(serveranswer, clientanswer, 16) != 0) {
 	heim_ntlm_free_buf(infotarget);
 	return HNTLM_ERR_AUTH;
     }
@@ -1995,7 +2006,7 @@ heim_ntlm_calculate_ntlm2_sess_hash(const unsigned char clnt_nonce[8],
  * @ingroup ntlm_core
  */
 
-void
+int
 heim_ntlm_derive_ntlm2_sess(const unsigned char sessionkey[16],
 			    const unsigned char *clnt_nonce, size_t clnt_nonce_length,
 			    const unsigned char svr_chal[8],
@@ -2006,10 +2017,14 @@ heim_ntlm_derive_ntlm2_sess(const unsigned char sessionkey[16],
 
     /* HMAC(Ksession, serverchallenge || clientchallenge) */
     HMAC_CTX_init(&c);
-    HMAC_Init_ex(&c, sessionkey, 16, EVP_md5(), NULL);
+    if (HMAC_Init_ex(&c, sessionkey, 16, EVP_md5(), NULL) == 0) {
+        HMAC_CTX_cleanup(&c);
+        return ENOMEM;
+    }
     HMAC_Update(&c, svr_chal, 8);
     HMAC_Update(&c, clnt_nonce, clnt_nonce_length);
     HMAC_Final(&c, derivedkey, &hmaclen);
     HMAC_CTX_cleanup(&c);
     memset(&c, 0, sizeof(c));
+    return 0;
 }

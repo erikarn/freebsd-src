@@ -40,6 +40,7 @@ RCSID("$Id$");
 #endif
 #include <hdb.h>
 #include <kadm5/private.h>
+#include <kadm5/kadm5_err.h>
 
 static krb5_context context;
 static krb5_log_facility *log_facility;
@@ -246,7 +247,6 @@ change (krb5_auth_context auth_context,
 {
     krb5_error_code ret;
     char *client = NULL, *admin = NULL;
-    const char *pwd_reason;
     kadm5_config_params conf;
     void *kadm5_handle = NULL;
     krb5_principal principal = NULL;
@@ -366,25 +366,8 @@ change (krb5_auth_context auth_context,
 	goto out;
     }
 
-    /*
-     * Check password quality if not changing as administrator
-     */
-
-    if (krb5_principal_compare(context, admin_principal, principal) == TRUE) {
-
-	pwd_reason = kadm5_check_password_quality (context, principal,
-						   pwd_data);
-	if (pwd_reason != NULL ) {
-	    krb5_warnx (context,
-			"%s didn't pass password quality check with error: %s",
-			client, pwd_reason);
-	    reply_priv (auth_context, s, sa, sa_size,
-			KRB5_KPASSWD_SOFTERROR, pwd_reason);
-	    goto out;
-	}
-	krb5_warnx (context, "Changing password for %s", client);
-    } else {
-	ret = _kadm5_acl_check_permission(kadm5_handle, KADM5_PRIV_CPW,
+    if (krb5_principal_compare(context, admin_principal, principal) == FALSE) {
+ 	ret = _kadm5_acl_check_permission(kadm5_handle, KADM5_PRIV_CPW,
 					  principal);
 	if (ret) {
 	    krb5_warn (context, ret,
@@ -395,6 +378,8 @@ change (krb5_auth_context auth_context,
 	    goto out;
 	}
 	krb5_warnx (context, "%s is changing password for %s", admin, client);
+    } else {
+	krb5_warnx (context, "Changing password for %s", client);
     }
 
     ret = krb5_data_realloc(pwd_data, pwd_data->length + 1);
@@ -412,7 +397,19 @@ change (krb5_auth_context auth_context,
     pwd_data = NULL;
     if (ret) {
 	const char *str = krb5_get_error_message(context, ret);
-	krb5_warnx(context, "kadm5_s_chpass_principal_cond: %s", str);
+
+        switch (ret) {
+        case KADM5_PASS_Q_TOOSHORT:
+        case KADM5_PASS_Q_CLASS:
+        case KADM5_PASS_Q_DICT:
+        case KADM5_PASS_Q_GENERIC:
+	    krb5_warnx(context,
+		       "%s didn't pass password quality check with error: %s",
+		       client, str);
+            break;
+        default:
+	    krb5_warnx(context, "kadm5_s_chpass_principal_cond: %s", str);
+	}
 	reply_priv (auth_context, s, sa, sa_size, KRB5_KPASSWD_SOFTERROR,
 		    str ? str : "Internal error");
 	krb5_free_error_message(context, str);
@@ -466,16 +463,25 @@ verify (krb5_auth_context *auth_context,
      * either an invalid request or an error packet.  An error packet may be
      * the result of a ping-pong attacker pointing us at another kpasswdd.
      */
+    if (len < 6) {
+	krb5_warnx(context, "Message too short: %llu",
+	    (unsigned long long)len);
+	return 1;
+    }
     pkt_len = (msg[0] << 8) | (msg[1]);
     pkt_ver = (msg[2] << 8) | (msg[3]);
     ap_req_len = (msg[4] << 8) | (msg[5]);
     if (pkt_len != len) {
-	krb5_warnx (context, "Strange len: %ld != %ld",
-		    (long)pkt_len, (long)len);
+	krb5_warnx(context, "Bad packet length: %u != %llu", pkt_len,
+	    (unsigned long long)len);
 	return 1;
     }
     if (ap_req_len == 0) {
 	krb5_warnx (context, "Request is error packet (ap_req_len == 0)");
+	return 1;
+    }
+    if (ap_req_len + 6 > len) {
+	krb5_warnx(context, "Bad AP-REQ length: %u", ap_req_len);
 	return 1;
     }
     if (pkt_ver != KRB5_KPASSWD_VERS_CHANGEPW &&
@@ -776,6 +782,7 @@ doit(krb5_keytab keytab, int port)
     free(sockets);
 
     krb5_free_addresses(context, &addrs);
+    krb5_kt_close(context, keytab);
     krb5_free_context(context);
     return 0;
 }
@@ -806,7 +813,7 @@ main(int argc, char **argv)
     }
 
     if (detach_from_console > 0 && daemon_child == -1)
-        roken_detach_prep(argc, argv, "--daemon-child");
+        daemon_child = roken_detach_prep(argc, argv, "--daemon-child");
 
     if (config_file == NULL) {
 	aret = asprintf(&config_file, "%s/kdc.conf", hdb_db_dir(context));

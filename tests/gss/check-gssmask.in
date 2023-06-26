@@ -61,6 +61,7 @@ gssmaestro="../../appl/gssmask/gssmaestro"
 KRB5_CONFIG="${objdir}/krb5.conf"
 export KRB5_CONFIG
 
+KRB5CCNAME=${cache}
 rm -f ${keytabfile}
 rm -f current-db*
 rm -f out-*
@@ -75,9 +76,13 @@ ${kadmin} \
     --realm-max-renewable-life=1month \
     ${R} || exit 1
 
-${kadmin} add -p p1 --use-defaults host/n1.test.h5l.se@${R} || exit 1
-${kadmin} add -p p2 --use-defaults host/n2.test.h5l.se@${R} || exit 1
-${kadmin} add -p p3 --use-defaults host/n3.test.h5l.se@${R} || exit 1
+# Test virtual principals, why not
+${kadmin} add_ns --key-rotation-epoch=now       \
+                 --key-rotation-period=15m      \
+                 --max-ticket-life=10d          \
+                 --max-renewable-life=20d       \
+                 --attributes=                  \
+                 "_/test.h5l.se@${R}" || exit 1
 ${kadmin} ext -k ${keytab} host/n1.test.h5l.se@${R} || exit 1
 ${kadmin} ext -k ${keytab} host/n2.test.h5l.se@${R} || exit 1
 ${kadmin} ext -k ${keytab} host/n3.test.h5l.se@${R} || exit 1
@@ -88,10 +93,10 @@ echo "Doing database check"
 ${kadmin} check ${R} || exit 1
 
 echo Starting kdc
-${kdc} --detach --testing || { echo "kdc failed to start"; exit 1; }
+${kdc} --detach --testing || { echo "kdc failed to start"; cat messages.log; exit 1; }
 kdcpid=`getpid kdc`
 
-trap "kill ${kdcpid}; echo signal killing kdc; exit 1;" EXIT
+trap "kill -9 ${kdcpid}; echo signal killing kdc; exit 1;" EXIT
 
 exitcode=0
 

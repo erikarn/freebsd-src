@@ -32,16 +32,13 @@
  */
 
 #include "hx_locl.h"
-#ifdef HAVE_DLFCN_H
-#include <dlfcn.h>
-#endif
 
 #ifdef HAVE_DLOPEN
 
 #include "ref/pkcs11.h"
 
 struct p11_slot {
-    int flags;
+    uint64_t flags;
 #define P11_SESSION		1
 #define P11_SESSION_IN_USE	2
 #define P11_LOGIN_REQ		4
@@ -823,6 +820,18 @@ p11_init(hx509_context context,
 
     *data = NULL;
 
+    if (flags & HX509_CERTS_NO_PRIVATE_KEYS) {
+	hx509_set_error_string(context, 0, ENOTSUP,
+			       "PKCS#11 store does not support "
+                               "HX509_CERTS_NO_PRIVATE_KEYS flag");
+        return ENOTSUP;
+    }
+
+    if (residue == NULL || residue[0] == '\0') {
+	hx509_set_error_string(context, 0, EINVAL,
+			       "PKCS#11 store not specified");
+        return EINVAL;
+    }
     list = strdup(residue);
     if (list == NULL)
 	return ENOMEM;
@@ -849,7 +858,7 @@ p11_init(hx509_context context,
 	str = strnext;
     }
 
-    p->dl_handle = dlopen(list, RTLD_NOW);
+    p->dl_handle = dlopen(list, RTLD_NOW | RTLD_LOCAL | RTLD_GROUP);
     if (p->dl_handle == NULL) {
 	ret = HX509_PKCS11_LOAD;
 	hx509_set_error_string(context, 0, ret,
@@ -1206,12 +1215,13 @@ static struct hx509_keyset_ops keyset_pkcs11 = {
     p11_iter_end,
     p11_printinfo,
     NULL,
+    NULL,
     NULL
 };
 
 #endif /* HAVE_DLOPEN */
 
-void
+HX509_LIB_FUNCTION void HX509_LIB_CALL
 _hx509_ks_pkcs11_register(hx509_context context)
 {
 #ifdef HAVE_DLOPEN

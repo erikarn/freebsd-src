@@ -36,7 +36,11 @@
 
 struct ext_keytab_data {
     krb5_keytab keytab;
+    int keep;
     int random_key_flag;
+    size_t nkstuple;
+    krb5_key_salt_tuple *kstuple;
+    void *kadm_handle;
 };
 
 static int
@@ -56,7 +60,7 @@ do_ext_keytab(krb5_principal principal, void *data)
     if (!e->random_key_flag)
         mask |= KADM5_KVNO | KADM5_KEY_DATA;
 
-    ret = kadm5_get_principal(kadm_handle, principal, &princ, mask);
+    ret = kadm5_get_principal(e->kadm_handle, principal, &princ, mask);
     if (ret)
 	return ret;
 
@@ -109,7 +113,8 @@ do_ext_keytab(krb5_principal principal, void *data)
             n_k++;
 	}
     } else if (e->random_key_flag) {
-	ret = kadm5_randkey_principal(kadm_handle, principal, &k, &n_k);
+        ret = kadm5_randkey_principal_3(e->kadm_handle, principal, e->keep,
+                                        e->nkstuple, e->kstuple, &k, &n_k);
 	if (ret)
 	    goto out;
 
@@ -136,7 +141,7 @@ do_ext_keytab(krb5_principal principal, void *data)
     }
 
   out:
-    kadm5_free_principal_ent(kadm_handle, &princ);
+    kadm5_free_principal_ent(e->kadm_handle, &princ);
     if (k) {
         for (i = 0; i < n_k; i++)
             memset(k[i].keyvalue.data, 0, k[i].keyvalue.length);
@@ -151,8 +156,34 @@ int
 ext_keytab(struct ext_keytab_options *opt, int argc, char **argv)
 {
     krb5_error_code ret;
-    int i;
     struct ext_keytab_data data;
+    const char *enctypes;
+    size_t i;
+
+    data.kadm_handle = NULL;
+    ret = kadm5_dup_context(kadm_handle, &data.kadm_handle);
+    if (ret)
+        krb5_err(context, 1, ret, "Could not duplicate kadmin connection");
+    data.random_key_flag = opt->random_key_flag;
+    data.keep = 1;
+    i = 0;
+    if (opt->keepallold_flag) {
+        data.keep = 2;
+        i++;
+    }
+    if (opt->keepold_flag) {
+        data.keep = 1;
+        i++;
+    }
+    if (opt->pruneall_flag) {
+        data.keep = 0;
+        i++;
+    }
+    if (i > 1) {
+        fprintf(stderr,
+                "use only one of --keepold, --keepallold, or --pruneall\n");
+        return EINVAL;
+    }
 
     if (opt->keytab_string == NULL)
 	ret = krb5_kt_default(context, &data.keytab);
@@ -163,8 +194,19 @@ ext_keytab(struct ext_keytab_options *opt, int argc, char **argv)
 	krb5_warn(context, ret, "krb5_kt_resolve");
 	return 1;
     }
-
-    data.random_key_flag = opt->random_key_flag;
+    enctypes = opt->enctypes_string;
+    if (enctypes == NULL || enctypes[0] == '\0')
+        enctypes = krb5_config_get_string(context, NULL, "libdefaults",
+                                          "supported_enctypes", NULL);
+    if (enctypes == NULL || enctypes[0] == '\0')
+        enctypes = "aes128-cts-hmac-sha1-96";
+    ret = krb5_string_to_keysalts2(context, enctypes, &data.nkstuple,
+                                   &data.kstuple);
+    if (ret) {
+        fprintf(stderr, "enctype(s) unknown\n");
+        krb5_kt_close(context, data.keytab);
+        return ret;
+    }
 
     for(i = 0; i < argc; i++) {
 	ret = foreach_principal(argv[i], do_ext_keytab, "ext", &data);
@@ -172,7 +214,8 @@ ext_keytab(struct ext_keytab_options *opt, int argc, char **argv)
 	    break;
     }
 
+    kadm5_destroy(data.kadm_handle);
     krb5_kt_close(context, data.keytab);
-
+    free(data.kstuple);
     return ret != 0;
 }

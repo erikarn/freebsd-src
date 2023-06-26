@@ -128,8 +128,8 @@ verify_user_otp(char *username)
 
     if (asprintf(&prompt, "%s's %s Password: ", username, ss) == -1 ||
         prompt == NULL)
-        return 1;
-    if(UI_UTIL_read_pw_string(passwd, sizeof(passwd)-1, prompt, 0)) {
+        err(1, "out of memory");
+    if (UI_UTIL_read_pw_string(passwd, sizeof(passwd)-1, prompt, 0)) {
         free(prompt);
 	return 1;
     }
@@ -299,6 +299,7 @@ main (int argc, char **argv)
     int uid = getuid();
     OtpAlgorithm *alg = otp_find_alg (OTP_ALG_DEFAULT);
     int optidx = 0;
+    char userbuf[128];
 
     setprogname (argv[0]);
     if(getarg(args, num_args, argc, argv, &optidx))
@@ -339,12 +340,9 @@ main (int argc, char **argv)
 	return list_otps (argc, argv, user);
 
     if (user == NULL) {
-	struct passwd *pwd;
-
-	pwd = k_getpwuid(uid);
-	if (pwd == NULL)
+        user = roken_get_username(userbuf, sizeof(userbuf));
+        if (user == NULL)
 	    err (1, "You don't exist");
-	user = pwd->pw_name;
     }
 
     /*

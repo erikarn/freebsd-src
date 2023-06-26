@@ -45,8 +45,11 @@
 #include <krb5_err.h>
 #include <heim_err.h>
 #include <k524_err.h>
+#include <k5e1_err.h>
 
 #include <krb5_asn1.h>
+typedef Krb5Int32 krb5int32;
+typedef Krb5UInt32 krb5uint32;
 
 /* name confusion with MIT */
 #ifndef KRB5KDC_ERR_KEY_EXP
@@ -55,8 +58,10 @@
 
 #ifdef _WIN32
 #define KRB5_CALLCONV __stdcall
+#define KRB5_LIB_CALL __stdcall
 #else
 #define KRB5_CALLCONV
+#define KRB5_LIB_CALL
 #endif
 
 /* simple constants */
@@ -90,6 +95,7 @@ typedef struct krb5_ntlm_data *krb5_ntlm;
 
 struct krb5_pac_data;
 typedef struct krb5_pac_data *krb5_pac;
+typedef const struct krb5_pac_data *krb5_const_pac;
 
 typedef struct krb5_rd_req_in_ctx_data *krb5_rd_req_in_ctx;
 typedef struct krb5_rd_req_out_ctx_data *krb5_rd_req_out_ctx;
@@ -117,52 +123,53 @@ typedef struct krb5_enc_data {
 } krb5_enc_data;
 
 /* alternative names */
-#define ENCTYPE_NULL KRB5_ENCTYPE_NULL
-#define ENCTYPE_DES_CBC_CRC KRB5_ENCTYPE_DES_CBC_CRC
-#define ENCTYPE_DES_CBC_MD4 KRB5_ENCTYPE_DES_CBC_MD4
-#define ENCTYPE_DES_CBC_MD5 KRB5_ENCTYPE_DES_CBC_MD5
-#define ENCTYPE_DES3_CBC_MD5 KRB5_ENCTYPE_DES3_CBC_MD5
-#define ENCTYPE_OLD_DES3_CBC_SHA1 KRB5_ENCTYPE_OLD_DES3_CBC_SHA1
-#define ENCTYPE_SIGN_DSA_GENERATE KRB5_ENCTYPE_SIGN_DSA_GENERATE
-#define ENCTYPE_ENCRYPT_RSA_PRIV KRB5_ENCTYPE_ENCRYPT_RSA_PRIV
-#define ENCTYPE_ENCRYPT_RSA_PUB KRB5_ENCTYPE_ENCRYPT_RSA_PUB
-#define ENCTYPE_DES3_CBC_SHA1 KRB5_ENCTYPE_DES3_CBC_SHA1
+#define ENCTYPE_NULL		KRB5_ENCTYPE_NULL
+#define ENCTYPE_DES_CBC_CRC	KRB5_ENCTYPE_DES_CBC_CRC
+#define ENCTYPE_DES_CBC_MD4	KRB5_ENCTYPE_DES_CBC_MD4
+#define ENCTYPE_DES_CBC_MD5	KRB5_ENCTYPE_DES_CBC_MD5
+#define ENCTYPE_DES3_CBC_MD5	KRB5_ENCTYPE_DES3_CBC_MD5
+#define ENCTYPE_OLD_DES3_CBC_SHA1	KRB5_ENCTYPE_OLD_DES3_CBC_SHA1
+#define ENCTYPE_SIGN_DSA_GENERATE	KRB5_ENCTYPE_SIGN_DSA_GENERATE
+#define ENCTYPE_ENCRYPT_RSA_PRIV	KRB5_ENCTYPE_ENCRYPT_RSA_PRIV
+#define ENCTYPE_ENCRYPT_RSA_PUB	KRB5_ENCTYPE_ENCRYPT_RSA_PUB
+#define ENCTYPE_DES3_CBC_SHA1	KRB5_ENCTYPE_DES3_CBC_SHA1
 #define ENCTYPE_AES128_CTS_HMAC_SHA1_96 KRB5_ENCTYPE_AES128_CTS_HMAC_SHA1_96
 #define ENCTYPE_AES256_CTS_HMAC_SHA1_96 KRB5_ENCTYPE_AES256_CTS_HMAC_SHA1_96
-#define ENCTYPE_ARCFOUR_HMAC KRB5_ENCTYPE_ARCFOUR_HMAC_MD5
-#define ENCTYPE_ARCFOUR_HMAC_MD5 KRB5_ENCTYPE_ARCFOUR_HMAC_MD5
-#define ENCTYPE_ARCFOUR_HMAC_MD5_56 KRB5_ENCTYPE_ARCFOUR_HMAC_MD5_56
-#define ENCTYPE_ENCTYPE_PK_CROSS KRB5_ENCTYPE_ENCTYPE_PK_CROSS
-#define ENCTYPE_DES_CBC_NONE KRB5_ENCTYPE_DES_CBC_NONE
-#define ENCTYPE_DES3_CBC_NONE KRB5_ENCTYPE_DES3_CBC_NONE
-#define ENCTYPE_DES_CFB64_NONE KRB5_ENCTYPE_DES_CFB64_NONE
-#define ENCTYPE_DES_PCBC_NONE KRB5_ENCTYPE_DES_PCBC_NONE
-#define ETYPE_NULL KRB5_ENCTYPE_NULL
-#define ETYPE_DES_CBC_CRC KRB5_ENCTYPE_DES_CBC_CRC
-#define ETYPE_DES_CBC_MD4 KRB5_ENCTYPE_DES_CBC_MD4
-#define ETYPE_DES_CBC_MD5 KRB5_ENCTYPE_DES_CBC_MD5
-#define ETYPE_DES3_CBC_MD5 KRB5_ENCTYPE_DES3_CBC_MD5
-#define ETYPE_OLD_DES3_CBC_SHA1 KRB5_ENCTYPE_OLD_DES3_CBC_SHA1
-#define ETYPE_SIGN_DSA_GENERATE KRB5_ENCTYPE_SIGN_DSA_GENERATE
-#define ETYPE_ENCRYPT_RSA_PRIV KRB5_ENCTYPE_ENCRYPT_RSA_PRIV
-#define ETYPE_ENCRYPT_RSA_PUB KRB5_ENCTYPE_ENCRYPT_RSA_PUB
-#define ETYPE_DES3_CBC_SHA1 KRB5_ENCTYPE_DES3_CBC_SHA1
-#define ETYPE_AES128_CTS_HMAC_SHA1_96 KRB5_ENCTYPE_AES128_CTS_HMAC_SHA1_96
-#define ETYPE_AES256_CTS_HMAC_SHA1_96 KRB5_ENCTYPE_AES256_CTS_HMAC_SHA1_96
-#define ETYPE_AES128_CTS_HMAC_SHA256_128 KRB5_ENCTYPE_AES128_CTS_HMAC_SHA256_128
-#define ETYPE_AES256_CTS_HMAC_SHA384_192 KRB5_ENCTYPE_AES256_CTS_HMAC_SHA384_192
-#define ETYPE_ARCFOUR_HMAC_MD5 KRB5_ENCTYPE_ARCFOUR_HMAC_MD5
-#define ETYPE_ARCFOUR_HMAC_MD5_56 KRB5_ENCTYPE_ARCFOUR_HMAC_MD5_56
-#define ETYPE_ENCTYPE_PK_CROSS KRB5_ENCTYPE_ENCTYPE_PK_CROSS
-#define ETYPE_ARCFOUR_MD4 KRB5_ENCTYPE_ARCFOUR_MD4
-#define ETYPE_ARCFOUR_HMAC_OLD KRB5_ENCTYPE_ARCFOUR_HMAC_OLD
-#define ETYPE_ARCFOUR_HMAC_OLD_EXP KRB5_ENCTYPE_ARCFOUR_HMAC_OLD_EXP
-#define ETYPE_DES_CBC_NONE KRB5_ENCTYPE_DES_CBC_NONE
-#define ETYPE_DES3_CBC_NONE KRB5_ENCTYPE_DES3_CBC_NONE
-#define ETYPE_DES_CFB64_NONE KRB5_ENCTYPE_DES_CFB64_NONE
-#define ETYPE_DES_PCBC_NONE KRB5_ENCTYPE_DES_PCBC_NONE
-#define ETYPE_DIGEST_MD5_NONE KRB5_ENCTYPE_DIGEST_MD5_NONE
-#define ETYPE_CRAM_MD5_NONE KRB5_ENCTYPE_CRAM_MD5_NONE
+#define ENCTYPE_ARCFOUR_HMAC	KRB5_ENCTYPE_ARCFOUR_HMAC_MD5
+#define ENCTYPE_ARCFOUR_HMAC_MD5	KRB5_ENCTYPE_ARCFOUR_HMAC_MD5
+#define ENCTYPE_ARCFOUR_HMAC_MD5_56	KRB5_ENCTYPE_ARCFOUR_HMAC_MD5_56
+#define ENCTYPE_ENCTYPE_PK_CROSS	KRB5_ENCTYPE_ENCTYPE_PK_CROSS
+#define ENCTYPE_DES_CBC_NONE	KRB5_ENCTYPE_DES_CBC_NONE
+#define ENCTYPE_DES3_CBC_NONE	KRB5_ENCTYPE_DES3_CBC_NONE
+#define ENCTYPE_DES_CFB64_NONE	KRB5_ENCTYPE_DES_CFB64_NONE
+#define ENCTYPE_DES_PCBC_NONE	KRB5_ENCTYPE_DES_PCBC_NONE
+#define ETYPE_NULL		KRB5_ENCTYPE_NULL
+#define ETYPE_DES_CBC_CRC	KRB5_ENCTYPE_DES_CBC_CRC
+#define ETYPE_DES_CBC_MD4	KRB5_ENCTYPE_DES_CBC_MD4
+#define ETYPE_DES_CBC_MD5	KRB5_ENCTYPE_DES_CBC_MD5
+#define ETYPE_DES3_CBC_MD5	KRB5_ENCTYPE_DES3_CBC_MD5
+#define ETYPE_OLD_DES3_CBC_SHA1	KRB5_ENCTYPE_OLD_DES3_CBC_SHA1
+#define ETYPE_SIGN_DSA_GENERATE	KRB5_ENCTYPE_SIGN_DSA_GENERATE
+#define ETYPE_ENCRYPT_RSA_PRIV	KRB5_ENCTYPE_ENCRYPT_RSA_PRIV
+#define ETYPE_ENCRYPT_RSA_PUB	KRB5_ENCTYPE_ENCRYPT_RSA_PUB
+#define ETYPE_DES3_CBC_SHA1	KRB5_ENCTYPE_DES3_CBC_SHA1
+#define ETYPE_AES128_CTS_HMAC_SHA1_96	KRB5_ENCTYPE_AES128_CTS_HMAC_SHA1_96
+#define ETYPE_AES256_CTS_HMAC_SHA1_96	KRB5_ENCTYPE_AES256_CTS_HMAC_SHA1_96
+#define ETYPE_AES128_CTS_HMAC_SHA256_128	KRB5_ENCTYPE_AES128_CTS_HMAC_SHA256_128
+#define ETYPE_AES256_CTS_HMAC_SHA384_192	KRB5_ENCTYPE_AES256_CTS_HMAC_SHA384_192
+#define ETYPE_ARCFOUR_HMAC_MD5	KRB5_ENCTYPE_ARCFOUR_HMAC_MD5
+#define ETYPE_ARCFOUR_HMAC_MD5_56	KRB5_ENCTYPE_ARCFOUR_HMAC_MD5_56
+#define ETYPE_ENCTYPE_PK_CROSS	KRB5_ENCTYPE_ENCTYPE_PK_CROSS
+#define ETYPE_ARCFOUR_MD4	KRB5_ENCTYPE_ARCFOUR_MD4
+#define ETYPE_ARCFOUR_HMAC_OLD	KRB5_ENCTYPE_ARCFOUR_HMAC_OLD
+#define ETYPE_ARCFOUR_HMAC_OLD_EXP	KRB5_ENCTYPE_ARCFOUR_HMAC_OLD_EXP
+#define ETYPE_DES_CBC_NONE	KRB5_ENCTYPE_DES_CBC_NONE
+#define ETYPE_DES3_CBC_NONE	KRB5_ENCTYPE_DES3_CBC_NONE
+#define ETYPE_DES_CFB64_NONE	KRB5_ENCTYPE_DES_CFB64_NONE
+#define ETYPE_DES_PCBC_NONE	KRB5_ENCTYPE_DES_PCBC_NONE
+#define ETYPE_DIGEST_MD5_NONE	KRB5_ENCTYPE_DIGEST_MD5_NONE
+#define ETYPE_CRAM_MD5_NONE	KRB5_ENCTYPE_CRAM_MD5_NONE
+#define DOMAIN_X500_COMPRESS	domain_X500_Compress
 
 /* PDU types */
 typedef enum krb5_pdu {
@@ -268,6 +275,10 @@ typedef enum krb5_key_usage {
     KRB5_KU_PA_SERVER_REFERRAL = 26,
     /* Keyusage for the server referral in a TGS req */
     KRB5_KU_SAM_ENC_NONCE_SAD = 27,
+    /* Defined in [MS-SFU] */
+    KRB5_KU_PA_S4U_X509_USER_REQUEST = 26,
+    /* Defined in [MS-SFU] */
+    KRB5_KU_PA_S4U_X509_USER_REPLY = 27,
     /* Encryption of the SAM-NONCE-OR-SAD field */
     KRB5_KU_PA_PKINIT_KX = 44,
     /* Encryption type of the kdc session contribution in pk-init */
@@ -357,15 +368,7 @@ typedef AP_REQ krb5_ap_req;
 
 struct krb5_cc_ops;
 
-#ifdef _WIN32
-#define KRB5_USE_PATH_TOKENS 1
-#endif
-
-#ifdef KRB5_USE_PATH_TOKENS
 #define KRB5_DEFAULT_CCFILE_ROOT "%{TEMP}/krb5cc_"
-#else
-#define KRB5_DEFAULT_CCFILE_ROOT "/tmp/krb5cc_"
-#endif
 
 #define KRB5_DEFAULT_CCROOT "FILE:" KRB5_DEFAULT_CCFILE_ROOT
 
@@ -380,7 +383,10 @@ typedef struct krb5_cccol_cursor_data *krb5_cccol_cursor;
 typedef struct krb5_ccache_data {
     const struct krb5_cc_ops *ops;
     krb5_data data;
-    int initialized; /* if non-zero: krb5_cc_initialize() called, now empty */
+    unsigned int cc_initialized:1;      /* if 1: krb5_cc_initialize() called */
+    unsigned int cc_need_start_realm:1;
+    unsigned int cc_start_tgt_stored:1;
+    unsigned int cc_kx509_done:1;
 }krb5_ccache_data;
 
 typedef struct krb5_ccache_data *krb5_ccache;
@@ -436,6 +442,7 @@ typedef union {
 /* flags for krb5_verify_ap_req */
 
 #define KRB5_VERIFY_AP_REQ_IGNORE_INVALID	(1 << 0)
+#define KRB5_VERIFY_AP_REQ_IGNORE_ADDRS		(1 << 1)
 
 #define KRB5_GC_CACHED			(1U << 0)
 #define KRB5_GC_USER_USER		(1U << 1)
@@ -482,9 +489,15 @@ typedef struct krb5_creds {
 
 typedef struct krb5_cc_cache_cursor_data *krb5_cc_cache_cursor;
 
-#define KRB5_CC_OPS_VERSION 3
+#define KRB5_CC_OPS_VERSION_0	0
+#define KRB5_CC_OPS_VERSION_1	1
+#define KRB5_CC_OPS_VERSION_2	2
+#define KRB5_CC_OPS_VERSION_3	3
+#define KRB5_CC_OPS_VERSION_5	5
 
+/* Only extend the structure. Do not change signatures. */
 typedef struct krb5_cc_ops {
+    /* Version 0 */
     int version;
     const char *prefix;
     const char* (KRB5_CALLCONV * get_name)(krb5_context, krb5_ccache);
@@ -511,27 +524,43 @@ typedef struct krb5_cc_ops {
     krb5_error_code (KRB5_CALLCONV * end_cache_get)(krb5_context, krb5_cc_cursor);
     krb5_error_code (KRB5_CALLCONV * move)(krb5_context, krb5_ccache, krb5_ccache);
     krb5_error_code (KRB5_CALLCONV * get_default_name)(krb5_context, char **);
+    /* Version 1 */
     krb5_error_code (KRB5_CALLCONV * set_default)(krb5_context, krb5_ccache);
+    /* Version 2 */
     krb5_error_code (KRB5_CALLCONV * lastchange)(krb5_context, krb5_ccache, krb5_timestamp *);
+    /* Version 3 */
     krb5_error_code (KRB5_CALLCONV * set_kdc_offset)(krb5_context, krb5_ccache, krb5_deltat);
     krb5_error_code (KRB5_CALLCONV * get_kdc_offset)(krb5_context, krb5_ccache, krb5_deltat *);
+    /* Version 5 */
+    krb5_error_code (KRB5_CALLCONV * get_name_2)(krb5_context, krb5_ccache,
+						 const char **id, const char **res,
+						 const char **sub);
+    krb5_error_code (KRB5_CALLCONV * resolve_2)(krb5_context, krb5_ccache *id, const char *res,
+						const char *sub);
+    /* Add new functions here for versions 6 and above */
 } krb5_cc_ops;
 
-struct krb5_log_facility;
-
+/*
+ * krb5_config_binding is identical to struct heim_config_binding
+ * within heimbase.h.  Its format is public and used by callers of
+ * krb5_config_get_list() and krb5_config_vget_list().
+ */
+enum krb5_config_type {
+    krb5_config_string,
+    krb5_config_list,
+};
 struct krb5_config_binding {
-    enum { krb5_config_string, krb5_config_list } type;
+    enum krb5_config_type type;
     char *name;
     struct krb5_config_binding *next;
     union {
-	char *string;
-	struct krb5_config_binding *list;
-	void *generic;
+        char *string;
+        struct krb5_config_binding *list;
+        void *generic;
     } u;
 };
 
 typedef struct krb5_config_binding krb5_config_binding;
-
 typedef krb5_config_binding krb5_config_section;
 
 typedef struct krb5_ticket {
@@ -552,8 +581,9 @@ typedef Authenticator krb5_donot_replay;
 #define KRB5_STORAGE_PRINCIPAL_WRONG_NUM_COMPONENTS	0x02
 #define KRB5_STORAGE_PRINCIPAL_NO_NAME_TYPE		0x04
 #define KRB5_STORAGE_KEYBLOCK_KEYTYPE_TWICE		0x08
-#define KRB5_STORAGE_BYTEORDER_MASK			0x60
+#define KRB5_STORAGE_BYTEORDER_MASK			0x70
 #define KRB5_STORAGE_BYTEORDER_BE			0x00 /* default */
+#define KRB5_STORAGE_BYTEORDER_PACKED			0x10
 #define KRB5_STORAGE_BYTEORDER_LE			0x20
 #define KRB5_STORAGE_BYTEORDER_HOST			0x40
 #define KRB5_STORAGE_CREDS_FLAGS_WRONG_BITORDER		0x80
@@ -667,16 +697,15 @@ typedef struct {
     KRB_ERROR error;
 } krb5_kdc_rep;
 
-extern const char *heimdal_version, *heimdal_long_version;
+extern const char *const heimdal_version, *const heimdal_long_version;
 
-typedef void (KRB5_CALLCONV * krb5_log_log_func_t)(const char*, const char*, void*);
+typedef void (KRB5_CALLCONV * krb5_log_log_func_t)(krb5_context,
+						   const char*,
+						   const char*,
+						   void*);
 typedef void (KRB5_CALLCONV * krb5_log_close_func_t)(void*);
 
-typedef struct krb5_log_facility {
-    char *program;
-    int len;
-    struct facility *val;
-} krb5_log_facility;
+typedef struct heim_log_facility_s krb5_log_facility;
 
 typedef EncAPRepPart krb5_ap_rep_enc_part;
 
@@ -689,9 +718,10 @@ typedef EncAPRepPart krb5_ap_rep_enc_part;
 #define KRB5_WELLKNOWN_NAME ("WELLKNOWN")
 #define KRB5_ANON_NAME ("ANONYMOUS")
 #define KRB5_ANON_REALM ("WELLKNOWN:ANONYMOUS")
+#define KRB5_FEDERATED_NAME ("FEDERATED")
+#define KRB5_FEDERATED_REALM ("WELLKNOWN:FEDERATED")
 #define KRB5_WELLKNOWN_ORG_H5L_REALM ("WELLKNOWN:ORG.H5L")
 #define KRB5_DIGEST_NAME ("digest")
-
 
 #define KRB5_PKU2U_REALM_NAME ("WELLKNOWN:PKU2U")
 #define KRB5_LKDC_REALM_NAME ("WELLKNOWN:COM.APPLE.LKDC")
@@ -811,11 +841,13 @@ typedef struct krb5_verify_opt {
 struct krb5_krbhst_data;
 typedef struct krb5_krbhst_data *krb5_krbhst_handle;
 
-#define KRB5_KRBHST_KDC		1
-#define KRB5_KRBHST_ADMIN	2
-#define KRB5_KRBHST_CHANGEPW	3
-#define KRB5_KRBHST_KRB524	4
-#define KRB5_KRBHST_KCA		5
+#define KRB5_KRBHST_KDC			1
+#define KRB5_KRBHST_ADMIN		2
+#define KRB5_KRBHST_CHANGEPW		3
+#define KRB5_KRBHST_KRB524		4
+#define KRB5_KRBHST_KCA			5
+#define KRB5_KRBHST_READONLY_ADMIN	6
+#define KRB5_KRBHST_TKTBRIDGEAP		7
 
 typedef struct krb5_krbhst_info {
     enum { KRB5_KRBHST_UDP,
@@ -870,13 +902,30 @@ typedef krb5_error_code
 (KRB5_CALLCONV * krb5_sendto_ctx_func)(krb5_context, krb5_sendto_ctx, void *,
 				       const krb5_data *, int *);
 
-struct krb5_plugin;
 enum krb5_plugin_type {
     PLUGIN_TYPE_DATA = 1,
-    PLUGIN_TYPE_FUNC
+    PLUGIN_TYPE_FUNC /* no longer supported */
 };
 
+/*
+ * Since <krb5/common_plugin.h> is new with Heimdal 8, users looking to write
+ * portable plugins across Heimdal 7 and 8 need a conditional compilation
+ * predicate from a header file that does exist in both major releases.  This
+ * is as good a place as any to define a plugin source-compatibility version
+ * number.
+ *
+ * When this macro is defined and is equal to 1, the Heimdal 8 plugin source
+ * API, and <krb5/common_plugin.h> header are available and should be used.
+ *
+ * In Heimdal 7, this macro is not defined, and <krb5/common_plugin.h> may not
+ * be available.
+ */
+#define KRB5_PLUGIN_COMMON_SPI_VERSION 1
+
 #define KRB5_PLUGIN_INVOKE_ALL  1
+
+typedef uintptr_t
+(KRB5_LIB_CALL *krb5_get_instance_func_t)(const char *);
 
 struct credentials; /* this is to keep the compiler happy */
 struct getargs;
@@ -963,13 +1012,14 @@ typedef struct krb5_name_canon_iterator_data *krb5_name_canon_iterator;
  */
 
 struct hx509_certs_data;
+typedef struct krb5_kx509_req_ctx_data *krb5_kx509_req_ctx;
 
 #include <krb5-protos.h>
 
 /* variables */
 
-extern KRB5_LIB_VARIABLE const char *krb5_config_file;
-extern KRB5_LIB_VARIABLE const char *krb5_defkeyname;
+extern KRB5_LIB_VARIABLE const char *const krb5_config_file;
+extern KRB5_LIB_VARIABLE const char *const krb5_defkeyname;
 
 
 extern KRB5_LIB_VARIABLE const krb5_cc_ops krb5_acc_ops;
@@ -979,6 +1029,7 @@ extern KRB5_LIB_VARIABLE const krb5_cc_ops krb5_mcc_ops;
 extern KRB5_LIB_VARIABLE const krb5_cc_ops krb5_kcm_ops;
 extern KRB5_LIB_VARIABLE const krb5_cc_ops krb5_akcm_ops;
 extern KRB5_LIB_VARIABLE const krb5_cc_ops krb5_scc_ops;
+extern KRB5_LIB_VARIABLE const krb5_cc_ops krb5_krcc_ops;
 
 extern KRB5_LIB_VARIABLE const krb5_kt_ops krb5_fkt_ops;
 extern KRB5_LIB_VARIABLE const krb5_kt_ops krb5_wrfkt_ops;
@@ -987,12 +1038,13 @@ extern KRB5_LIB_VARIABLE const krb5_kt_ops krb5_mkt_ops;
 extern KRB5_LIB_VARIABLE const krb5_kt_ops krb5_akf_ops;
 extern KRB5_LIB_VARIABLE const krb5_kt_ops krb5_any_ops;
 
-extern KRB5_LIB_VARIABLE const char *krb5_cc_type_api;
-extern KRB5_LIB_VARIABLE const char *krb5_cc_type_file;
-extern KRB5_LIB_VARIABLE const char *krb5_cc_type_memory;
-extern KRB5_LIB_VARIABLE const char *krb5_cc_type_kcm;
-extern KRB5_LIB_VARIABLE const char *krb5_cc_type_scc;
-extern KRB5_LIB_VARIABLE const char *krb5_cc_type_dcc;
+extern KRB5_LIB_VARIABLE const char *const krb5_cc_type_api;
+extern KRB5_LIB_VARIABLE const char *const krb5_cc_type_file;
+extern KRB5_LIB_VARIABLE const char *const krb5_cc_type_memory;
+extern KRB5_LIB_VARIABLE const char *const krb5_cc_type_kcm;
+extern KRB5_LIB_VARIABLE const char *const krb5_cc_type_scc;
+extern KRB5_LIB_VARIABLE const char *const krb5_cc_type_dcc;
+extern KRB5_LIB_VARIABLE const char *const krb5_cc_type_keyring;
 
 /* clang analyzer workarounds */
 

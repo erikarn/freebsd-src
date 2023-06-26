@@ -42,13 +42,6 @@ struct _krb5_key_data {
 
 struct _krb5_key_usage;
 
-struct krb5_crypto_data {
-    struct _krb5_encryption_type *et;
-    struct _krb5_key_data key;
-    int num_key_usage;
-    struct _krb5_key_usage *key_usage;
-};
-
 #define CRYPTO_ETYPE(C) ((C)->et->type)
 
 /* bits for `flags' below */
@@ -59,6 +52,7 @@ struct krb5_crypto_data {
 #define F_PSEUDO		0x0010	/* not a real protocol type */
 #define F_DISABLED		0x0020	/* enctype/checksum disabled */
 #define F_WEAK			0x0040	/* enctype is considered weak */
+#define F_OLD			0x0080	/* enctype is old */
 
 #define F_RFC3961_ENC		0x0100	/* RFC3961 simplified profile */
 #define F_SPECIAL		0x0200	/* backwards */
@@ -97,14 +91,16 @@ struct _krb5_checksum_type {
     size_t checksumsize;
     unsigned flags;
     krb5_error_code (*checksum)(krb5_context context,
+				krb5_crypto crypto,
 				struct _krb5_key_data *key,
-				const void *buf, size_t len,
 				unsigned usage,
+				const struct krb5_crypto_iov *iov, int niov,
 				Checksum *csum);
     krb5_error_code (*verify)(krb5_context context,
+			      krb5_crypto crypto,
 			      struct _krb5_key_data *key,
-			      const void *buf, size_t len,
 			      unsigned usage,
+			      const struct krb5_crypto_iov *iov, int niov,
 			      Checksum *csum);
 };
 
@@ -125,14 +121,20 @@ struct _krb5_encryption_type {
 			       krb5_boolean encryptp,
 			       int usage,
 			       void *ivec);
+    krb5_error_code (*encrypt_iov)(krb5_context context,
+			       struct _krb5_key_data *key,
+			       krb5_crypto_iov *iov, int niov,
+			       krb5_boolean encryptp,
+			       int usage,
+			       void *ivec);
     size_t prf_length;
     krb5_error_code (*prf)(krb5_context,
 			   krb5_crypto, const krb5_data *, krb5_data *);
 };
 
-#define ENCRYPTION_USAGE(U) ((int32_t)((((uint32_t)(U)) << 8)) | 0xAA)
-#define INTEGRITY_USAGE(U)  ((int32_t)((((uint32_t)(U)) << 8)) | 0x55)
-#define CHECKSUM_USAGE(U)   ((int32_t)((((uint32_t)(U)) << 8)) | 0x99)
+#define ENCRYPTION_USAGE(U) (((uint32_t)(U) << 8) | 0xAA)
+#define INTEGRITY_USAGE(U) (((uint32_t)(U) << 8) | 0x55)
+#define CHECKSUM_USAGE(U) (((uint32_t)(U) << 8) | 0x99)
 
 /* Checksums */
 
@@ -150,7 +152,9 @@ extern struct _krb5_checksum_type _krb5_checksum_hmac_sha256_128_aes128;
 extern struct _krb5_checksum_type _krb5_checksum_hmac_sha384_192_aes256;
 extern struct _krb5_checksum_type _krb5_checksum_hmac_md5;
 extern struct _krb5_checksum_type _krb5_checksum_sha1;
-extern struct _krb5_checksum_type _krb5_checksum_sha2;
+extern struct _krb5_checksum_type _krb5_checksum_sha256;
+extern struct _krb5_checksum_type _krb5_checksum_sha384;
+extern struct _krb5_checksum_type _krb5_checksum_sha512;
 
 extern struct _krb5_checksum_type *_krb5_checksum_types[];
 extern int _krb5_num_checksums;
@@ -187,15 +191,41 @@ extern struct _krb5_encryption_type _krb5_enctype_null;
 extern struct _krb5_encryption_type *_krb5_etypes[];
 extern int _krb5_num_etypes;
 
+static inline int
+_krb5_crypto_iov_should_sign(const struct krb5_crypto_iov *iov)
+{
+    return (iov->flags == KRB5_CRYPTO_TYPE_DATA
+            || iov->flags == KRB5_CRYPTO_TYPE_SIGN_ONLY
+            || iov->flags == KRB5_CRYPTO_TYPE_HEADER
+            || iov->flags == KRB5_CRYPTO_TYPE_PADDING);
+}
+
 /* NO_HCRYPTO_POLLUTION is defined in pkinit-ec.c.  See commentary there. */
 #ifndef NO_HCRYPTO_POLLUTION
 /* Interface to the EVP crypto layer provided by hcrypto */
 struct _krb5_evp_schedule {
     /*
      * Normally we'd say EVP_CIPHER_CTX here, but!  this header gets
-     * included in lib/krb5/pkinit-ec.ck
+     * included in lib/krb5/pkinit-ec.c
      */
     EVP_CIPHER_CTX ectx;
     EVP_CIPHER_CTX dctx;
 };
+
+struct krb5_crypto_data {
+    struct _krb5_encryption_type *et;
+    struct _krb5_key_data key;
+    EVP_MD_CTX *mdctx;
+    HMAC_CTX *hmacctx;
+    int num_key_usage;
+    struct _krb5_key_usage *key_usage;
+    krb5_flags flags;
+};
+
+/*
+ * Allow generation and verification of unkeyed checksums even when
+ * key material is available.
+ */
+#define KRB5_CRYPTO_FLAG_ALLOW_UNKEYED_CHECKSUM		    0x01
+
 #endif

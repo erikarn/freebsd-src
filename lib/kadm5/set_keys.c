@@ -288,7 +288,7 @@ _kadm5_set_keys3(kadm5_server_context *context,
     len  = n_keys;
     keys = malloc (len * sizeof(*keys));
     if (keys == NULL && len != 0)
-	return ENOMEM;
+	return krb5_enomem(context->context);
 
     _kadm5_init_keys (keys, len);
 
@@ -353,7 +353,7 @@ _kadm5_set_keys_randomly (kadm5_server_context *context,
 
    kblock = malloc(num_keys * sizeof(kblock[0]));
    if (kblock == NULL) {
-	ret = ENOMEM;
+	ret = krb5_enomem(context->context);
 	_kadm5_free_keys (context->context, num_keys, keys);
 	return ret;
    }
@@ -395,19 +395,21 @@ _kadm5_set_keys_randomly (kadm5_server_context *context,
 out:
    if(ret) {
 	for (i = 0; i < num_keys; ++i)
-	    krb5_free_keyblock_contents (context->context, &kblock[i]);
+	    krb5_free_keyblock_contents(context->context, &kblock[i]);
 	free(kblock);
-	_kadm5_free_keys (context->context, num_keys, keys);
+	_kadm5_free_keys(context->context, num_keys, keys);
 	return ret;
    }
 
-   _kadm5_free_keys (context->context, ent->keys.len, ent->keys.val);
+   _kadm5_free_keys(context->context, ent->keys.len, ent->keys.val);
    ent->keys.val = keys;
    ent->keys.len = num_keys;
    if (n_keys && new_keys) {
        *new_keys     = kblock;
        *n_keys       = num_keys;
    } else {
+	for (i = 0; i < num_keys; ++i)
+	    krb5_free_keyblock_contents(context->context, &kblock[i]);
         free(kblock);
    }
 

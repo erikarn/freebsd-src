@@ -31,7 +31,7 @@
 
 RELDIR=kuser
 
-intcflags=-I$(OBJ)
+intcflags=-I$(OBJ) -I$(SRC)\lib\gssapi -I$(OBJDIR)\lib\gssapi -I$(OBJDIR)\lib\gss_preauth
 
 !include ../windows/NTMakefile.w32 
 
@@ -55,8 +55,12 @@ NOINSTPROGRAMS=\
 
 
 BINLIBS=\
+	$(LIBHEIMBASE) \
+	$(LIBGSS_PREAUTH) \
+	$(LIBGSSAPI)	\
 	$(LIBHEIMDAL)	\
 	$(LIBHEIMNTLM)	\
+	$(LIBHX509)	\
 !if !defined(NO_AFS)
         $(LIBKAFS)      \
 !endif
@@ -70,7 +74,7 @@ clean::
 
 
 $(BINDIR)\kinit.exe: $(OBJ)\kinit.obj $(BINLIBS) $(OBJ)\kinit-version.res
-	$(EXECONLINK)
+	$(EXECONLINK) Secur32.lib Shell32.lib
 	$(EXEPREP)
 
 HEIMTOOLS_OBJS =				\
@@ -78,6 +82,7 @@ HEIMTOOLS_OBJS =				\
 	$(OBJ)\heimtools.obj			\
 	$(OBJ)\kswitch.obj		\
 	$(OBJ)\klist.obj		\
+	$(OBJ)\kx509.obj		\
 	$(OBJ)\copy_cred_cache.obj
 
 HEIMTOOLSLIBS=\
@@ -85,7 +90,7 @@ HEIMTOOLSLIBS=\
 	$(LIBSL)
 
 $(BINDIR)\heimtools.exe: $(HEIMTOOLS_OBJS) $(HEIMTOOLSLIBS) $(OBJ)\heimtools-version.res
-	$(EXECONLINK)
+	$(EXECONLINK) Secur32.lib Shell32.lib
 	$(EXEPREP)
 
 

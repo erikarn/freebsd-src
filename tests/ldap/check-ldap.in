@@ -54,6 +54,8 @@ kgetcred="${TESTS_ENVIRONMENT} ../../kuser/kgetcred -c $cache"
 kadmin="${TESTS_ENVIRONMENT} ../../kadmin/kadmin -l -r $R"
 kdc="${TESTS_ENVIRONMENT} ../../kdc/kdc --addresses=localhost -P $port"
 
+foopassword="fooLongPasswordYo123;"
+
 testfailed="echo test failed; exit 1"
 
 KRB5_CONFIG="${objdir}/krb5.conf"
@@ -102,8 +104,8 @@ ${kadmin} \
     --realm-max-renewable-life=1month \
     ${R} || exit 1
 
-${kadmin} add -p foo --use-defaults foo@${R} || exit 1
-${kadmin} add -p foo --use-defaults bar@${R} || exit 1
+${kadmin} add -p "$foopassword" --use-defaults foo@${R} || exit 1
+${kadmin} add -p "$foopassword" --use-defaults bar@${R} || exit 1
 ${kadmin} add -p kaka --use-defaults ${server}@${R} || exit 1
 
 ${kadmin} cpw --random-password bar@${R} > /dev/null || exit 1
@@ -111,14 +113,14 @@ ${kadmin} cpw --random-password bar@${R} > /dev/null || exit 1
 ${kadmin} cpw --random-password bar@${R} > /dev/null || exit 1
 
 ${kadmin} cpw --random-password suser@${R} > /dev/null|| exit 1
-${kadmin} cpw --password=foo suser@${R} || exit 1
+${kadmin} cpw --password="$foopassword" suser@${R} || exit 1
 
 ${kadmin} list '*' > /dev/null || exit 1
 
-echo foo > ${objdir}/foopassword
+echo "$foopassword" > ${objdir}/foopassword
 
 echo Starting kdc
-${kdc} --detach --testing || { echo "kdc failed to start"; exit 1; }
+${kdc} --detach --testing || { echo "kdc failed to start"; cat messages.log; exit 1; }
 kdcpid=`getpid kdc`
 
 trap "kill ${kdcpid}; echo signal killing kdc; sh ${srcdir}/slapd-stop ; exit 1;" EXIT
@@ -133,7 +135,7 @@ echo "Getting ${server} ticket"
 ${kgetcred} ${server}@${R} || { ec=1 ; eval "${testfailed}"; }
 
 
-echo "Getting *@$R inital ticket (fail)";
+echo "Getting *@$R initial ticket (fail)";
 ${kinit} --password-file=${objdir}/foopassword '*'@$R 2>/dev/null && \
 	{ ec=1 ; eval "${testfailed}"; }
 

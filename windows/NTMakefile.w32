@@ -207,6 +207,8 @@ EXEGUILINK_C = $(LINK) $(ldebug) $(guilflags) $(guilibsdll) $(libmach)
 DLLCONLINK_C = $(LINK) $(ldebug) $(dlllflags) $(conlibsdll) $(libmach)
 DLLGUILINK_C = $(LINK) $(ldebug) $(dlllflags) $(guilibsdll) $(libmach)
 
+C2OBJ_C_MT = $(CC) $(cdebug) $(cflags) $(cvarsmt) $(AUXCFLAGS) $(intcflags) $(cdefines) $(cincdirs) $(cwarn)
+
 !else # STATICRUNTIME
 
 C2OBJ_C = $(CC) $(cdebug) $(cflags) $(cvarsmt) $(AUXCFLAGS) $(intcflags) $(cdefines) $(cincdirs) $(cwarn)
@@ -440,7 +442,7 @@ clean::
 	-$(RM) $(OBJ)\*.*
 !endif
 
-.SUFFIXES: .c .cpp .hin .h .x .hx
+.SUFFIXES: .c .cpp .hin .h .hx
 
 #----------------------------------------------------------------------
 # Manifest handling
@@ -510,10 +512,10 @@ SIGNTOOL=signtool.exe
 !ifdef SIGNTOOL_C
 
 !ifndef SIGNTOOL_T
-SIGNTOOL_T=http://timestamp.verisign.com/scripts/timstamp.dll
+SIGNTOOL_T=http://timestamp.digicert.com
 !endif
 !ifndef SIGNTOOL_T_SHA256
-SIGNTOOL_T_SHA256=http://sha256timestamp.ws.symantec.com/sha256/timestamp
+SIGNTOOL_T_SHA256=http://timestamp.digicert.com
 !endif
 
 _CODESIGN=( $(SIGNTOOL) sign /fd sha1 $(SIGNTOOL_O) /t $(SIGNTOOL_T) $(SIGNTOOL_C) /v $@ )
@@ -574,9 +576,11 @@ DLLPREP_MERGE=\
 #
 
 LIBASN1	    =$(LIBDIR)\libasn1.lib
+LIBASN1_S   =$(LIBDIR)\libasn1_s.lib
 LIBCOMERR   =$(LIBDIR)\libcom_err.lib
 LIBEDITLINE =$(LIBDIR)\libeditline.lib
 LIBGSSAPI   =$(LIBDIR)\libgssapi.lib
+LIBGSS_PREAUTH=$(LIBDIR)\libgss_preauth.lib
 LIBHCRYPTO  =$(LIBDIR)\libhcrypto.lib
 LIBHDB	    =$(LIBDIR)\libhdb.lib
 LIBHEIMBASE =$(LIBDIR)\libheimbase.lib
@@ -596,6 +600,7 @@ LIBSL	    =$(LIBDIR)\libsl.lib
 LIBSQLITE   =$(LIBDIR)\libsqlite.lib
 LIBVERS	    =$(LIBDIR)\libvers.lib
 LIBWIND	    =$(LIBDIR)\libwind.lib
+LIBX25519   =$(LIBDIR)\libx25519.lib
 
 !ifdef VER_DEBUG
 ASM_DBG=.Debug

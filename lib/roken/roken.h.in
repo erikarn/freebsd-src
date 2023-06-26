@@ -1,6 +1,6 @@
 /* -*- C -*- */
 /*
- * Copyright (c) 1995-2005 Kungliga Tekniska Högskolan
+ * Copyright (c) 1995-2017 Kungliga Tekniska Högskolan
  * (Royal Institute of Technology, Stockholm, Sweden).
  * All rights reserved.
  *
@@ -32,11 +32,11 @@
  * SUCH DAMAGE.
  */
 
-#if defined(_WIN32) && _MSC_VER >= 1400
+# if defined(_WIN32) && _MSC_VER >= 1400
 /* _CRT_RAND_S must be defined before including stdlib.h */
-# define _CRT_RAND_S
-# define HAVE_WIN32_RAND_S 1
-#endif
+#  define _CRT_RAND_S
+#  define HAVE_WIN32_RAND_S 1
+# endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -48,20 +48,103 @@
 #include <limits.h>
 #include <signal.h>
 
-#ifndef ROKEN_LIB_FUNCTION
-#ifdef _WIN32
-#  define ROKEN_LIB_CALL     __cdecl
-#  ifdef ROKEN_LIB_DYNAMIC
+#ifdef HAVE_UTIL_H
+#include <util.h>
+#endif
+
+# ifndef ROKEN_LIB_FUNCTION
+#  ifdef _WIN32
+#   ifdef ROKEN_LIB_DYNAMIC
 #    define ROKEN_LIB_FUNCTION __declspec(dllimport)
-#    define ROKEN_LIB_VARIABLE __declspec(dllimport)
-#  else
+#   else
 #    define ROKEN_LIB_FUNCTION
-#    define ROKEN_LIB_VARIABLE
+#   endif
+#  else
+#   define ROKEN_LIB_FUNCTION
 #  endif
+# endif
+
+# ifndef ROKEN_LIB_NORETURN_FUNCTION
+#  ifdef _WIN32
+#   ifdef ROKEN_LIB_DYNAMIC
+#    define ROKEN_LIB_NORETURN_FUNCTION __declspec(dllimport noreturn)
+#   else
+#    define ROKEN_LIB_NORETURN_FUNCTION __declspec(noreturn)
+#   endif
+#  else
+#   define ROKEN_LIB_NORETURN_FUNCTION
+#  endif
+# endif
+
+# ifndef ROKEN_LIB_CALL
+#  ifdef _WIN32
+#   define ROKEN_LIB_CALL     __cdecl
+#  else
+#   define ROKEN_LIB_CALL
+#  endif
+# endif
+
+# ifndef ROKEN_LIB_VARIABLE
+#  ifdef _WIN32
+#   ifdef ROKEN_LIB_DYNAMIC
+#    define ROKEN_LIB_VARIABLE __declspec(dllimport)
+#   else
+#    define ROKEN_LIB_VARIABLE
+#   endif
+#  else
+#   define ROKEN_LIB_VARIABLE
+#  endif
+# endif
+
+#if !defined(__has_extension)
+#define __has_extension(x) 0
+#endif
+
+#ifndef ROKEN_REQUIRE_GNUC
+#define ROKEN_REQUIRE_GNUC(m,n,p) \
+    (((__GNUC__ * 10000) + (__GNUC_MINOR__ * 100) + __GNUC_PATCHLEVEL__) >= \
+     (((m) * 10000) + ((n) * 100) + (p)))
+#endif
+
+#ifndef ROKEN_DEPRECATED
+#if __has_extension(deprecated) || ROKEN_REQUIRE_GNUC(3,1,0)
+#define ROKEN_DEPRECATED __attribute__ ((__deprecated__))
+#elif defined(_MSC_VER) && (_MSC_VER>1200)
+#define ROKEN_DEPRECATED __declspec(deprecated)
 #else
-#define ROKEN_LIB_FUNCTION
-#define ROKEN_LIB_CALL
-#define ROKEN_LIB_VARIABLE
+#define ROKEN_DEPRECATED
+#endif
+#endif
+
+#ifndef ROKEN_PRINTF_ATTRIBUTE
+#if __has_extension(format) || ROKEN_REQUIRE_GNUC(3,1,0)
+#define ROKEN_PRINTF_ATTRIBUTE(x) __attribute__ ((__format__ x))
+#else
+#define ROKEN_PRINTF_ATTRIBUTE(x)
+#endif
+#endif
+
+#ifndef ROKEN_NORETURN_ATTRIBUTE
+#if __has_extension(noreturn) || ROKEN_REQUIRE_GNUC(3,1,0)
+#define ROKEN_NORETURN_ATTRIBUTE __attribute__ ((__noreturn__))
+#else
+#define ROKEN_NORETURN_ATTRIBUTE
+#endif
+#endif
+
+#ifndef ROKEN_UNUSED_ATTRIBUTE
+#if __has_extension(unused) || ROKEN_REQUIRE_GNUC(3,1,0)
+#define ROKEN_UNUSED_ATTRIBUTE __attribute__ ((__unused__))
+#else
+#define ROKEN_UNUSED_ATTRIBUTE
+#endif
+#endif
+
+#ifndef ROKEN_WARN_UNUSED_RESULT_ATTRIBUTE
+#if __has_extension(warn_unused_result) || ROKEN_REQUIRE_GNUC(3,3,0)
+#define ROKEN_WARN_UNUSED_RESULT_ATTRIBUTE __attribute__ ((__warn_unused_result__))
+#else
+#define ROKEN_WARN_UNUSED_RESULT_ATTRIBUTE
 #endif
 #endif
 
@@ -101,7 +184,10 @@ typedef int rk_socket_t;
 #define rk_SOCK_ERRNO errno
 #define rk_INVALID_SOCKET (-1)
 
-#define rk_SOCK_INIT() 0
+static inline ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL rk_SOCK_INIT(void) {
+	return 0;
+}
+
 #define rk_SOCK_EXIT() do { } while(0)
 
 #endif  /* WinSock */
@@ -265,11 +351,15 @@ struct sockaddr_dl;
 #include <paths.h>
 #endif
 
+#ifdef HAVE_DLFCN_H
+#include <dlfcn.h>
+#endif
+
 #ifdef HAVE_DIRENT_H
 #include <dirent.h>
 #endif
 
-#ifdef HAVE_DIRECT_H
+#ifdef WIN32
 #include <direct.h>
 #endif
 
@@ -317,10 +407,6 @@ ROKEN_CPP_START
 #define chdir   _chdir
 
 #define fsync   _commit
-
-#define timezone    _timezone
-
-#define tzname  _tzname
 
 #define _PIPE_BUFFER_SZ 8192
 #define pipe(fds) _pipe((fds), _PIPE_BUFFER_SZ, O_BINARY);
@@ -416,6 +502,11 @@ rk_wcsdup(const unsigned short *);
 
 #endif  /* _MSC_VER */
 
+#ifndef HAVE_MEMMEM
+#define memmem rk_smemmem
+ROKEN_LIB_FUNCTION void * ROKEN_LIB_CALL memmem(const void *, size_t, const void *, size_t);
+#endif
+
 #ifdef HAVE_WINSOCK
 
 /* While we are at it, define WinSock specific scatter gather socket
@@ -476,7 +567,7 @@ ROKEN_LIB_FUNCTION void ROKEN_LIB_CALL endusershell(void);
 #endif
 ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
      rk_snprintf (char *, size_t, const char *, ...)
-     __attribute__ ((__format__ (__printf__, 3, 4)));
+     ROKEN_PRINTF_ATTRIBUTE((__printf__, 3, 4));
 #endif
 
 #if !defined(HAVE_VSNPRINTF) || defined(NEED_VSNPRINTF_PROTO)
@@ -485,7 +576,7 @@ ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
 #endif
 ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
      rk_vsnprintf (char *, size_t, const char *, va_list)
-     __attribute__ ((__format__ (__printf__, 3, 0)));
+     ROKEN_PRINTF_ATTRIBUTE((__printf__, 3, 0));
 #endif
 
 #if !defined(HAVE_ASPRINTF) || defined(NEED_ASPRINTF_PROTO)
@@ -494,7 +585,7 @@ ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
 #endif
 ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
      rk_asprintf (char **, const char *, ...)
-     __attribute__ ((__format__ (__printf__, 2, 3)));
+     ROKEN_PRINTF_ATTRIBUTE((__printf__, 2, 3));
 #endif
 
 #if !defined(HAVE_VASPRINTF) || defined(NEED_VASPRINTF_PROTO)
@@ -503,7 +594,7 @@ ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
 #endif
 ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
     rk_vasprintf (char **, const char *, va_list)
-     __attribute__ ((__format__ (__printf__, 2, 0)));
+    ROKEN_PRINTF_ATTRIBUTE((__printf__, 2, 0));
 #endif
 
 #if !defined(HAVE_ASNPRINTF) || defined(NEED_ASNPRINTF_PROTO)
@@ -512,7 +603,7 @@ ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
 #endif
 ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
     rk_asnprintf (char **, size_t, const char *, ...)
-     __attribute__ ((__format__ (__printf__, 3, 4)));
+    ROKEN_PRINTF_ATTRIBUTE((__printf__, 3, 4));
 #endif
 
 #if !defined(HAVE_VASNPRINTF) || defined(NEED_VASNPRINTF_PROTO)
@@ -521,7 +612,19 @@ ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
 #endif
 ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
     vasnprintf (char **, size_t, const char *, va_list)
-     __attribute__ ((__format__ (__printf__, 3, 0)));
+    ROKEN_PRINTF_ATTRIBUTE((__printf__, 3, 0));
+#endif
+
+#if !defined(HAVE_EVASPRINTF) || defined(NEED_EVASPRINTF_PROTO)
+#define evasprintf  rk_evasprintf
+ROKEN_LIB_FUNCTION char * ROKEN_LIB_CALL
+rk_evasprintf(const char *format, va_list args);
+#endif
+
+#if !defined(HAVE_EASPRINTF) || defined(NEED_EASPRINTF_PROTO)
+#define easprintf   rk_easprintf
+ROKEN_LIB_FUNCTION char * ROKEN_LIB_CALL
+rk_easprintf(const char *format, ...);
 #endif
 
 #ifndef HAVE_STRDUP
@@ -644,18 +747,7 @@ ROKEN_LIB_FUNCTION char* ROKEN_LIB_CALL getcwd(char *, size_t);
 
 #ifdef HAVE_PWD_H
 #include <pwd.h>
-ROKEN_LIB_FUNCTION struct passwd * ROKEN_LIB_CALL k_getpwnam (const char *);
-ROKEN_LIB_FUNCTION struct passwd * ROKEN_LIB_CALL k_getpwuid (uid_t);
 #endif
-
-#ifdef POSIX_GETPWNAM_R
-#define rk_getpwnam_r(_n, _pw, _b, _sz, _pwd) getpwnam_r(_n, _pw, _b, _sz, _pwd)
-#else
-ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
-rk_getpwnam_r(const char *, struct passwd *, char *, size_t, struct passwd **);
-#endif
-
-ROKEN_LIB_FUNCTION const char * ROKEN_LIB_CALL get_default_username (void);
 
 #ifndef HAVE_SETEUID
 #define seteuid rk_seteuid
@@ -679,11 +771,14 @@ ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL lstat(const char *, struct stat *);
 ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL mkstemp(char *);
 #endif
 
-#ifndef HAVE_CGETENT
-#define cgetent rk_cgetent
-#define cgetstr rk_cgetstr
-ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL cgetent(char **, char **, const char *);
-ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL cgetstr(char *, const char *, char **);
+#ifndef HAVE_MKOSTEMP
+#define mkostemp rk_mkostemp
+ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL mkostemp(char *, int);
+#endif
+
+#ifndef HAVE_MKDTEMP
+#define mkdtemp rk_mkdtemp
+ROKEN_LIB_FUNCTION char * ROKEN_LIB_CALL mkdtemp(char *);
 #endif
 
 #ifndef HAVE_INITGROUPS
@@ -702,7 +797,7 @@ ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL rk_rename(const char *, const char *);
 #define rk_rename(__rk_rn_from,__rk_rn_to) rename(__rk_rn_from,__rk_rn_to)
 #endif
 
-#ifdef MKDIR_DOES_NOT_HAVE_MODE
+#ifdef WIN32
 #define mkdir rk_mkdir
 #else
 #define rk_mkdir(__rk_rn_name, __rk_rn_mode) mkdir(__rk_rn_name,__rk_rn_mode)
@@ -734,12 +829,6 @@ ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
 #endif
 ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL innetgr(const char*, const char*,
     const char*, const char*);
-#endif
-
-#ifndef HAVE_IRUSEROK
-#define iruserok rk_iruserok
-ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL iruserok(unsigned, int,
-    const char *, const char *);
 #endif
 
 #if !defined(HAVE_GETHOSTNAME) || defined(NEED_GETHOSTNAME_PROTO)
@@ -803,16 +892,16 @@ int rk_flock(int fd, int operation);
 #ifndef HAVE_DIRFD
 #ifdef HAVE_DIR_DD_FD
 #define dirfd(x) ((x)->dd_fd)
+#elif defined(HAVE_DIR_D_FD)
+#define dirfd(x) ((x)->d_fd)
 #else
 #ifndef _WIN32 /* Windows code never calls dirfd */
-#error Missing dirfd() and ->dd_fd
+#error Missing dirfd() and ->dd_fd and ->d_fd
 #endif
 #endif
 #endif
 
 ROKEN_LIB_FUNCTION time_t ROKEN_LIB_CALL tm2time (struct tm, int);
-
-ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL unix_verify_user(char *, char *);
 
 ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL roken_concat (char *, size_t, ...);
 
@@ -823,7 +912,7 @@ ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL roken_vconcat (char *, size_t, va_list);
 ROKEN_LIB_FUNCTION size_t ROKEN_LIB_CALL
     roken_vmconcat (char **, size_t, va_list);
 
-ROKEN_LIB_FUNCTION void ROKEN_LIB_CALL roken_detach_prep(int, char **, char *);
+ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL roken_detach_prep(int, char **, char *);
 ROKEN_LIB_FUNCTION void ROKEN_LIB_CALL roken_detach_finish(const char *, int);
 
 ROKEN_LIB_FUNCTION ssize_t ROKEN_LIB_CALL
@@ -832,8 +921,19 @@ ROKEN_LIB_FUNCTION ssize_t ROKEN_LIB_CALL
 ROKEN_LIB_FUNCTION ssize_t ROKEN_LIB_CALL
     net_read (rk_socket_t, void *, size_t);
 
+ROKEN_LIB_FUNCTION unsigned long ROKEN_LIB_CALL
+    rk_getauxval(unsigned long);
+
 ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
     issuid(void);
+
+ROKEN_LIB_FUNCTION char * ROKEN_LIB_CALL
+    rk_secure_getenv(const char *);
+
+#ifndef HAVE_SECURE_GETENV
+#undef secure_getenv
+#define secure_getenv(e) rk_secure_getenv(e)
+#endif
 
 #ifndef HAVE_STRUCT_WINSIZE
 struct winsize {
@@ -870,27 +970,27 @@ ROKEN_LIB_VARIABLE extern int opterr;
 
 #ifndef HAVE_GETIPNODEBYNAME
 #define getipnodebyname rk_getipnodebyname
-ROKEN_LIB_FUNCTION struct hostent * ROKEN_LIB_CALL
-getipnodebyname (const char *, int, int, int *);
 #endif
+ROKEN_LIB_FUNCTION struct hostent * ROKEN_LIB_CALL
+rk_getipnodebyname(const char *, int, int, int *);
 
 #ifndef HAVE_GETIPNODEBYADDR
 #define getipnodebyaddr rk_getipnodebyaddr
-ROKEN_LIB_FUNCTION struct hostent * ROKEN_LIB_CALL
-getipnodebyaddr (const void *, size_t, int, int *);
 #endif
+ROKEN_LIB_FUNCTION struct hostent * ROKEN_LIB_CALL
+rk_getipnodebyaddr(const void *, size_t, int, int *);
 
 #ifndef HAVE_FREEHOSTENT
 #define freehostent rk_freehostent
-ROKEN_LIB_FUNCTION void ROKEN_LIB_CALL
-freehostent (struct hostent *);
 #endif
+ROKEN_LIB_FUNCTION void ROKEN_LIB_CALL
+rk_freehostent(struct hostent *);
 
 #ifndef HAVE_COPYHOSTENT
 #define copyhostent rk_copyhostent
-ROKEN_LIB_FUNCTION struct hostent * ROKEN_LIB_CALL
-copyhostent (const struct hostent *);
 #endif
+ROKEN_LIB_FUNCTION struct hostent * ROKEN_LIB_CALL
+rk_copyhostent(const struct hostent *);
 
 #ifndef HAVE_SOCKLEN_T
 typedef int socklen_t;
@@ -956,27 +1056,27 @@ struct addrinfo {
 
 #ifndef HAVE_GETADDRINFO
 #define getaddrinfo rk_getaddrinfo
-ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
-getaddrinfo(const char *,
-	    const char *,
-	    const struct addrinfo *,
-	    struct addrinfo **);
 #endif
+ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
+rk_getaddrinfo(const char *,
+	       const char *,
+	       const struct addrinfo *,
+	       struct addrinfo **);
 
 #ifndef HAVE_GETNAMEINFO
 #define getnameinfo rk_getnameinfo
-ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
-getnameinfo(const struct sockaddr *, socklen_t,
-		char *, size_t,
-		char *, size_t,
-		int);
 #endif
+ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
+rk_getnameinfo(const struct sockaddr *, socklen_t,
+	       char *, size_t,
+	       char *, size_t,
+	       int);
 
 #ifndef HAVE_FREEADDRINFO
 #define freeaddrinfo rk_freeaddrinfo
-ROKEN_LIB_FUNCTION void ROKEN_LIB_CALL
-freeaddrinfo(struct addrinfo *);
 #endif
+ROKEN_LIB_FUNCTION void ROKEN_LIB_CALL
+rk_freeaddrinfo(struct addrinfo *);
 
 #ifndef HAVE_GAI_STRERROR
 #define gai_strerror rk_gai_strerror
@@ -1004,6 +1104,17 @@ ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
 roken_getaddrinfo_hostspec(const char *, int, struct addrinfo **);
 ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
 roken_getaddrinfo_hostspec2(const char *, int, int, struct addrinfo **);
+
+ROKEN_LIB_FUNCTION char * ROKEN_LIB_CALL
+roken_get_homedir(char *, size_t);
+ROKEN_LIB_FUNCTION char * ROKEN_LIB_CALL
+roken_get_appdatadir(char *, size_t);
+ROKEN_LIB_FUNCTION char * ROKEN_LIB_CALL
+roken_get_username(char *, size_t);
+ROKEN_LIB_FUNCTION char * ROKEN_LIB_CALL
+roken_get_loginname(char *, size_t);
+ROKEN_LIB_FUNCTION char * ROKEN_LIB_CALL
+roken_get_shell(char *, size_t);
 
 #ifndef HAVE_STRFTIME
 #define strftime rk_strftime
@@ -1177,9 +1288,9 @@ vis(char *, int, int, int);
 
 #if !defined(HAVE_CLOSEFROM)
 #define closefrom rk_closefrom
-ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
-closefrom(int);
 #endif
+ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
+rk_closefrom(int);
 
 #if !defined(HAVE_TIMEGM)
 #define timegm rk_timegm
@@ -1191,6 +1302,20 @@ rk_timegm(struct tm *tm);
 #define qsort rk_qsort
 void
 rk_qsort(void *, size_t, size_t, int (*)(const void *, const void *));
+#endif
+
+#if !defined(HAVE_MERGESORT)
+#define mergesort rk_mergesort
+int
+mergesort(void *base, size_t nel, size_t width,
+	  int (*compar)(const void *, const void *));
+#endif
+
+#if !defined(HAVE_MERGESORT_R)
+#define mergesort_r rk_mergesort_r
+int
+mergesort_r(void *base, size_t nel, size_t width,
+	    int (*compar)(const void *, const void *, void *), void *thunk);
 #endif
 
 #ifndef HAVE_MEMSET_S
@@ -1257,6 +1382,10 @@ int ROKEN_LIB_FUNCTION rk_socket(int, int, int);
 #define EWOULDBLOCK             140
 #endif
 
+#ifdef WIN32
+ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
+win32_getLibraryVersion(const char *libname, char **outname, char **outversion);
+#endif
 
 #ifdef SOCKET_WRAPPER_REPLACE
 #include <socket_wrapper.h>

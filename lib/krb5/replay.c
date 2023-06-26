@@ -58,7 +58,7 @@ krb5_rc_resolve_type(krb5_context context,
 		     const char *type)
 {
     *id = NULL;
-    if(strcmp(type, "FILE")) {
+    if (strcmp(type, "FILE") != 0) {
 	krb5_set_error_message (context, KRB5_RC_TYPE_NOTFOUND,
 				N_("replay cache type %s not supported", ""),
 				type);
@@ -82,7 +82,7 @@ krb5_rc_resolve_full(krb5_context context,
 
     *id = NULL;
 
-    if(strncmp(string_name, "FILE:", 5)) {
+    if (strncmp(string_name, "FILE:", 5) != 0) {
 	krb5_set_error_message(context, KRB5_RC_TYPE_NOTFOUND,
 			       N_("replay cache type %s not supported", ""),
 			       string_name);
@@ -220,8 +220,10 @@ krb5_rc_store(krb5_context context,
     }
     rk_cloexec_file(f);
     count = fread(&tmp, sizeof(ent), 1, f);
-    if(count != 1)
+    if (count != 1) {
+	fclose(f);
 	return KRB5_RC_IO_UNKNOWN;
+    }
     t = ent.stamp - tmp.stamp;
     while(fread(&tmp, sizeof(ent), 1, f)){
 	if(tmp.stamp < t)

@@ -53,8 +53,8 @@ nokeytab="FILE:no-such-keytab"
 cache="FILE:krb5ccfile"
 
 kinit="${TESTS_ENVIRONMENT} ../../kuser/kinit -c $cache ${afs_no_afslog}"
+kdestroy="${TESTS_ENVIRONMENT} ../../kuser/kdestroy -c $cache"
 klist="${TESTS_ENVIRONMENT} ../../kuser/heimtools klist -c $cache"
-klist="${TESTS_ENVIRONMENT} ../../kuser/klist -c $cache"
 kgetcred="${TESTS_ENVIRONMENT} ../../kuser/kgetcred -c $cache"
 kadmin="${TESTS_ENVIRONMENT} ../../kadmin/kadmin -l -r $R"
 kdc="${TESTS_ENVIRONMENT} ../../kdc/kdc --addresses=localhost -P $port"
@@ -100,6 +100,7 @@ ${ktutil} -k ${keytab} rename --no-delete host/short@${R} host/long.test.h5l.se@
 ${kadmin} add -p kaka --use-defaults digest/${R}@${R} || exit 1
 
 ${kadmin} add -p u1 --use-defaults user1@${R} || exit 1
+${kadmin} mod --alias=user1.alias user1@${R} || exit 1
 
 # Create a server principal with no AES
 ${kadmin} add -p p1 --use-defaults host/no-aes.test.h5l.se@${R} || exit 1
@@ -114,27 +115,33 @@ ${kadmin} check ${R} || exit 1
 echo u1 > ${objdir}/foopassword
 
 echo Starting kdc
-${kdc} --detach --testing || { echo "kdc failed to start"; exit 1; }
+${kdc} --detach --testing || { echo "kdc failed to start"; cat messages.log; exit 1; }
 kdcpid=`getpid kdc`
 
-trap "kill ${kdcpid}; echo signal killing kdc; exit 1;" EXIT
+trap "kill -9 ${kdcpid}; echo signal killing kdc; exit 1;" EXIT
 
 testfailed="echo test failed; cat messages.log; exit 1"
 
 echo "Test gss_acquire_cred_with_password" ; > messages.log
+${kdestroy}
 ${context} --client-name=user1@${R} --client-password=u1 --mech-type=krb5 \
         host@lucid.test.h5l.se || { eval "$testfailed"; }
+${klist} && { eval "$testfailed"; }
 # These must fail (because wrong password)
 ${context} --client-name=user1@${R} --client-password=u2 --mech-type=krb5 \
         host@lucid.test.h5l.se && { eval "$testfailed"; }
-${context} --client-name=user1@${R} --client-password=u2 --mech-type='' \
-        --mech-types=krb5 host@lucid.test.h5l.se && { eval "$testfailed"; }
-${context} --client-name=user1@${R} --client-password=u2 --mech-type=krb5 \
-        --mech-types=krb5 host@lucid.test.h5l.se && { eval "$testfailed"; }
-${context} --client-name=user1@${R} --client-password=u2 --mech-type=all \
-        --mech-types=krb5 host@lucid.test.h5l.se && { eval "$testfailed"; }
+${klist} && { eval "$testfailed"; }
+${context} --client-name=user1@${R} --client-password=u2 --mech-types='' \
+        --mech-type=krb5 host@lucid.test.h5l.se && { eval "$testfailed"; }
+${klist} && { eval "$testfailed"; }
+${context} --client-name=user1@${R} --client-password=u2 --mech-types=krb5 \
+        --mech-type=krb5 host@lucid.test.h5l.se && { eval "$testfailed"; }
+${klist} && { eval "$testfailed"; }
+${context} --client-name=user1@${R} --client-password=u2 --mech-types=all \
+        --mech-type=krb5 host@lucid.test.h5l.se && { eval "$testfailed"; }
+${klist} && { eval "$testfailed"; }
 ${context} --client-name=user1@${R} --client-password=u2 \
-        --mech-type=krb5,ntlm --mech-types=krb5 host@lucid.test.h5l.se \
+        --mech-types=krb5,ntlm --mech-type=krb5 host@lucid.test.h5l.se \
         && { eval "$testfailed"; }
 # gss_acquire_cred_with_password() must not have side-effects
 ${klist} && { eval "$testfailed"; }
@@ -153,7 +160,8 @@ echo "checking non existant keytabfile (krb5)" ; > messages.log
 ${context} --mech-type=krb5 host@lucid.test.h5l.se  > test_context.log 2>&1 && \
 	{ eval "$testfailed"; }
 echo "checking non existant keytabfile (spengo)" ; > messages.log
-${context} --mech-type=spnego host@lucid.test.h5l.se > test_context.log 2>&1 && \
+${context} --mech-type=spnego --mech-types=spnego,krb5 \
+	host@lucid.test.h5l.se > test_context.log 2>&1 && \
 	{ eval "$testfailed"; }
 
 mv ${keytabfile}.no ${keytabfile}
@@ -207,6 +215,7 @@ for mech in krb5 krb5iov spnego spnegoiov; do
 	echo "${mech} no-mutual ${iov}" ; > messages.log
 	${context} --mech-type=${mech} \
 	    --wrapunwrap ${iov} \
+            --localname=mapped_user1 \
 	    --name-type=hostbased-service host@lucid.test.h5l.se || \
 		{ eval "$testfailed"; }
 
@@ -232,6 +241,14 @@ for mech in krb5 krb5iov spnego spnegoiov; do
 		{ eval "$testfailed"; }
 done
 
+echo "======test authz-data (krb5)"
+${context} --mech-type=krb5 \
+    --mutual \
+    --wrapunwrap \
+    --on-behalf-of=foo@BAR.TEST.H5L.SE \
+    --name-type=hostbased-service host@lucid.test.h5l.se ||
+    { eval "$testfailed"; }
+
 echo "======dce-style"
 for mech in krb5 krb5iov spnego; do
 	iov=""
@@ -249,6 +266,29 @@ for mech in krb5 krb5iov spnego; do
 	    --mech-type=${mech} \
 	    --mutual \
 	    --dce-style \
+	    --wrapunwrap ${iov} \
+	    --name-type=hostbased-service host@lucid.test.h5l.se || \
+	    { eval "$testfailed"; }
+
+done
+
+echo "======export-import-context"
+for mech in krb5 krb5iov spnego spnegoiov; do
+	iov=""
+	if [ "$mech" = "krb5iov" ] ; then
+	    mech="krb5"
+	    iov="--iov"
+	fi
+	if [ "$mech" = "spnegoiov" ] ; then
+	    mech="spnego"
+	    iov="--iov"
+	fi
+
+	echo "${mech}: export-import-context ${iov}" ; > messages.log
+	${context} \
+	    --mech-type=${mech} \
+	    --mutual \
+	    --export-import-context \
 	    --wrapunwrap ${iov} \
 	    --name-type=hostbased-service host@lucid.test.h5l.se || \
 	    { eval "$testfailed"; }
@@ -277,6 +317,80 @@ done
 
 rm ${keytabfile}.new
 
+echo "====== test PAC-based name canonicalization"
+
+${kdestroy}
+${kinit} --password-file=${objdir}/foopassword user1.alias@${R} || \
+	{ eval "$testfailed"; }
+
+for mech in krb5 spnego; do
+	KRB5_CONFIG="${objdir}/new_clients_k5.conf" ${context} -v \
+		--mech-type=$mech host@lucid.test.h5l.se > name-canon.log || \
+		{ eval "$testfailed"; }
+	grep "client name:" name-canon.log | grep "user1.alias@TEST.H5L.SE" > /dev/null && \
+		{ echo "client name not canonicalized"; eval "$testfailed"; }
+	grep "client name:" name-canon.log | grep "user1@TEST.H5L.SE" > /dev/null || \
+		{ echo "wrong client name"; eval "$testfailed"; }
+done
+
+echo "====== test channel-bindings."
+
+for mech in krb5 spnego; do
+	echo "${mech}: initiator only bindings" ; > messages.log
+	${context} -v --i-channel-bindings=abc \
+		--mech-type=$mech host@lucid.test.h5l.se > cbinding.log || \
+		{ eval "$testfailed"; }
+	grep "sflags:" cbinding.log | grep "channel-bound" > /dev/null && \
+		{ echo "channel-bound flag unexpected"; eval "$testfailed"; }
+
+	echo "${mech}: acceptor only bindings" ; > messages.log
+	${context} -v --a-channel-bindings=abc \
+		--mech-type=$mech host@lucid.test.h5l.se > cbinding.log || \
+		{ eval "$testfailed"; }
+	grep "sflags:" cbinding.log | grep "channel-bound" > /dev/null && \
+		{ echo "channel-bound flag unexpected"; eval "$testfailed"; }
+
+	echo "${mech}: matching bindings" ; > messages.log
+	${context} -v --i-channel-bindings=abc --a-channel-bindings=abc \
+		--mech-type=$mech host@lucid.test.h5l.se > cbinding.log || \
+		{ eval "$testfailed"; }
+	grep "sflags:" cbinding.log | grep "channel-bound" > /dev/null || \
+		{ echo "no channel-bound flag"; eval "$testfailed"; }
+
+	echo "${mech}: non matching bindings" ; > messages.log
+	${context} --i-channel-bindings=abc --a-channel-bindings=xyz \
+		--mech-type=$mech host@lucid.test.h5l.se 2>/dev/null && \
+		{ eval "$testfailed"; }
+
+	echo "${mech}: initiator only bindings (client-aware)" ; > messages.log
+	KRB5_CONFIG="${objdir}/new_clients_k5.conf" ${context} -v \
+		--i-channel-bindings=abc \
+		--mech-type=$mech host@lucid.test.h5l.se > cbinding.log || \
+		{ eval "$testfailed"; }
+	grep "sflags:" cbinding.log | grep "channel-bound" > /dev/null && \
+		{ echo "channel-bound flag unexpected"; eval "$testfailed"; }
+
+	echo "${mech}: acceptor only bindings (client-aware)" ; > messages.log
+	KRB5_CONFIG="${objdir}/new_clients_k5.conf" ${context} \
+		--a-channel-bindings=abc \
+		--mech-type=$mech host@lucid.test.h5l.se 2>/dev/null && \
+		{ eval "$testfailed"; }
+
+	echo "${mech}: matching bindings (client-aware)" ; > messages.log
+	KRB5_CONFIG="${objdir}/new_clients_k5.conf" ${context} -v \
+		--i-channel-bindings=abc --a-channel-bindings=abc \
+		--mech-type=$mech host@lucid.test.h5l.se > cbinding.log || \
+		{ eval "$testfailed"; }
+	grep "sflags:" cbinding.log | grep "channel-bound" > /dev/null || \
+		{ echo "no channel-bound flag"; eval "$testfailed"; }
+
+	echo "${mech}: non matching bindings (client-aware)" ; > messages.log
+	KRB5_CONFIG="${objdir}/new_clients_k5.conf" ${context} \
+		--i-channel-bindings=abc --a-channel-bindings=xyz \
+		--mech-type=$mech host@lucid.test.h5l.se 2>/dev/null && \
+		{ eval "$testfailed"; }
+
+done
 
 #echo "sasl-digest-md5"
 #${context}  --mech-type=sasl-digest-md5 \

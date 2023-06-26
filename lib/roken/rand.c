@@ -36,6 +36,7 @@
 
 #ifdef HAVE_WIN32_RAND_S
 static int hasRand_s = 1;
+#include "versionsupport.h"
 #endif
 
 void ROKEN_LIB_FUNCTION
@@ -49,13 +50,7 @@ rk_random_init(void)
     srandom(time(NULL));
 #else
 # ifdef HAVE_WIN32_RAND_S
-    OSVERSIONINFO osInfo;
-
-    osInfo.dwOSVersionInfoSize = sizeof(osInfo);
-    hasRand_s =
-	(GetVersionEx(&osInfo)
-	  && ((osInfo.dwMajorVersion > 5) ||
-	       (osInfo.dwMajorVersion == 5) && (osInfo.dwMinorVersion >= 1)));
+	hasRand_s = IsWindowsXPOrGreater();
 # endif
     srand (time(NULL));
 #endif

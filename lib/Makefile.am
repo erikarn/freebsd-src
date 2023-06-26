@@ -26,10 +26,10 @@ endif
 
 SUBDIRS = \
 	roken \
-	base \
 	vers \
-	$(dir_editline) \
 	$(dir_com_err) \
+	base \
+	$(dir_editline) \
 	sl \
 	wind \
 	asn1 \
@@ -41,6 +41,7 @@ SUBDIRS = \
 	ntlm \
 	$(dir_afs) \
 	gssapi \
+	gss_preauth \
 	hdb \
 	kadm5 \
 	$(dir_otp) \

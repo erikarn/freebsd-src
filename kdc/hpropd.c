@@ -78,7 +78,7 @@ main(int argc, char **argv)
     krb5_socket_t sock = rk_INVALID_SOCKET;
     HDB *db = NULL;
     int optidx = 0;
-    char *tmp_db;
+    char *tmp_db = NULL;
     krb5_log_facility *fac;
     int nprincs;
 
@@ -107,9 +107,7 @@ main(int argc, char **argv)
     }
 
     argc -= optidx;
-#ifndef __clang_analyzer__
     argv += optidx;
-#endif
 
     if (argc != 0)
 	usage(1);
@@ -144,6 +142,7 @@ main(int argc, char **argv)
 	    mini_inetd (krb5_getportbyname (context, "hprop", "tcp",
 					    HPROP_PORT), &sock);
 	}
+	socket_set_keepalive(sock, 1);
 	sin_len = sizeof(ss);
 	if (getpeername(sock, sa, &sin_len) < 0)
 	    krb5_err(context, 1, errno, "getpeername");
@@ -179,7 +178,7 @@ main(int argc, char **argv)
 	ret = krb5_unparse_name(context, ticket->server, &server);
 	if (ret)
 	    krb5_err(context, 1, ret, "krb5_unparse_name");
-	if (strncmp(server, "hprop/", 5) != 0)
+	if (strncmp(server, "hprop/", 6) != 0)
 	    krb5_errx(context, 1, "ticket not for hprop (%s)", server);
 
 	free(server);
@@ -209,25 +208,20 @@ main(int argc, char **argv)
 	    krb5_err(context, 1, ret, "krb5_kt_close");
     }
 
-    if (!print_dump) {
-	int aret;
+    if (asprintf(&tmp_db, "%s~", database) < 0 || tmp_db == NULL)
+	krb5_errx(context, 1, "hdb_create: out of memory");
 
-	aret = asprintf(&tmp_db, "%s~", database);
-	if (aret == -1)
-	    krb5_errx(context, 1, "hdb_create: out of memory");
-
-	ret = hdb_create(context, &db, tmp_db);
-	if (ret)
-	    krb5_err(context, 1, ret, "hdb_create(%s)", tmp_db);
-	ret = db->hdb_open(context, db, O_RDWR | O_CREAT | O_TRUNC, 0600);
-	if (ret)
-	    krb5_err(context, 1, ret, "hdb_open(%s)", tmp_db);
-    }
+    ret = hdb_create(context, &db, tmp_db);
+    if (ret)
+	krb5_err(context, 1, ret, "hdb_create(%s)", tmp_db);
+    ret = db->hdb_open(context, db, O_RDWR | O_CREAT | O_TRUNC, 0600);
+    if (ret)
+	krb5_err(context, 1, ret, "hdb_open(%s)", tmp_db);
 
     nprincs = 0;
     while (1){
 	krb5_data data;
-	hdb_entry_ex entry;
+	hdb_entry entry;
 
 	if (from_stdin) {
 	    ret = krb5_read_message(context, &sock, &data);
@@ -245,18 +239,10 @@ main(int argc, char **argv)
 		data.length = 0;
 		krb5_write_priv_message(context, ac, &sock, &data);
 	    }
-	    if (!print_dump) {
-		ret = db->hdb_close(context, db);
-		if (ret)
-		    krb5_err(context, 1, ret, "db_close");
-		ret = db->hdb_rename(context, db, database);
-		if (ret)
-		    krb5_err(context, 1, ret, "db_rename");
-	    }
 	    break;
 	}
 	memset(&entry, 0, sizeof(entry));
-	ret = hdb_value2entry(context, &data, &entry.entry);
+	ret = hdb_value2entry(context, &data, &entry);
 	krb5_data_free(&data);
 	if (ret)
 	    krb5_err(context, 1, ret, "hdb_value2entry");
@@ -270,7 +256,7 @@ main(int argc, char **argv)
 	    ret = db->hdb_store(context, db, 0, &entry);
 	    if (ret == HDB_ERR_EXISTS) {
 		char *s;
-		ret = krb5_unparse_name(context, entry.entry.principal, &s);
+		ret = krb5_unparse_name(context, entry.principal, &s);
 		if (ret)
 		    s = strdup(unparseable_name);
 		krb5_warnx(context, "Entry exists: %s", s);
@@ -280,10 +266,17 @@ main(int argc, char **argv)
 	    else
 		nprincs++;
 	}
-	hdb_free_entry(context, &entry);
+	hdb_free_entry(context, db, &entry);
     }
     if (!print_dump)
 	krb5_log(context, fac, 0, "Received %d principals", nprincs);
+
+    ret = db->hdb_close(context, db);
+    if (ret)
+	krb5_err(context, 1, ret, "db_close");
+    ret = db->hdb_rename(context, db, database);
+    if (ret)
+	krb5_err(context, 1, ret, "db_rename");
 
     if (inetd_flag == 0)
 	rk_closesocket(sock);

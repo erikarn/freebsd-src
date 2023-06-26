@@ -41,6 +41,7 @@ int local_flag;
 static int ad_flag;
 static int help_flag;
 static int version_flag;
+static char *hdb;
 static char *realm;
 static char *admin_server;
 static int server_port = 0;
@@ -62,6 +63,10 @@ static struct getargs args[] = {
     {
 	"key-file",	'k',	arg_string, &keyfile,
 	"location of master key file", "file"
+    },
+    {
+	"hdb",	'H',	arg_string,   &hdb,
+	"HDB to use", "hdb"
     },
     {
 	"realm",	'r',	arg_string,   &realm,
@@ -204,6 +209,11 @@ main(int argc, char **argv)
 	conf.mask |= KADM5_CONFIG_REALM;
     }
 
+    if (hdb) {
+	conf.dbname = hdb;
+	conf.mask |= KADM5_CONFIG_DBNAME;
+    }
+
     if (admin_server) {
 	conf.admin_server = admin_server;
 	conf.mask |= KADM5_CONFIG_ADMIN_SERVER;
@@ -286,10 +296,13 @@ main(int argc, char **argv)
     } else {
 	while(!exit_seen) {
 	    ret = sl_command_loop(commands, "kadmin> ", NULL);
-	    if (ret == -2)
+	    if (ret == -2) {
 		exit_seen = 1;
-	    else if (ret != 0)
+            } else if (ret != 0) {
 		exit_status = 1;
+                if (!isatty(STDIN_FILENO))
+                    exit_seen = 1;
+            }
 	}
     }
 

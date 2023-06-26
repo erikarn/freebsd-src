@@ -35,7 +35,7 @@
 
 #include "kdc_locl.h"
 
-void
+KDC_LIB_FUNCTION void KDC_LIB_CALL
 kdc_openlog(krb5_context context,
 	    const char *service,
 	    krb5_kdc_configuration *config)
@@ -60,20 +60,25 @@ kdc_openlog(krb5_context context,
     krb5_set_warn_dest(context, config->logf);
 }
 
-char*
+#undef __attribute__
+#define __attribute__(X)
+
+KDC_LIB_FUNCTION char * KDC_LIB_CALL
 kdc_log_msg_va(krb5_context context,
 	       krb5_kdc_configuration *config,
 	       int level, const char *fmt, va_list ap)
+    __attribute__ ((__format__ (__printf__, 4, 0)))
 {
     char *msg;
     krb5_vlog_msg(context, config->logf, &msg, level, fmt, ap);
     return msg;
 }
 
-char*
+KDC_LIB_FUNCTION char * KDC_LIB_CALL
 kdc_log_msg(krb5_context context,
 	    krb5_kdc_configuration *config,
 	    int level, const char *fmt, ...)
+    __attribute__ ((__format__ (__printf__, 4, 5)))
 {
     va_list ap;
     char *s;
@@ -83,15 +88,23 @@ kdc_log_msg(krb5_context context,
     return s;
 }
 
-void
+KDC_LIB_FUNCTION void KDC_LIB_CALL
+kdc_vlog(krb5_context context,
+         krb5_kdc_configuration *config,
+         int level, const char *fmt, va_list ap)
+    __attribute__ ((__format__ (__printf__, 4, 0)))
+{
+    free(kdc_log_msg_va(context, config, level, fmt, ap));
+}
+
+KDC_LIB_FUNCTION void KDC_LIB_CALL
 kdc_log(krb5_context context,
 	krb5_kdc_configuration *config,
 	int level, const char *fmt, ...)
+    __attribute__ ((__format__ (__printf__, 4, 5)))
 {
     va_list ap;
-    char *s;
     va_start(ap, fmt);
-    s = kdc_log_msg_va(context, config, level, fmt, ap);
-    if(s) free(s);
+    free(kdc_log_msg_va(context, config, level, fmt, ap));
     va_end(ap);
 }

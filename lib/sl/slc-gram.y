@@ -254,7 +254,7 @@ check(struct assignment *as)
     struct assignment *a;
     int ret = 0;
     for(a = as; a != NULL; a = a->next) {
-	if(strcmp(a->name, "command")) {
+	if (strcmp(a->name, "command") != 0) {
 	    fprintf(stderr, "unknown type %s line %d\n", a->name, a->lineno);
 	    ret++;
 	    continue;
@@ -398,7 +398,7 @@ static void defval_neg_flag(const char *name, struct assignment *defval)
 static void defval_string(const char *name, struct assignment *defval)
 {
     if(defval != NULL)
-	cprint(1, "opt.%s = (char *)(unsigned long)\"%s\";\n", name, defval->u.value);
+	cprint(1, "opt.%s = (char *)(uintptr_t)\"%s\";\n", name, defval->u.value);
     else
 	cprint(1, "opt.%s = NULL;\n", name);
 }
@@ -686,9 +686,10 @@ gen_wrapper(struct assignment *as)
 	(*th->free)(s);
 	free(s);
     }
-    cprint(1, "return 0;\n");
+    cprint(1, "return 1;\n");
     cprint(0, "}\n");
     cprint(0, "\n");
+    free(n);
 }
 
 char cname[PATH_MAX];
@@ -699,6 +700,7 @@ gen(struct assignment *as)
 {
     struct assignment *a;
     cprint(0, "#include <stdio.h>\n");
+    cprint(0, "#include <stdint.h>\n");
     cprint(0, "#include <getarg.h>\n");
     cprint(0, "#include <sl.h>\n");
     cprint(0, "#include \"%s\"\n\n", hname);

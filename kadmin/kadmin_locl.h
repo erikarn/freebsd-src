@@ -98,6 +98,7 @@
 
 extern krb5_context context;
 extern void * kadm_handle;
+extern int list_chunk_size;
 
 #undef ALLOC
 #define ALLOC(X) ((X) = malloc(sizeof(*(X))))
@@ -149,12 +150,19 @@ void start_server(krb5_context, const char*);
 /* server.c */
 
 krb5_error_code
-kadmind_loop (krb5_context, krb5_keytab, int);
+kadmind_loop (krb5_context, krb5_keytab, int, int);
 
 /* rpc.c */
 
 int
-handle_mit(krb5_context, void *, size_t, int);
+handle_mit(krb5_context, void *, size_t, int, int);
 
+/* mod.c */
+
+void
+add_tl(kadm5_principal_ent_rec *, int, krb5_data *);
+
+krb5_tl_data *
+get_tl(kadm5_principal_ent_rec *, int);
 
 #endif /* __ADMIN_LOCL_H__ */

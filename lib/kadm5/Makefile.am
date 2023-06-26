@@ -15,13 +15,16 @@ libkadm5srv_la_LDFLAGS += $(LDFLAGS_VERSION_SCRIPT)$(srcdir)/version-script.map
 endif
 
 sbin_PROGRAMS = iprop-log
-check_PROGRAMS = default_keys
+check_PROGRAMS = default_keys test_marshall
 noinst_PROGRAMS = test_pw_quality
 
-noinst_LTLIBRARIES = sample_passwd_check.la
+noinst_LTLIBRARIES = sample_passwd_check.la sample_hook.la
 
 sample_passwd_check_la_SOURCES = sample_passwd_check.c
 sample_passwd_check_la_LDFLAGS = -module
+
+sample_hook_la_SOURCES = sample_hook.c
+sample_hook_la_LDFLAGS = -module
 
 libkadm5srv_la_LIBADD = \
 	$(LIB_com_err) ../krb5/libkrb5.la \
@@ -34,10 +37,13 @@ libexec_PROGRAMS = ipropd-master ipropd-slave
 default_keys_SOURCES = default_keys.c
 default_keys_CPPFLAGS = -I$(srcdir)/../krb5
 
+test_marshall_SOURCES = marshall.c
+test_marshall_CPPFLAGS = -I$(srcdir)/../krb5 -DTEST
+
 kadm5includedir = $(includedir)/kadm5
 buildkadm5include = $(buildinclude)/kadm5
 
-dist_kadm5include_HEADERS = admin.h private.h kadm5-pwcheck.h
+dist_kadm5include_HEADERS = admin.h private.h kadm5-hook.h kadm5-pwcheck.h
 dist_kadm5include_HEADERS += $(srcdir)/kadm5-protos.h $(srcdir)/kadm5-private.h
 
 nodist_kadm5include_HEADERS = kadm5_err.h
@@ -73,6 +79,7 @@ dist_libkadm5clnt_la_SOURCES =			\
 	modify_c.c				\
 	private.h				\
 	privs_c.c				\
+	prune_c.c				\
 	randkey_c.c				\
 	rename_c.c				\
 	send_recv.c				\
@@ -107,9 +114,11 @@ dist_libkadm5srv_la_SOURCES =			\
 	password_quality.c			\
 	private.h				\
 	privs_s.c				\
+	prune_s.c				\
 	randkey_s.c				\
 	rename_s.c				\
 	server_glue.c				\
+	server_hooks.c				\
 	setkey3_s.c				\
 	set_keys.c				\
 	set_modifier.c				\
@@ -143,6 +152,7 @@ LDADD = \
 	$(DB3LIB) $(DB1LIB) $(LMDBLIB) $(NDBMLIB) \
 	$(LIB_dlopen) \
 	$(LIB_pidfile)
+
 
 iprop_log_LDADD = \
 	libkadm5srv.la \
@@ -181,6 +191,7 @@ ALL_OBJECTS += $(ipropd_slave_OBJECTS)
 ALL_OBJECTS += $(iprop_log_OBJECTS)
 ALL_OBJECTS += $(test_pw_quality_OBJECTS)
 ALL_OBJECTS += $(sample_passwd_check_la_OBJECTS)
+ALL_OBJECTS += $(sample_hook_la_OBJECTS)
 ALL_OBJECTS += $(default_keys_OBJECTS)
 
 $(ALL_OBJECTS): $(srcdir)/kadm5-protos.h $(srcdir)/kadm5-private.h
@@ -217,5 +228,6 @@ EXTRA_DIST = \
 	check-cracklib.pl \
 	flush.c \
 	sample_passwd_check.c \
+	sample_hook.c \
 	version-script.map \
 	version-script-client.map

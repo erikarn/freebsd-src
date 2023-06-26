@@ -37,6 +37,8 @@
 #include <getarg.h>
 #include <parse_bytes.h>
 
+#define MAX_REQUEST_MAX 67108864ll /* 64MB, the maximum accepted value of max_request */
+
 struct dbinfo {
     char *realm;
     char *dbname;
@@ -189,7 +191,7 @@ configure(krb5_context context, int argc, char **argv, int *optidx)
 							   "detach", NULL);
 
     if (detach_from_console && daemon_child == -1)
-        roken_detach_prep(argc, argv, "--daemon-child");
+        daemon_child = roken_detach_prep(argc, argv, "--daemon-child");
 
     {
 	char **files;
@@ -221,8 +223,18 @@ configure(krb5_context context, int argc, char **argv, int *optidx)
     if (ret)
 	krb5_err(context, 1, ret, "krb5_kdc_set_dbinfo");
 
-    if(max_request_str)
-	max_request_tcp = max_request_udp = parse_bytes(max_request_str, NULL);
+    if (max_request_str) {
+        int64_t bytes;
+
+        if ((bytes = parse_bytes(max_request_str, NULL)) < 0)
+            krb5_errx(context, 1, "--max-request must be non-negative");
+
+        if (bytes > MAX_REQUEST_MAX)
+            krb5_errx(context, 1, "--max-request size is too big "
+                      "(must be smaller than %lld)", MAX_REQUEST_MAX);
+
+        max_request_tcp = max_request_udp = bytes;
+    }
 
     if(max_request_tcp == 0){
 	p = krb5_config_get_string (context,
@@ -230,8 +242,18 @@ configure(krb5_context context, int argc, char **argv, int *optidx)
 				    "kdc",
 				    "max-request",
 				    NULL);
-	if(p)
-	    max_request_tcp = max_request_udp = parse_bytes(p, NULL);
+        if (p) {
+            int64_t bytes;
+
+            if ((bytes = parse_bytes(max_request_str, NULL)) < 0)
+                krb5_errx(context, 1, "[kdc] max-request must be non-negative");
+
+            if (bytes > MAX_REQUEST_MAX)
+                krb5_errx(context, 1, "[kdc] max-request size is too big "
+                          "(must be smaller than %lld)", MAX_REQUEST_MAX);
+
+            max_request_tcp = max_request_udp = bytes;
+        }
     }
 
     if(require_preauth != -1)
@@ -299,7 +321,7 @@ configure(krb5_context context, int argc, char **argv, int *optidx)
 	krb5_enctype_disable(context, ETYPE_DES_PCBC_NONE);
     }
 
-    krb5_kdc_windc_init(context);
+    krb5_kdc_plugin_init(context);
 
     krb5_kdc_pkinit_config(context, config);
 

@@ -1,6 +1,6 @@
 ########################################################################
 #
-# Copyright (c) 2009, Secure Endpoints Inc.
+# Copyright (c) 2009 - 2017, Secure Endpoints Inc.
 # All rights reserved.
 # 
 # Redistribution and use in source and binary forms, with or without
@@ -34,10 +34,12 @@ RELDIR=lib\roken
 !include ../../windows/NTMakefile.w32
 
 libroken_la_OBJS =			\
+	$(OBJ)\base32.obj		\
 	$(OBJ)\base64.obj		\
 	$(OBJ)\bswap.obj		\
 	$(OBJ)\concat.obj		\
 	$(OBJ)\cloexec.obj		\
+	$(OBJ)\clz.obj			\
 	$(OBJ)\ct.obj			\
 	$(OBJ)\detach.obj		\
 	$(OBJ)\dirent.obj		\
@@ -55,8 +57,10 @@ libroken_la_OBJS =			\
 	$(OBJ)\ewrite.obj		\
 	$(OBJ)\flock.obj		\
 	$(OBJ)\fnmatch.obj		\
+	$(OBJ)\fseeko.obj		\
+	$(OBJ)\ftello.obj		\
+	$(OBJ)\getauxval.obj		\
 	$(OBJ)\getaddrinfo_hostspec.obj	\
-	$(OBJ)\get_default_username.obj	\
 	$(OBJ)\get_window_size.obj	\
 	$(OBJ)\getarg.obj		\
 	$(OBJ)\getifaddrs_w32.obj	\
@@ -64,16 +68,21 @@ libroken_la_OBJS =			\
 	$(OBJ)\getopt.obj		\
 	$(OBJ)\getprogname.obj		\
 	$(OBJ)\gettimeofday.obj		\
+	$(OBJ)\getuserinfo.obj		\
 	$(OBJ)\hex.obj			\
 	$(OBJ)\hostent_find_fqdn.obj	\
 	$(OBJ)\inet_aton.obj		\
 	$(OBJ)\issuid.obj		\
 	$(OBJ)\localtime_r.obj		\
 	$(OBJ)\lstat.obj		\
+	$(OBJ)\memmem.obj 		\
 	$(OBJ)\memset_s.obj 		\
+	$(OBJ)\mergesort_r.obj 		\
 	$(OBJ)\mkdir.obj                \
 	$(OBJ)\mini_inetd.obj		\
+	$(OBJ)\mkdtemp.obj		\
 	$(OBJ)\mkstemp.obj		\
+	$(OBJ)\mkostemp.obj		\
 	$(OBJ)\net_read.obj		\
 	$(OBJ)\net_write.obj		\
 	$(OBJ)\parse_bytes.obj		\
@@ -85,6 +94,7 @@ libroken_la_OBJS =			\
 	$(OBJ)\rand.obj			\
 	$(OBJ)\roken_gethostby.obj	\
 	$(OBJ)\rtbl.obj			\
+	$(OBJ)\secure_getenv.obj	\
 	$(OBJ)\sendmsg.obj		\
 	$(OBJ)\setenv.obj		\
 	$(OBJ)\setprogname.obj		\
@@ -95,6 +105,7 @@ libroken_la_OBJS =			\
 	$(OBJ)\sockstartup_w32.obj	\
 	$(OBJ)\strcollect.obj		\
 	$(OBJ)\strerror_r.obj		\
+	$(OBJ)\strftime.obj		\
 	$(OBJ)\strlcat.obj		\
 	$(OBJ)\strlcpy.obj		\
 	$(OBJ)\strndup.obj		\
@@ -120,6 +131,7 @@ libroken_la_OBJS =			\
 	$(OBJ)\warnerr.obj		\
 	$(OBJ)\warnx.obj		\
         $(OBJ)\win32_alloc.obj          \
+	$(OBJ)\win32_version.obj        \
 	$(OBJ)\writev.obj               \
 	$(OBJ)\xfree.obj
 
@@ -148,13 +160,13 @@ $(INCDIR)\roken.h: $(OBJ)\make-roken.exe
 	$(OBJ)\make-roken.exe > $@ || $(RM) $@
 
 INCFILES = 			\
+	$(INCDIR)\base32.h	\
 	$(INCDIR)\base64.h	\
 	$(INCDIR)\dirent.h	\
 	$(INCDIR)\dlfcn.h	\
 	$(INCDIR)\err.h		\
 	$(INCDIR)\fnmatch.h	\
 	$(INCDIR)\getarg.h	\
-	$(INCDIR)\glob.h	\
 	$(INCDIR)\hex.h		\
 	$(INCDIR)\ifaddrs.h	\
 	$(INCDIR)\parse_bytes.h	\
@@ -168,9 +180,11 @@ INCFILES = 			\
 	$(INCDIR)\stdbool.h	\
 	$(INCDIR)\syslog.h	\
 	$(INCDIR)\vis.h		\
+	$(INCDIR)\vis-extras.h	\
 !ifndef HAVE_STDINT_H
 	$(INCDIR)\stdint.h	\
 !endif
+	$(INCDIR)\versionsupport.h	\
 	$(INCDIR)\xdbm.h
 
 clean::
@@ -181,16 +195,18 @@ all:: $(INCFILES) $(LIBROKEN)
 clean::
 	-$(RM) $(LIBROKEN)
 
-TMP_PROGS = $(OBJ)\snprintf-test.exe $(OBJ)\resolve-test.exe
+TMP_PROGS = $(OBJ)\snprintf-test.exe $(OBJ)\resolve-test.exe $(OBJ)\test-getuserinfo.exe
 
 # Tests
 
 TEST_PROGS =			    \
+	$(OBJ)\base32-test.exe	    \
 	$(OBJ)\base64-test.exe	    \
 	$(OBJ)\getaddrinfo-test.exe \
 	$(OBJ)\getifaddrs-test.exe  \
 	$(OBJ)\hex-test.exe	    \
 	$(OBJ)\test-detach.exe	    \
+	$(OBJ)\test-getuserinfo.exe \
 	$(OBJ)\test-readenv.exe	    \
 	$(OBJ)\parse_bytes-test.exe \
 	$(OBJ)\parse_reply-test.exe \
@@ -242,6 +258,9 @@ $(OBJ)\snprintf-test.exe: $(OBJ)\snprintf-test.obj $(OBJ)\libtest.lib $(LIBROKEN
 $(OBJ)\resolve-test.exe: $(OBJ)\resolve-test.obj $(LIBROKEN)
 	$(EXECONLINK) DnsAPI.lib
 
+$(OBJ)\base32-test.exe: $(OBJ)\base32-test.obj $(OBJ)\base32.obj $(LIBROKEN)
+	$(EXECONLINK)
+
 $(OBJ)\base64-test.exe: $(OBJ)\base64-test.obj $(OBJ)\base64.obj $(LIBROKEN)
 	$(EXECONLINK)
 
@@ -256,6 +275,9 @@ $(OBJ)\parse_bytes-test.exe: $(OBJ)\parse_bytes-test.obj $(LIBROKEN)
 
 $(OBJ)\test-detach.exe: $(OBJ)\test-detach.obj $(OBJ)\detach.obj $(LIBROKEN)
 	$(EXECONLINK)
+
+$(OBJ)\test-getuserinfo.exe: $(OBJ)\test-getuserinfo.obj $(OBJ)\getuserinfo.obj $(LIBROKEN)
+	$(EXECONLINK) Secur32.lib Shell32.lib
 
 $(OBJ)\dirent-test.exe: $(OBJ)\dirent-test.obj $(LIBROKEN)
 	$(EXECONLINK)
@@ -272,8 +294,9 @@ test-run:
 	cd $(OBJ)
 	-test-mini_inetd.exe
 	-dirent-test.exe
+	-base32-test.exe
 	-base64-test.exe
-	-getaddrinfo-test.exe
+	-getaddrinfo-test.exe www.h5l.org http
 	-getifaddrs-test.exe
 	-hex-test.exe
 	-test-readenv.exe

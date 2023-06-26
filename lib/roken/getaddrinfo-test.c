@@ -129,6 +129,9 @@ main(int argc, char **argv)
 	return 0;
     }
 
+    if (rk_SOCK_INIT())
+	errx(1, "Failed to initialize sockets (%s)", strerror(rk_SOCK_ERRNO));
+
     argc -= optidx;
     argv += optidx;
 
@@ -143,5 +146,6 @@ main(int argc, char **argv)
 
 	doit (nodename, argv[i+1]);
     }
+    rk_SOCK_EXIT();
     return 0;
 }

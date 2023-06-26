@@ -57,7 +57,9 @@ gss_get_name_attribute(OM_uint32 *minor_status,
     if (input_name == GSS_C_NO_NAME)
         return GSS_S_BAD_NAME;
 
-    HEIM_SLIST_FOREACH(mn, &name->gn_mn, gmn_link) {
+    _gss_mg_check_name(input_name);
+
+    HEIM_TAILQ_FOREACH(mn, &name->gn_mn, gmn_link) {
         gssapi_mech_interface m = mn->gmn_mech;
 
         if (!m->gm_get_name_attribute)
@@ -72,7 +74,7 @@ gss_get_name_attribute(OM_uint32 *minor_status,
                                                 display_value,
                                                 more);
         if (GSS_ERROR(major_status))
-            _gss_mg_error(m, major_status, *minor_status);
+            _gss_mg_error(m, *minor_status);
         else
             break;
     }

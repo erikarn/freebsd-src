@@ -106,7 +106,9 @@ int _kafs_debug; /* this should be done in a better way */
 #define SUN_PROC_POINT		8
 
 static int afs_entry_point = UNKNOWN_ENTRY_POINT;
+#if defined(AFS_SYSCALL) || defined(AFS_SYSCALL2) || defined(AFS_SYSCALL3) || defined(AFS_PIOCTL)
 static int afs_syscalls[2];
+#endif
 static char *afs_ioctlpath;
 static unsigned long afs_ioctlnum;
 
@@ -134,7 +136,7 @@ try_aix(void)
     /*
      * If we are root or running setuid don't trust AFSLIBPATH!
      */
-    if (getuid() != 0 && !issuid() && (p = getenv("AFSLIBPATH")) != NULL)
+    if (getuid() != 0 && (p = secure_getenv("AFSLIBPATH")) != NULL)
 	strlcpy(path, p, sizeof(path));
     else
 	snprintf(path, sizeof(path), "%s/afslib.so", LIBDIR);
@@ -464,8 +466,7 @@ k_hasafs(void)
     int saved_errno, ret;
     char *env = NULL;
 
-    if (!issuid())
-	env = getenv ("AFS_SYSCALL");
+    env = secure_getenv("AFS_SYSCALL");
 
     /*
      * Already checked presence of AFS syscalls?

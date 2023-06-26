@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997 - 2006 Kungliga Tekniska Högskolan
+ * Copyright (c) 1997 - 2006 Kungliga Tekniska HÃ¶gskolan
  * (Royal Institute of Technology, Stockholm, Sweden).
  * All rights reserved.
  *
@@ -38,12 +38,39 @@
 #ifndef __TEMPLATE_H__
 #define __TEMPLATE_H__
 
+/*
+ * TBD:
+ * 
+ *  - For OER also encode number of optional/default/extension elements into
+ *    header entry's ptr field, not just the number of entries that follow it.
+ *
+ *  - For JER we'll need to encode encoding options (encode as array, encode as
+ *    object, etc.)
+ *
+ *  - For open types we'll need to be able to indicate what encoding rules the
+ *    type uses.
+ *
+ *  - We have too many bits for tags (20) and probably not enough for ops (4
+ *    bits, and we've used all but one).
+ */
+
+/* header:
+ *   HF  flags if not a BIT STRING type
+ *   HBF flags if     a BIT STRING type
+ *
+ * ptr is count of elements
+ * offset is size of struct
+ */
+
 /* tag:
  *  0..20 tag
  * 21     type
  * 22..23 class
  * 24..27 flags
  * 28..31 op
+ *
+ * ptr points to template for tagged type
+ * offset is offset of struct field
  */
 
 /* parse:
@@ -51,21 +78,78 @@
  * 12..23 unused
  * 24..27 flags
  * 28..31 op
+ *
+ * ptr is NULL
+ * offset is ...
  */
 
-#define A1_OP_MASK		(0xf0000000)
-#define A1_OP_TYPE		(0x10000000)
-#define A1_OP_TYPE_EXTERN	(0x20000000)
-#define A1_OP_TAG		(0x30000000)
-#define A1_OP_PARSE		(0x40000000)
-#define A1_OP_SEQOF		(0x50000000)
-#define A1_OP_SETOF		(0x60000000)
-#define A1_OP_BMEMBER		(0x70000000)
-#define A1_OP_CHOICE		(0x80000000)
+/* defval: (next template entry is defaulted)
+ *
+ *  DV    flags (ptr is or points to defval)
+ *
+ * ptr is default value or pointer to default value
+ * offset is all ones
+ */
+
+/* name: first one is the name of the SET/SEQUENCE/CHOICE type
+ *       subsequent ones are the name of the nth field
+ *
+ *  0..23 unused
+ * 24..27 flags A1_NM_*
+ * 28..31 op
+ *
+ * ptr is const char * pointer to the name as C string
+ * offset is all zeros
+ */
+
+/* objset:
+ *  0..9  open type ID entry index
+ * 10..19 open type entry index
+ * 20..23 unused
+ * 24..27 flags A1_OS_*
+ * 28..31 op
+ *
+ * ptr points to object set template
+ * offset is the offset of the choice struct
+ */
+
+/* opentypeid: offset is zero
+ *             ptr points to value if it is not an integer
+ *             ptr   is the  value if it is     an integer
+ *  0..23 unused
+ * 24..27 flags A1_OTI_*
+ * 28..31 op
+ */
+
+/* opentype: offset is sizeof C type for this open type choice
+ *           ptr points to template for type choice
+ *  0..23 unused
+ * 24..27 flags
+ * 28..31 op
+ */
+
+#define A1_OP_MASK			(0xf0000000)
+#define A1_OP_TYPE			(0x10000000) /* templated type */
+#define A1_OP_TYPE_EXTERN		(0x20000000) /* templated type (imported) */
+#define A1_OP_TAG			(0x30000000) /* a tag */
+#define A1_OP_PARSE			(0x40000000) /* primitive type */
+#define A1_OP_SEQOF			(0x50000000) /* sequence of */
+#define A1_OP_SETOF			(0x60000000) /* set      of */
+#define A1_OP_BMEMBER			(0x70000000) /* BIT STRING member */
+#define A1_OP_CHOICE			(0x80000000) /* CHOICE */
+#define A1_OP_DEFVAL			(0x90000000) /* def. value */
+#define A1_OP_OPENTYPE_OBJSET		(0xa0000000) /* object set for open type */
+#define A1_OP_OPENTYPE_ID		(0xb0000000) /* open type id field */
+#define A1_OP_OPENTYPE			(0xc0000000) /* open type    field */
+#define A1_OP_NAME			(0xd0000000) /* symbol */
+#define A1_OP_TYPE_DECORATE		(0xe0000000) /* decoration w/ templated type */
+#define A1_OP_TYPE_DECORATE_EXTERN	(0xf0000000) /* decoration w/ some C type */
+						     /* 0x00.. is still free */
 
 #define A1_FLAG_MASK		(0x0f000000)
 #define A1_FLAG_OPTIONAL	(0x01000000)
 #define A1_FLAG_IMPLICIT	(0x02000000)
+#define A1_FLAG_DEFAULT		(0x04000000)
 
 #define A1_TAG_T(CLASS,TYPE,TAG)	((A1_OP_TAG) | (((CLASS) << 22) | ((TYPE) << 21) | (TAG)))
 #define A1_TAG_CLASS(x)		(((x) >> 22) & 0x3)
@@ -87,6 +171,16 @@
 
 #define A1_HBF_RFC1510		0x1
 
+#define A1_DV_BOOLEAN		0x01
+#define A1_DV_INTEGER		0x02
+#define A1_DV_INTEGER32		0x04
+#define A1_DV_INTEGER64		0x08
+#define A1_DV_UTF8STRING	0x10
+
+#define A1_OS_IS_SORTED		(0x01000000)
+#define A1_OS_OT_IS_ARRAY	(0x02000000)
+#define A1_OTI_IS_INTEGER	(0x04000000)
+
 
 struct asn1_template {
     uint32_t tt;
@@ -94,11 +188,12 @@ struct asn1_template {
     const void *ptr;
 };
 
-typedef int (*asn1_type_decode)(const unsigned char *, size_t, void *, size_t *);
-typedef int (*asn1_type_encode)(unsigned char *, size_t, const void *, size_t *);
-typedef size_t (*asn1_type_length)(const void *);
-typedef void (*asn1_type_release)(void *);
-typedef int (*asn1_type_copy)(const void *, void *);
+typedef int (ASN1CALL *asn1_type_decode)(const unsigned char *, size_t, void *, size_t *);
+typedef int (ASN1CALL *asn1_type_encode)(unsigned char *, size_t, const void *, size_t *);
+typedef size_t (ASN1CALL *asn1_type_length)(const void *);
+typedef void (ASN1CALL *asn1_type_release)(void *);
+typedef int (ASN1CALL *asn1_type_copy)(const void *, void *);
+typedef char * (ASN1CALL *asn1_type_print)(const void *, int);
 
 struct asn1_type_func {
     asn1_type_encode encode;
@@ -106,6 +201,7 @@ struct asn1_type_func {
     asn1_type_length length;
     asn1_type_copy copy;
     asn1_type_release release;
+    asn1_type_print print;
     size_t size;
 };
 
@@ -160,8 +256,10 @@ _asn1_copy_top (
 	void * /*to*/);
 
 void
-_asn1_free_top(const struct asn1_template *t,
-	       void *data);
+_asn1_free_top(const struct asn1_template *, void *);
+
+char *
+_asn1_print_top(const struct asn1_template *, int, const void *);
 
 int
 _asn1_decode_top (

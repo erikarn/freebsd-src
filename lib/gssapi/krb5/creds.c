@@ -38,11 +38,12 @@ _gsskrb5_export_cred(OM_uint32 *minor_status,
 		     gss_cred_id_t cred_handle,
 		     gss_buffer_t cred_token)
 {
+    OM_uint32 major_status;
     gsskrb5_cred handle = (gsskrb5_cred)cred_handle;
     krb5_context context;
     krb5_error_code ret;
     krb5_storage *sp;
-    krb5_data data, mech;
+    krb5_data data;
     const char *type;
     char *str;
 
@@ -141,15 +142,11 @@ _gsskrb5_export_cred(OM_uint32 *minor_status,
 	return GSS_S_FAILURE;
     }
 
-    mech.data = GSS_KRB5_MECHANISM->elements;
-    mech.length = GSS_KRB5_MECHANISM->length;
-
-    ret = krb5_store_data(sp, mech);
-    if (ret) {
+    major_status = _gss_mg_store_oid(minor_status, sp, GSS_KRB5_MECHANISM);
+    if (major_status != GSS_S_COMPLETE) {
 	krb5_data_free(&data);
 	krb5_storage_free(sp);
-	*minor_status = ret;
-	return GSS_S_FAILURE;
+	return major_status;
     }
 
     ret = krb5_store_data(sp, data);
@@ -266,9 +263,15 @@ _gsskrb5_import_cred(OM_uint32 * minor_status,
 	*minor_status = ENOMEM;
 	return GSS_S_FAILURE;
     }
+    *minor_status = krb5_cc_get_principal(context, id, &handle->principal);
+    if (*minor_status) {
+        free(handle);
+        krb5_cc_close(context, id);
+        return GSS_S_FAILURE;
+    }
 
     handle->usage = GSS_C_INITIATE;
-    krb5_cc_get_principal(context, id, &handle->principal);
+    handle->destination_realm = NULL;
     handle->ccache = id;
     handle->cred_flags = flags;
 

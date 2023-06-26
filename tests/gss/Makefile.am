@@ -2,9 +2,9 @@
 
 include $(top_srcdir)/Makefile.am.common
 
-noinst_DATA = krb5.conf
+noinst_DATA = krb5.conf new_clients_k5.conf mech
 
-SCRIPT_TESTS = check-basic check-gss check-gssmask check-context check-spnego check-ntlm
+SCRIPT_TESTS = check-basic check-gss check-gssmask check-context check-spnego check-ntlm check-negoex
 
 TESTS = $(SCRIPT_TESTS)
 
@@ -12,10 +12,13 @@ check_SCRIPTS = $(SCRIPT_TESTS)
 
 port = 49188
 
-do_subst = $(heim_verbose)sed -e 's,[@]srcdir[@],$(srcdir),g' \
+do_subst = srcdirabs=`cd "$(srcdir)"; pwd`; objdirabs=`pwd`; sed \
+	-e 's,[@]srcdir[@],$(srcdir),g' \
+	-e "s,[@]srcdirabs[@],$${srcdirabs},g" \
 	-e 's,[@]env_setup[@],$(top_builddir)/tests/bin/setup-env,g' \
 	-e 's,[@]port[@],$(port),g' \
-	-e 's,[@]objdir[@],$(top_builddir)/tests/gss,g'
+	-e 's,[@]objdir[@],$(top_builddir)/tests/gss,g' \
+	-e "s,[@]objdirabs[@],$${objdirabs},g"
 
 check-gss: check-gss.in Makefile
 	$(do_subst) < $(srcdir)/check-gss.in > check-gss.tmp && \
@@ -47,9 +50,22 @@ check-ntlm: check-ntlm.in Makefile
 	chmod +x check-ntlm.tmp && \
 	mv check-ntlm.tmp check-ntlm
 
+check-negoex: check-negoex.in Makefile
+	$(do_subst) < $(srcdir)/check-negoex.in > check-negoex.tmp && \
+	chmod +x check-negoex.tmp && \
+	mv check-negoex.tmp check-negoex
+
 krb5.conf: krb5.conf.in Makefile
 	$(do_subst) < $(srcdir)/krb5.conf.in > krb5.conf.tmp && \
 	mv krb5.conf.tmp krb5.conf
+
+new_clients_k5.conf: new_clients_k5.conf.in Makefile
+	$(do_subst) < $(srcdir)/new_clients_k5.conf.in > new_clients_k5.conf.tmp && \
+	mv new_clients_k5.conf.tmp new_clients_k5.conf
+
+mech: mech.in Makefile
+	$(do_subst) < $(srcdir)/mech.in > mech.tmp && \
+	mv mech.tmp mech
 
 CLEANFILES= \
 	$(TESTS) \
@@ -59,6 +75,8 @@ CLEANFILES= \
 	krb5ccfile-ds \
 	server.keytab \
 	krb5.conf \
+	new_clients_k5.conf \
+	mech \
 	current-db* \
 	*.log \
 	tempfile \
@@ -77,5 +95,9 @@ EXTRA_DIST = \
 	check-spnego.in \
 	check-ntlm.in \
 	check-context.in \
+	check-negoex.in \
 	ntlm-user-file.txt \
-	krb5.conf.in
+	krb5.conf.in \
+	include-krb5.conf \
+	new_clients_k5.conf.in \
+	mech.in

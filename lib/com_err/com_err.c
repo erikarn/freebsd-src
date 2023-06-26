@@ -38,6 +38,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <roken.h>
+#include <heim_threads.h>
 #include "com_err.h"
 
 struct et_list *_et_list = NULL;
@@ -62,7 +63,7 @@ error_message (long code)
 }
 
 KRB5_LIB_FUNCTION int KRB5_LIB_CALL
-init_error_table(const char **msgs, long base, int count)
+init_error_table(const char *const *msgs, long base, int count)
 {
     initialize_error_table_r(&_et_list, msgs, count, base);
     return 0;
@@ -132,7 +133,7 @@ reset_com_err_hook (void)
 static const char char_set[] =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_";
 
-static char buf[6];
+static HEIMDAL_THREAD_LOCAL char buf[6];
 
 KRB5_LIB_FUNCTION const char * KRB5_LIB_CALL
 error_table_name(int num)

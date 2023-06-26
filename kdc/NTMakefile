@@ -33,6 +33,8 @@ RELDIR=kdc
 
 !include ../windows/NTMakefile.w32 
 
+intcflags=-I$(OBJ) -I$(SRC)\lib\gssapi -I$(OBJDIR)\lib\gssapi -I$(OBJDIR)\lib\gss_preauth -DBUILD_KDC_LIB
+
 BINPROGRAMS=$(BINDIR)\string2key.exe
 
 SBINPROGRAMS=$(SBINDIR)\kstash.exe
@@ -49,7 +51,9 @@ INCFILES=\
 	$(INCDIR)\kdc.h		\
 	$(INCDIR)\kdc-protos.h	\
 	$(INCDIR)\kdc-private.h	\
-	$(INCDIR)\krb5\windc_plugin.h
+	$(INCDIR)\krb5\kdc-audit.h \
+	$(INCDIR)\krb5\kdc-plugin.h \
+	$(INCDIR)\krb5\kdc-accessors.h
 
 all:: $(INCFILES) $(LIBKDC) $(BINPROGRAMS) $(SBINPROGRAMS) $(LIBEXECPROGRAMS)
 
@@ -92,21 +96,29 @@ $(LIBEXECDIR)\kdc.exe: \
 
 LIBKDC_OBJS=\
 	$(OBJ)\default_config.obj	\
-	$(OBJ)\set_dbinfo.obj 	\
-	$(OBJ)\digest.obj	\
-	$(OBJ)\fast.obj	\
-	$(OBJ)\kerberos5.obj	\
-	$(OBJ)\krb5tgs.obj	\
-	$(OBJ)\pkinit.obj	\
-	$(OBJ)\pkinit-ec.obj	\
-	$(OBJ)\log.obj		\
-	$(OBJ)\misc.obj		\
-	$(OBJ)\kx509.obj	\
-	$(OBJ)\process.obj	\
-	$(OBJ)\windc.obj
+	$(OBJ)\ca.obj			\
+	$(OBJ)\kx509.obj		\
+	$(OBJ)\set_dbinfo.obj		\
+	$(OBJ)\digest.obj		\
+	$(OBJ)\fast.obj			\
+	$(OBJ)\kerberos5.obj		\
+	$(OBJ)\krb5tgs.obj		\
+	$(OBJ)\pkinit.obj		\
+	$(OBJ)\pkinit-ec.obj		\
+	$(OBJ)\mssfu.obj			\
+	$(OBJ)\log.obj			\
+	$(OBJ)\misc.obj			\
+	$(OBJ)\kx509.obj		\
+	$(OBJ)\token_validator.obj	\
+	$(OBJ)\csr_authorizer.obj	\
+	$(OBJ)\process.obj		\
+	$(OBJ)\kdc-plugin.obj		\
+	$(OBJ)\gss_preauth.obj
 
 LIBKDC_LIBS=\
 	$(LIBHDB)		\
+	$(LIBGSS_PREAUTH)	\
+	$(LIBGSSAPI)		\
 	$(LIBHEIMBASE)		\
 	$(LIBHEIMDAL)		\
 	$(LIBHEIMNTLM)		\
@@ -126,23 +138,28 @@ clean::
 
 libkdc_la_SOURCES = 		\
 	default_config.c 	\
+	ca.c			\
 	set_dbinfo.c	 	\
 	digest.c		\
-	fast.c		\
+	fast.c			\
 	kdc_locl.h		\
 	kerberos5.c		\
 	krb5tgs.c		\
 	pkinit.c		\
 	pkinit-ec.c		\
+	mssfu.c			\
 	log.c			\
 	misc.c			\
 	kx509.c			\
+	token_validator.c	\
+	csr_authorizer.c	\
 	process.c		\
-	windc.c			\
-	rx.h
+	kdc-plugin.c		\
+	gss_preauth.c
 
 $(OBJ)\kdc-protos.h: $(libkdc_la_SOURCES)
-	$(PERL) ..\cf\make-proto.pl -q -P remove -o $@ $(libkdc_la_SOURCES) \
+	cd $(SRCDIR)
+	$(PERL) ..\cf\make-proto.pl -E KDC_LIB -q -P remove -o $@ $(libkdc_la_SOURCES) \
 	|| $(RM) $@
 
 $(OBJ)\kdc-private.h: $(libkdc_la_SOURCES)

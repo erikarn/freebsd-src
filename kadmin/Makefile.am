@@ -26,6 +26,7 @@ dist_kadmin_SOURCES =				\
 	kadmin.c				\
 	load.c					\
 	mod.c					\
+	prune.c					\
 	rename.c				\
 	stash.c					\
 	util.c					\
@@ -68,6 +69,7 @@ LDADD_common = \
 	$(DB3LIB) $(DB1LIB) $(LMDBLIB) $(NDBMLIB)
 
 kadmind_LDADD = $(top_builddir)/lib/kadm5/libkadm5srv.la \
+	$(top_builddir)/lib/kadm5/libkadm5clnt.la \
 	../lib/gssapi/libgssapi.la \
 	$(LDADD_common) \
 	$(LIB_pidfile) \

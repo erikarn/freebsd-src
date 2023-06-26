@@ -142,7 +142,7 @@ parse_name(const unsigned char *p, size_t len,
     /* MECHNAME_LEN */
     if (len < 4)
 	return 1;
-    l = p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3];
+    l = (unsigned long)p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3];
     len -= 4;
     p += 4;
 
@@ -529,6 +529,7 @@ ret_principal_ent(krb5_context contextp,
 	CHECK(krb5_ret_uint32(sp, &flag));
 	ent->key_data[i].key_data_type[1] = flag;
     }
+    CHECK(i == num);
 
     return 0;
 }
@@ -689,7 +690,7 @@ proc_init(kadm5_server_context *contextp,
 struct krb5_proc {
     const char *name;
     void (*func)(kadm5_server_context *, krb5_storage *, krb5_storage *);
-} procs[] = {
+} rwprocs[] = {
     { "NULL", NULL },
     { "create principal", proc_create_principal },
     { "delete principal", proc_delete_principal },
@@ -704,6 +705,29 @@ struct krb5_proc {
     { "get policy", NULL },
     { "get privs", NULL },
     { "init", proc_init },
+    { "get principals", NULL },
+    { "get polices", NULL },
+    { "setkey principal", NULL },
+    { "setkey principal v4", NULL },
+    { "create principal v3", NULL },
+    { "chpass principal v3", NULL },
+    { "chrand principal v3", NULL },
+    { "setkey principal v3", NULL }
+}, roprocs[] = {
+    { "NULL", NULL },
+    { "create principal", NULL },
+    { "delete principal", NULL },
+    { "modify principal", NULL },
+    { "rename principal", NULL },
+    { "get principal", proc_get_principal },
+    { "chpass principal", NULL },
+    { "chrand principal", NULL },
+    { "create policy", NULL },
+    { "delete policy", NULL },
+    { "modify policy", NULL },
+    { "get policy", NULL },
+    { "get privs", NULL },
+    { "init", NULL },
     { "get principals", NULL },
     { "get polices", NULL },
     { "setkey principal", NULL },
@@ -742,8 +766,10 @@ struct gctx {
 
 static int
 process_stream(krb5_context contextp,
-	       unsigned char *buf, size_t ilen,
-	       krb5_storage *sp)
+	       unsigned char *buf,
+               size_t ilen,
+	       krb5_storage *sp,
+               int readonly)
 {
     krb5_error_code ret;
     krb5_storage *msg, *reply, *dreply;
@@ -757,6 +783,16 @@ process_stream(krb5_context contextp,
     msg = krb5_storage_emem();
     reply = krb5_storage_emem();
     dreply = krb5_storage_emem();
+
+    if (msg == NULL || reply == NULL || dreply == NULL) {
+	if (msg != NULL)
+	    krb5_storage_free(msg);
+	if (reply != NULL)
+	    krb5_storage_free(reply);
+	if (dreply != NULL)
+	    krb5_storage_free(dreply);
+	return krb5_enomem(contextp);
+    }
 
     /*
      * First packet comes partly from the caller
@@ -874,6 +910,7 @@ process_stream(krb5_context contextp,
 	    int conf_state;
 	    uint32_t seq;
 	    krb5_storage *sp1;
+            struct krb5_proc *procs = readonly ? roprocs : rwprocs;
 
 	    INSIST(gcred.service == rpg_privacy);
 
@@ -911,11 +948,16 @@ process_stream(krb5_context contextp,
 	     */
 	    CHECK(krb5_store_uint32(dreply, gctx.seq_num));
 
-	    if (chdr.proc >= sizeof(procs)/sizeof(procs[0])) {
+	    if (chdr.proc >= sizeof(rwprocs)/sizeof(rwprocs[0])) {
 		krb5_warnx(contextp, "proc number out of array");
 	    } else if (procs[chdr.proc].func == NULL) {
-		krb5_warnx(contextp, "proc '%s' never implemented",
-			  procs[chdr.proc].name);
+                if (readonly && rwprocs[chdr.proc].func)
+                    krb5_warnx(contextp,
+                               "proc '%s' not allowed (readonly mode)",
+                               procs[chdr.proc].name);
+                else
+                    krb5_warnx(contextp, "proc '%s' never implemented",
+                               procs[chdr.proc].name);
 	    } else {
 		krb5_warnx(contextp, "proc %s", procs[chdr.proc].name);
 		INSIST(server_handle != NULL);
@@ -931,7 +973,7 @@ process_stream(krb5_context contextp,
 	    INSIST(gctx.ctx == NULL);
 
 	    gctx.inprogress = 1;
-	    /* FALLTHROUGH */
+	    HEIM_FALLTHROUGH;
 	case RPG_CONTINUE_INIT: {
 	    gss_name_t src_name = GSS_C_NO_NAME;
 	    krb5_data in;
@@ -1091,7 +1133,11 @@ process_stream(krb5_context contextp,
 
 
 int
-handle_mit(krb5_context contextp, void *buf, size_t len, krb5_socket_t sock)
+handle_mit(krb5_context contextp,
+           void *buf,
+           size_t len,
+           krb5_socket_t sock,
+           int readonly)
 {
     krb5_storage *sp;
 
@@ -1100,7 +1146,7 @@ handle_mit(krb5_context contextp, void *buf, size_t len, krb5_socket_t sock)
     sp = krb5_storage_from_socket(sock);
     INSIST(sp != NULL);
 
-    process_stream(contextp, buf, len, sp);
+    process_stream(contextp, buf, len, sp, readonly);
 
     return 0;
 }

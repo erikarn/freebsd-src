@@ -277,7 +277,7 @@ proto (int sock, const char *hostname, const char *svc,
     }
     krb5_data_free (&data);
 
-    return(strcmp(message, "ok"));
+    return strcmp(message, "ok") != 0;
 }
 
 static int
@@ -312,7 +312,9 @@ doit (const char *hostname, int port, const char *svc,
 	    continue;
 	}
 	freeaddrinfo (ai);
-	return proto (s, hostname, svc, message, len);
+	error = proto(s, hostname, svc, message, len);
+	close(s);
+	return error;
     }
     warnx ("failed to contact %s", hostname);
     freeaddrinfo (ai);
@@ -322,6 +324,7 @@ doit (const char *hostname, int port, const char *svc,
 int
 main(int argc, char **argv)
 {
+    char userbuf[128];
     int argcc,port,i;
     int ret=0;
 
@@ -329,7 +332,7 @@ main(int argc, char **argv)
     port = client_setup(&context, &argcc, argv);
 
     if (remote_name == NULL) {
-	remote_name = get_default_username ();
+	remote_name = roken_get_username(userbuf, sizeof(userbuf));
 	if (remote_name == NULL)
 	    errx (1, "who are you?");
     }

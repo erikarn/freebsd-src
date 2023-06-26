@@ -106,11 +106,14 @@ set_funcs(kadm5_server_context *c)
     SET(c, get_principals);
     SET(c, get_privs);
     SET(c, modify_principal);
+    SET(c, prune_principal);
     SET(c, randkey_principal);
     SET(c, rename_principal);
     SET(c, lock);
     SET(c, unlock);
     SET(c, setkey_principal_3);
+    SET(c, iter_principals);
+    SET(c, dup_context);
 }
 
 #ifndef NO_UNIX_SOCKETS
@@ -160,29 +163,37 @@ find_db_spec(kadm5_server_context *ctx)
 	    p = hdb_dbinfo_get_dbname(context, d);
 	    if (p) {
 		ctx->config.dbname = strdup(p);
-                if (ctx->config.dbname == NULL)
-                    return ENOMEM;
+                if (ctx->config.dbname == NULL) {
+		    hdb_free_dbinfo(context, &info);
+		    return krb5_enomem(context);
+		}
             }
 
 	    p = hdb_dbinfo_get_acl_file(context, d);
 	    if (p) {
 		ctx->config.acl_file = strdup(p);
-                if (ctx->config.acl_file == NULL)
-                    return ENOMEM;
+                if (ctx->config.acl_file == NULL) {
+		    hdb_free_dbinfo(context, &info);
+		    return krb5_enomem(context);
+		}
             }
 
 	    p = hdb_dbinfo_get_mkey_file(context, d);
 	    if (p) {
 		ctx->config.stash_file = strdup(p);
-                if (ctx->config.stash_file == NULL)
-                    return ENOMEM;
+                if (ctx->config.stash_file == NULL) {
+		    hdb_free_dbinfo(context, &info);
+		    return krb5_enomem(context);
+		}
             }
 
 	    p = hdb_dbinfo_get_log_file(context, d);
 	    if (p) {
 		ctx->log_context.log_file = strdup(p);
-                if (ctx->log_context.log_file == NULL)
-                    return ENOMEM;
+                if (ctx->log_context.log_file == NULL) {
+		    hdb_free_dbinfo(context, &info);
+		    return krb5_enomem(context);
+		}
             }
 	    break;
 	}
@@ -194,25 +205,25 @@ find_db_spec(kadm5_server_context *ctx)
     if (ctx->config.dbname == NULL) {
 	ctx->config.dbname = strdup(hdb_default_db(context));
         if (ctx->config.dbname == NULL)
-            return ENOMEM;
+	    return krb5_enomem(context);
     }
     if (ctx->config.acl_file == NULL) {
 	aret = asprintf(&ctx->config.acl_file, "%s/kadmind.acl",
 			hdb_db_dir(context));
 	if (aret == -1)
-	    return ENOMEM;
+	    return krb5_enomem(context);
     }
     if (ctx->config.stash_file == NULL) {
 	aret = asprintf(&ctx->config.stash_file, "%s/m-key",
 			hdb_db_dir(context));
 	if (aret == -1)
-	    return ENOMEM;
+	    return krb5_enomem(context);
     }
     if (ctx->log_context.log_file == NULL) {
 	aret = asprintf(&ctx->log_context.log_file, "%s/log",
 			hdb_db_dir(context));
 	if (aret == -1)
-	    return ENOMEM;
+	    return krb5_enomem(context);
     }
 
 #ifndef NO_UNIX_SOCKETS
@@ -233,7 +244,7 @@ _kadm5_s_init_context(kadm5_server_context **ctx,
 
     *ctx = calloc(1, sizeof(**ctx));
     if (*ctx == NULL)
-	return ENOMEM;
+	return krb5_enomem(context);
     (*ctx)->log_context.socket_fd = rk_INVALID_SOCKET;
 
     set_funcs(*ctx);
@@ -241,10 +252,12 @@ _kadm5_s_init_context(kadm5_server_context **ctx,
     krb5_add_et_list (context, initialize_kadm5_error_table_r);
 
 #define is_set(M) (params && params->mask & KADM5_CONFIG_ ## M)
+    if (params)
+        (*ctx)->config.mask = params->mask;
     if (is_set(REALM)) {
 	(*ctx)->config.realm = strdup(params->realm);
         if ((*ctx)->config.realm == NULL)
-            return ENOMEM;
+	    return krb5_enomem(context);
     } else {
 	ret = krb5_get_default_realm(context, &(*ctx)->config.realm);
         if (ret)
@@ -253,20 +266,27 @@ _kadm5_s_init_context(kadm5_server_context **ctx,
     if (is_set(DBNAME)) {
 	(*ctx)->config.dbname = strdup(params->dbname);
         if ((*ctx)->config.dbname == NULL)
-            return ENOMEM;
+	    return krb5_enomem(context);
     }
     if (is_set(ACL_FILE)) {
 	(*ctx)->config.acl_file = strdup(params->acl_file);
         if ((*ctx)->config.acl_file == NULL)
-            return ENOMEM;
+	    return krb5_enomem(context);
     }
     if (is_set(STASH_FILE)) {
 	(*ctx)->config.stash_file = strdup(params->stash_file);
         if ((*ctx)->config.stash_file == NULL)
-            return ENOMEM;
+	    return krb5_enomem(context);
     }
 
-    find_db_spec(*ctx);
+    ret = find_db_spec(*ctx);
+    if (ret == 0)
+        ret = _kadm5_s_init_hooks(*ctx);
+    if (ret != 0) {
+	kadm5_s_destroy(*ctx);
+	*ctx = NULL;
+	return ret;
+    }
 
     /* PROFILE can't be specified for now */
     /* KADMIND_PORT is supposed to be used on the server also,

@@ -37,9 +37,6 @@
 #ifdef HAVE_SYS_WAIT_H
 #include <sys/wait.h>
 #endif
-#ifdef HAVE_DLFCN_H
-#include <dlfcn.h>
-#endif
 
 static int
 min_length_passwd_quality (krb5_context context,
@@ -199,6 +196,7 @@ external_passwd_quality (krb5_context context,
 	fclose(out);
 	fclose(error);
 	wait_for_process(child);
+	free(p);
 	return 1;
     }
     reply[strcspn(reply, "\n")] = '\0';
@@ -249,10 +247,6 @@ static int num_verifiers;
  * setup the password quality hook
  */
 
-#ifndef RTLD_NOW
-#define RTLD_NOW 0
-#endif
-
 void
 kadm5_setup_passwd_quality_check(krb5_context context,
 				 const char *check_library,
@@ -285,7 +279,7 @@ kadm5_setup_passwd_quality_check(krb5_context context,
 
     if(check_library == NULL)
 	return;
-    handle = dlopen(check_library, RTLD_NOW);
+    handle = dlopen(check_library, RTLD_NOW | RTLD_LOCAL | RTLD_GROUP);
     if(handle == NULL) {
 	krb5_warnx(context, "failed to open `%s'", check_library);
 	return;
@@ -325,7 +319,7 @@ add_verifier(krb5_context context, const char *check_library)
     void *handle;
     int i;
 
-    handle = dlopen(check_library, RTLD_NOW);
+    handle = dlopen(check_library, RTLD_NOW | RTLD_LOCAL | RTLD_GROUP);
     if(handle == NULL) {
 	krb5_warnx(context, "failed to open `%s'", check_library);
 	return ENOENT;

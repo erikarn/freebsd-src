@@ -100,11 +100,16 @@ main (int argc, char **argv)
 * @endcode
 */
 
+static const krb5_cc_ops *
+cc_get_prefix_ops(krb5_context context,
+		  const char *prefix,
+		  const char **residual);
+
 /**
  * Add a new ccache type with operations `ops', overwriting any
  * existing one if `override'.
  *
- * @param context a Keberos context
+ * @param context a Kerberos context
  * @param ops type of plugin symbol
  * @param override flag to select if the registration is to overide
  * an existing ops with the same name.
@@ -180,74 +185,47 @@ _krb5_cc_allocate(krb5_context context,
  */
 
 static krb5_error_code
-allocate_ccache (krb5_context context,
-		 const krb5_cc_ops *ops,
-		 const char *residual,
-		 krb5_ccache *id)
+allocate_ccache(krb5_context context,
+                const krb5_cc_ops *ops,
+                const char *residual,
+                const char *subsidiary,
+                krb5_ccache *id)
 {
-    krb5_error_code ret;
-#ifdef KRB5_USE_PATH_TOKENS
-    char * exp_residual = NULL;
+    krb5_error_code ret = 0;
+    char *exp_residual = NULL;
     int filepath;
 
     filepath = (strcmp("FILE", ops->prefix) == 0
 		 || strcmp("DIR", ops->prefix) == 0
 		 || strcmp("SCC", ops->prefix) == 0);
 
-    ret = _krb5_expand_path_tokens(context, residual, filepath, &exp_residual);
-    if (ret)
-	return ret;
+    if (residual)
+        ret = _krb5_expand_path_tokens(context, residual, filepath, &exp_residual);
+    if (ret == 0)
+        ret = _krb5_cc_allocate(context, ops, id);
 
-    residual = exp_residual;
-#endif
-
-    ret = _krb5_cc_allocate(context, ops, id);
-    if (ret) {
-#ifdef KRB5_USE_PATH_TOKENS
-	if (exp_residual)
-	    free(exp_residual);
-#endif
-	return ret;
+    if (ret == 0) {
+        if ((*id)->ops->version < KRB5_CC_OPS_VERSION_5
+            || (*id)->ops->resolve_2 == NULL) {
+            ret = (*id)->ops->resolve(context, id, exp_residual);
+        } else {
+            ret = (*id)->ops->resolve_2(context, id, exp_residual, subsidiary);
+        }
     }
-
-    ret = (*id)->ops->resolve(context, id, residual);
-    if(ret) {
+    if (ret) {
 	free(*id);
         *id = NULL;
     }
-
-#ifdef KRB5_USE_PATH_TOKENS
-    if (exp_residual)
-	free(exp_residual);
-#endif
-
+    free(exp_residual);
     return ret;
 }
 
-static int
-is_possible_path_name(const char * name)
-{
-    const char * colon;
-
-    if ((colon = strchr(name, ':')) == NULL)
-        return TRUE;
-
-#ifdef _WIN32
-    /* <drive letter>:\path\to\cache ? */
-
-    if (colon == name + 1 &&
-        strchr(colon + 1, ':') == NULL)
-        return TRUE;
-#endif
-
-    return FALSE;
-}
 
 /**
  * Find and allocate a ccache in `id' from the specification in `residual'.
  * If the ccache name doesn't contain any colon, interpret it as a file name.
  *
- * @param context a Keberos context.
+ * @param context a Kerberos context.
  * @param name string name of a credential cache.
  * @param id return pointer to a found credential cache.
  *
@@ -263,27 +241,183 @@ krb5_cc_resolve(krb5_context context,
 		const char *name,
 		krb5_ccache *id)
 {
-    int i;
+    const krb5_cc_ops *ops;
+    const char *residual = NULL;
 
     *id = NULL;
 
-    for(i = 0; i < context->num_cc_ops && context->cc_ops[i]->prefix; i++) {
-	size_t prefix_len = strlen(context->cc_ops[i]->prefix);
+    ops = cc_get_prefix_ops(context, name, &residual);
+    if (ops == NULL)
+	ops = &krb5_fcc_ops; /* residual will point to name */
 
-	if(strncmp(context->cc_ops[i]->prefix, name, prefix_len) == 0
-	   && name[prefix_len] == ':') {
-	    return allocate_ccache (context, context->cc_ops[i],
-				    name + prefix_len + 1,
-				    id);
+    return allocate_ccache(context, ops, residual, NULL, id);
+}
+
+#ifdef _WIN32
+static const char *
+get_default_cc_type_win32(krb5_context context)
+{
+    krb5_error_code ret;
+    krb5_ccache id;
+
+    /*
+     * If the MSLSA ccache type has a principal name,
+     * use it as the default.
+     */
+    ret = krb5_cc_resolve(context, "MSLSA:", &id);
+    if (ret == 0) {
+        krb5_principal princ;
+        ret = krb5_cc_get_principal(context, id, &princ);
+        krb5_cc_close(context, id);
+        if (ret == 0) {
+            krb5_free_principal(context, princ);
+	    return "MSLSA";
 	}
     }
-    if (is_possible_path_name(name))
-	return allocate_ccache (context, &krb5_fcc_ops, name, id);
-    else {
+
+    /*
+     * If the API: ccache can be resolved,
+     * use it as the default.
+     */
+    ret = krb5_cc_resolve(context, "API:", &id);
+    if (ret == 0) {
+	krb5_cc_close(context, id);
+	return "API";
+    }
+
+    return NULL;
+}
+#endif /* _WIN32 */
+
+static const char *
+get_default_cc_type(krb5_context context, int simple)
+{
+    const char *def_ccname;
+    const char *def_cctype =
+        krb5_config_get_string_default(context, NULL,
+                                       secure_getenv("KRB5CCTYPE"),
+                                       "libdefaults", "default_cc_type", NULL);
+    const char *def_cccol =
+        krb5_config_get_string(context, NULL, "libdefaults",
+                               "default_cc_collection", NULL);
+    const krb5_cc_ops *ops;
+
+    if (!simple && (def_ccname = krb5_cc_default_name(context))) {
+	ops = cc_get_prefix_ops(context, def_ccname, NULL);
+	if (ops)
+	    return ops->prefix;
+    }
+    if (!def_cctype && def_cccol) {
+	ops = cc_get_prefix_ops(context, def_cccol, NULL);
+	if (ops)
+	    return ops->prefix;
+    }
+#ifdef _WIN32
+    if (def_cctype == NULL)
+	def_cctype = get_default_cc_type_win32(context);
+#endif
+    if (def_cctype == NULL)
+	def_cctype = KRB5_DEFAULT_CCTYPE->prefix;
+    return def_cctype;
+}
+
+/**
+ * Find and allocate a ccache in `id' for the subsidiary cache named by
+ * `subsidiary' in the collection named by `collection'.
+ *
+ * @param context a Kerberos context.
+ * @param cctype string name of a credential cache collection type.
+ * @param collection string name of a credential cache collection.
+ * @param subsidiary string name of a credential cache in a collection.
+ * @param id return pointer to a found credential cache.
+ *
+ * @return Return 0 or an error code. In case of an error, id is set
+ * to NULL, see krb5_get_error_message().
+ *
+ * @ingroup krb5_ccache
+ */
+
+
+KRB5_LIB_FUNCTION krb5_error_code KRB5_LIB_CALL
+krb5_cc_resolve_sub(krb5_context context,
+                    const char *cctype,
+                    const char *collection,
+                    const char *subsidiary,
+                    krb5_ccache *id)
+{
+    const krb5_cc_ops *ops = NULL;
+
+    *id = NULL;
+
+    /* Get the cctype from the collection, maybe */
+    if (cctype == NULL && collection)
+	ops = cc_get_prefix_ops(context, collection, &collection);
+
+    if (ops == NULL)
+	ops = cc_get_prefix_ops(context, get_default_cc_type(context, 0), NULL);
+
+    if (ops == NULL) {
 	krb5_set_error_message(context, KRB5_CC_UNKNOWN_TYPE,
-			       N_("unknown ccache type %s", "name"), name);
+			       N_("unknown ccache type %s", ""), cctype);
 	return KRB5_CC_UNKNOWN_TYPE;
     }
+
+    return allocate_ccache(context, ops, collection, subsidiary, id);
+}
+
+
+/**
+ * Find and allocate a ccache in `id' from the specification in `residual', but
+ * specific to the given principal `principal' by using the principal name as
+ * the name of a "subsidiary" credentials cache in the collection named by
+ * `name'.  If the ccache name doesn't contain any colon, interpret it as a
+ * file name.
+ *
+ * @param context a Kerberos context.
+ * @param name string name of a credential cache.
+ * @param principal principal name of desired credentials.
+ * @param id return pointer to a found credential cache.
+ *
+ * @return Return 0 or an error code. In case of an error, id is set
+ * to NULL, see krb5_get_error_message().
+ *
+ * @ingroup krb5_ccache
+ */
+
+KRB5_LIB_FUNCTION krb5_error_code KRB5_LIB_CALL
+krb5_cc_resolve_for(krb5_context context,
+                    const char *cctype,
+		    const char *name,
+                    krb5_const_principal principal,
+                    krb5_ccache *id)
+{
+    krb5_error_code ret;
+    char *p, *s;
+
+    *id = NULL;
+
+    ret = krb5_unparse_name(context, principal, &p);
+    if (ret)
+        return ret;
+    /*
+     * Subsidiary components cannot have various chars in them that are used as
+     * separators.  ':' is used for subsidiary separators in all ccache types
+     * except FILE, where '+' is used instead because we can't use ':' in file
+     * paths on Windows and because ':' is not in the POSIX safe set.
+     */
+    for (s = p; *s; s++) {
+        switch (s[0]) {
+        case ':':
+        case '+':
+        case '/':
+        case '\\':
+            s[0] = '-';
+        default: break;
+        }
+    }
+    ret = krb5_cc_resolve_sub(context, cctype, name, p, id);
+    free(p);
+    return ret;
 }
 
 /**
@@ -304,6 +438,9 @@ krb5_cc_new_unique(krb5_context context, const char *type,
 {
     const krb5_cc_ops *ops;
     krb5_error_code ret;
+
+    if (type == NULL)
+        type = get_default_cc_type(context, 1);
 
     ops = krb5_cc_get_prefix_ops(context, type);
     if (ops == NULL) {
@@ -334,7 +471,52 @@ KRB5_LIB_FUNCTION const char* KRB5_LIB_CALL
 krb5_cc_get_name(krb5_context context,
 		 krb5_ccache id)
 {
-    return id->ops->get_name(context, id);
+    const char *name = NULL;
+
+    if (id->ops->version < KRB5_CC_OPS_VERSION_5
+	|| id->ops->get_name_2 == NULL)
+	return id->ops->get_name(context, id);
+
+    (void) id->ops->get_name_2(context, id, &name, NULL, NULL);
+    return name;
+}
+
+/**
+ * Return the name of the ccache collection associated with `id'
+ *
+ * @ingroup krb5_ccache
+ */
+
+
+KRB5_LIB_FUNCTION const char* KRB5_LIB_CALL
+krb5_cc_get_collection(krb5_context context, krb5_ccache id)
+{
+    const char *name = NULL;
+
+    if (id->ops->version < KRB5_CC_OPS_VERSION_5
+	|| id->ops->get_name_2 == NULL)
+	return NULL;
+
+    (void) id->ops->get_name_2(context, id, NULL, &name, NULL);
+    return name;
+}
+
+/**
+ * Return the name of the subsidiary ccache of `id'
+ *
+ * @ingroup krb5_ccache
+ */
+
+
+KRB5_LIB_FUNCTION const char* KRB5_LIB_CALL
+krb5_cc_get_subsidiary(krb5_context context, krb5_ccache id)
+{
+    const char *name = NULL;
+
+    if (id->ops->version >= KRB5_CC_OPS_VERSION_5
+	&& id->ops->get_name_2 != NULL)
+        (void) id->ops->get_name_2(context, id, NULL, NULL, &name);
+    return name;
 }
 
 /**
@@ -354,7 +536,7 @@ krb5_cc_get_type(krb5_context context,
 /**
  * Return the complete resolvable name the cache
 
- * @param context a Keberos context
+ * @param context a Kerberos context
  * @param id return pointer to a found credential cache
  * @param str the returned name of a credential cache, free with krb5_xfree()
  *
@@ -443,10 +625,7 @@ environment_changed(krb5_context context)
 	 strncmp(context->default_cc_name, "API:", 4) == 0))
 	return 1;
 
-    if(issuid())
-	return 0;
-
-    e = getenv("KRB5CCNAME");
+    e = secure_getenv("KRB5CCNAME");
     if (e == NULL) {
 	if (context->default_cc_name_env) {
 	    free(context->default_cc_name_env);
@@ -478,7 +657,8 @@ krb5_cc_switch(krb5_context context, krb5_ccache id)
     _krb5_set_default_cc_name_to_registry(context, id);
 #endif
 
-    if (id->ops->set_default == NULL)
+    if (id->ops->version == KRB5_CC_OPS_VERSION_0
+	|| id->ops->set_default == NULL)
 	return 0;
 
     return (*id->ops->set_default)(context, id);
@@ -496,7 +676,7 @@ krb5_cc_support_switch(krb5_context context, const char *type)
     const krb5_cc_ops *ops;
 
     ops = krb5_cc_get_prefix_ops(context, type);
-    if (ops && ops->set_default)
+    if (ops && ops->version > KRB5_CC_OPS_VERSION_0 && ops->set_default)
 	return 1;
     return FALSE;
 }
@@ -511,109 +691,61 @@ KRB5_LIB_FUNCTION krb5_error_code KRB5_LIB_CALL
 krb5_cc_set_default_name(krb5_context context, const char *name)
 {
     krb5_error_code ret = 0;
-    char *p = NULL, *exp_p = NULL;
-    int filepath;
-    const krb5_cc_ops *ops = KRB5_DEFAULT_CCTYPE;
+    char *p = NULL;
 
     if (name == NULL) {
-	const char *e = NULL;
+	const char *e;
 
-	if (!issuid()) {
-	    e = getenv("KRB5CCNAME");
-	    if (e) {
-		p = strdup(e);
-		if (context->default_cc_name_env)
-		    free(context->default_cc_name_env);
-		context->default_cc_name_env = strdup(e);
-	    }
-	}
+        if ((e = secure_getenv("KRB5CCNAME"))) {
+            if ((p = strdup(e)) == NULL)
+                return krb5_enomem(context);
 
-#ifdef _WIN32
-	if (p == NULL) {
-	    p = _krb5_get_default_cc_name_from_registry(context);
+            free(context->default_cc_name_env);
+            context->default_cc_name_env = p;
+
+            if ((p = strdup(e)) == NULL)
+                return krb5_enomem(context);
+
+            /*
+             * We're resetting the default ccache name.  Recall that we got
+             * this from the environment, which might change.
+             */
+            context->default_cc_name_set = 0;
+        } else if ((e = krb5_cc_configured_default_name(context))) {
+            if ((p = strdup(e)) == NULL)
+                return krb5_enomem(context);
+
+            /*
+             * Since $KRB5CCNAME was not set, and since we got the default
+             * ccache name from configuration, we'll not want
+             * environment_changed() to return true to avoid re-doing the
+             * krb5_cc_configured_default_name() call unnecessarily.
+             *
+             * XXX Perhaps if we got the ccache name from the registry then
+             *     we'd want to recheck it?  If so we might need an indication
+             *     from krb5_cc_configured_default_name() about that!
+             */
+            context->default_cc_name_set = 1;
         }
-#endif
-	if (p == NULL) {
-	    e = krb5_config_get_string(context, NULL, "libdefaults",
-				       "default_cc_name", NULL);
-	    if (e) {
-		ret = _krb5_expand_default_cc_name(context, e, &p);
-		if (ret)
-		    return ret;
-	    }
-	}
-	if (p == NULL) {
-	    e = krb5_config_get_string(context, NULL, "libdefaults",
-				       "default_cc_type", NULL);
-	    if (e) {
-		ops = krb5_cc_get_prefix_ops(context, e);
-		if (ops == NULL) {
-		    krb5_set_error_message(context,
-					   KRB5_CC_UNKNOWN_TYPE,
-					   "Credential cache type %s "
-					   "is unknown", e);
-		    return KRB5_CC_UNKNOWN_TYPE;
-		}
-	    }
-	}
-#ifdef _WIN32
-	if (p == NULL) {
-	    /*
-	     * If the MSLSA ccache type has a principal name,
-	     * use it as the default.
-	     */
-	    krb5_ccache id;
-	    ret = krb5_cc_resolve(context, "MSLSA:", &id);
-	    if (ret == 0) {
-		krb5_principal princ;
-		ret = krb5_cc_get_principal(context, id, &princ);
-		if (ret == 0) {
-		    krb5_free_principal(context, princ);
-		    p = strdup("MSLSA:");
-		}
-		krb5_cc_close(context, id);
-	    }
-	}
-	if (p == NULL) {
-	    /*
-	     * If the API:krb5cc ccache can be resolved,
-	     * use it as the default.
-	     */
-	    krb5_ccache api_id;
-	    ret = krb5_cc_resolve(context, "API:krb5cc", &api_id);
-	    if (ret == 0)
-		krb5_cc_close(context, api_id);
-	}
-	/* Otherwise, fallback to the FILE ccache */
-#endif
-	if (p == NULL) {
-	    ret = (*ops->get_default_name)(context, &p);
-	    if (ret)
-		return ret;
-	}
-	context->default_cc_name_set = 0;
     } else {
-	p = strdup(name);
-	if (p == NULL)
-	    return krb5_enomem(context);
+        int filepath = (strncmp("FILE:", name, 5) == 0 ||
+                        strncmp("DIR:",  name, 4) == 0 ||
+                        strncmp("SCC:",  name, 4) == 0);
+
+        ret = _krb5_expand_path_tokens(context, name, filepath, &p);
+        if (ret)
+            return ret;
+
+        /*
+         * Since the default ccache name was set explicitly, we won't want
+         * environment_changed() to return true until the default ccache name
+         * is reset.
+         */
 	context->default_cc_name_set = 1;
     }
 
-    filepath = (strncmp("FILE:", p, 5) == 0
-		 || strncmp("DIR:", p, 4) == 0
-		 || strncmp("SCC:", p, 4) == 0);
-
-    ret = _krb5_expand_path_tokens(context, p, filepath, &exp_p);
-    free(p);
-    p = exp_p;
-    if (ret)
-	return ret;
-
-    if (context->default_cc_name)
-	free(context->default_cc_name);
-
+    free(context->default_cc_name);
     context->default_cc_name = p;
-
     return 0;
 }
 
@@ -636,6 +768,71 @@ krb5_cc_default_name(krb5_context context)
     return context->default_cc_name;
 }
 
+KRB5_LIB_FUNCTION const char * KRB5_LIB_CALL
+krb5_cc_configured_default_name(krb5_context context)
+{
+    krb5_error_code ret = 0;
+#ifdef _WIN32
+    krb5_ccache id;
+#endif
+    const char *cfg;
+    char *expanded;
+    const krb5_cc_ops *ops;
+
+    if (context->configured_default_cc_name)
+        return context->configured_default_cc_name;
+
+#ifdef _WIN32
+    if ((expanded = _krb5_get_default_cc_name_from_registry(context)))
+        return context->configured_default_cc_name = expanded;
+#endif
+
+    /* If there's a configured default, expand the tokens and use it */
+    cfg = krb5_config_get_string(context, NULL, "libdefaults",
+                                 "default_cc_name", NULL);
+    if (cfg == NULL)
+        cfg = krb5_config_get_string(context, NULL, "libdefaults",
+                                     "default_ccache_name", NULL);
+    if (cfg) {
+        ret = _krb5_expand_default_cc_name(context, cfg, &expanded);
+        if (ret) {
+            krb5_set_error_message(context, ret,
+                                   "token expansion failed for %s", cfg);
+            return NULL;
+        }
+        return context->configured_default_cc_name = expanded;
+    }
+
+    /* Else try a configured default ccache type's default */
+    cfg = get_default_cc_type(context, 1);
+    if ((ops = krb5_cc_get_prefix_ops(context, cfg)) == NULL) {
+	krb5_set_error_message(context, KRB5_CC_UNKNOWN_TYPE,
+                               "unknown configured credential cache "
+                               "type %s", cfg);
+	return NULL;
+    }
+
+    /* The get_default_name() method expands any tokens */
+    ret = (*ops->get_default_name)(context, &expanded);
+    if (ret) {
+	krb5_set_error_message(context, ret, "failed to find a default "
+			       "ccache for default ccache type %s", cfg);
+	return NULL;
+    }
+    return context->configured_default_cc_name = expanded;
+}
+
+KRB5_LIB_FUNCTION char * KRB5_LIB_CALL
+krb5_cccol_get_default_ccname(krb5_context context)
+{
+    const char *cfg = get_default_cc_type(context, 1);
+    char *cccol_default_ccname;
+    const krb5_cc_ops *ops = krb5_cc_get_prefix_ops(context, cfg);
+
+    (void) (*ops->get_default_name)(context, &cccol_default_ccname);
+    return cccol_default_ccname;
+}
+
 /**
  * Open the default ccache in `id'.
  *
@@ -644,16 +841,50 @@ krb5_cc_default_name(krb5_context context)
  * @ingroup krb5_ccache
  */
 
-
 KRB5_LIB_FUNCTION krb5_error_code KRB5_LIB_CALL
 krb5_cc_default(krb5_context context,
 		krb5_ccache *id)
 {
     const char *p = krb5_cc_default_name(context);
 
+    *id = NULL;
     if (p == NULL)
 	return krb5_enomem(context);
     return krb5_cc_resolve(context, p, id);
+}
+
+/**
+ * Open the named subsidiary cache from the default ccache collection in `id'.
+ *
+ * @return Return an error code or 0, see krb5_get_error_message().
+ *
+ * @ingroup krb5_ccache
+ */
+
+KRB5_LIB_FUNCTION krb5_error_code KRB5_LIB_CALL
+krb5_cc_default_sub(krb5_context context,
+                    const char *subsidiary,
+		    krb5_ccache *id)
+{
+    return krb5_cc_resolve_sub(context, get_default_cc_type(context, 0), NULL,
+                               subsidiary, id);
+}
+
+/**
+ * Open the default ccache in `id' that corresponds to the given principal.
+ *
+ * @return Return an error code or 0, see krb5_get_error_message().
+ *
+ * @ingroup krb5_ccache
+ */
+
+KRB5_LIB_FUNCTION krb5_error_code KRB5_LIB_CALL
+krb5_cc_default_for(krb5_context context,
+                    krb5_const_principal principal,
+                    krb5_ccache *id)
+{
+    return krb5_cc_resolve_for(context, get_default_cc_type(context, 0), NULL,
+                               principal, id);
 }
 
 /**
@@ -673,8 +904,12 @@ krb5_cc_initialize(krb5_context context,
     krb5_error_code ret;
 
     ret = (*id->ops->init)(context, id, primary_principal);
-    if (ret == 0)
-        id->initialized = 1;
+    if (ret == 0) {
+        id->cc_kx509_done = 0;
+        id->cc_initialized = 1;
+        id->cc_need_start_realm = 1;
+        id->cc_start_tgt_stored = 0;
+    }
     return ret;
 }
 
@@ -692,11 +927,32 @@ KRB5_LIB_FUNCTION krb5_error_code KRB5_LIB_CALL
 krb5_cc_destroy(krb5_context context,
 		krb5_ccache id)
 {
+    krb5_error_code ret2 = 0;
     krb5_error_code ret;
+    krb5_data d;
+
+    /*
+     * Destroy associated hx509 PKIX credential store created by krb5_kx509*().
+     */
+    if (krb5_cc_get_config(context, id, NULL, "kx509store", &d) == 0) {
+        char *name;
+
+        if ((name = strndup(d.data, d.length)) == NULL) {
+            ret2 = krb5_enomem(context);
+        } else {
+            hx509_certs certs;
+            ret = hx509_certs_init(context->hx509ctx, name, 0, NULL, &certs);
+            if (ret == 0)
+                ret2 = hx509_certs_destroy(context->hx509ctx, &certs);
+            else
+                hx509_certs_free(&certs);
+            free(name);
+        }
+    }
 
     ret = (*id->ops->destroy)(context, id);
-    krb5_cc_close (context, id);
-    return ret;
+    (void) krb5_cc_close(context, id);
+    return ret ? ret : ret2;
 }
 
 /**
@@ -713,6 +969,52 @@ krb5_cc_close(krb5_context context,
 	      krb5_ccache id)
 {
     krb5_error_code ret;
+
+    if (!id)
+	return 0;
+
+    /*
+     * We want to automatically acquire a PKIX credential using kx509.
+     *
+     * This can be slow if we're generating an RSA key.  Plus it means talking
+     * to the KDC.
+     *
+     * We only want to do this when:
+     *
+     *  - krb5_cc_initialize() was called on this ccache handle,
+     *  - a start TGT was stored (actually, a cross-realm TGT would do),
+     *
+     * and
+     *
+     *  - we aren't creating a gss_cred_id_t for a delegated credential.
+     *
+     * We only have a heuristic for the last condition: that `id' is not a
+     * MEMORY ccache, which is what's used for delegated credentials.
+     *
+     * We really only want to do this when storing a credential in a user's
+     * default ccache, but we leave it to krb5_kx509() to do that check.
+     *
+     * XXX Perhaps we should do what krb5_kx509() does here, and just call
+     *     krb5_kx509_ext() (renamed to krb5_kx509()).  Then we wouldn't need
+     *     the delegated cred handle heuristic.
+     */
+    if (id->cc_initialized && id->cc_start_tgt_stored && !id->cc_kx509_done &&
+        strcmp("MEMORY", krb5_cc_get_type(context, id)) != 0) {
+        krb5_boolean enabled;
+
+        krb5_appdefault_boolean(context, NULL, NULL, "enable_kx509", FALSE,
+                                &enabled);
+        if (enabled) {
+            _krb5_debug(context, 2, "attempting to fetch a certificate using "
+                        "kx509");
+            ret = krb5_kx509(context, id, NULL);
+            if (ret)
+                _krb5_debug(context, 2, "failed to fetch a certificate");
+            else
+                _krb5_debug(context, 2, "fetched a certificate");
+        }
+    }
+
     ret = (*id->ops->close)(context, id);
     free(id);
     return ret;
@@ -734,31 +1036,54 @@ krb5_cc_store_cred(krb5_context context,
 {
     krb5_error_code ret;
     krb5_data realm;
+    const char *cfg = "";
+
+    /* Automatic cc_config-setting and other actions */
+    if (krb5_principal_get_num_comp(context, creds->server) > 1 &&
+        krb5_is_config_principal(context, creds->server))
+        cfg = krb5_principal_get_comp_string(context, creds->server, 1);
+
+    if (id->cc_initialized && !id->cc_need_start_realm &&
+        strcmp(cfg, "start_realm") == 0)
+        return 0;
 
     ret = (*id->ops->store)(context, id, creds);
+    if (ret)
+        return ret;
 
-    /* Look for and mark the first root TGT's realm as the start realm */
-    if (ret == 0 && id->initialized &&
+    if (id->cc_initialized && !id->cc_start_tgt_stored &&
+        id->cc_need_start_realm &&
         krb5_principal_is_root_krbtgt(context, creds->server)) {
-
-        id->initialized = 0;
+        /* Mark the first root TGT's realm as the start realm */
+        id->cc_start_tgt_stored = 1;
         realm.length = strlen(creds->server->realm);
         realm.data = creds->server->realm;
         (void) krb5_cc_set_config(context, id, NULL, "start_realm", &realm);
-    } else if (ret == 0 && id->initialized &&
-        krb5_is_config_principal(context, creds->server) &&
-        strcmp(creds->server->name.name_string.val[1], "start_realm") == 0) {
-
+        id->cc_need_start_realm = 0;
+    } else if (id->cc_initialized && id->cc_start_tgt_stored &&
+               !id->cc_kx509_done && strcmp(cfg, "kx509cert") == 0) {
         /*
-         * But if the caller is storing a start_realm ccconfig, then
-         * stop looking for root TGTs to mark as the start_realm.
-         *
-         * By honoring any start_realm cc config stored, we interop
-         * both, with ccache implementations that don't preserve
-         * insertion order, and Kerberos implementations that store this
-         * cc config before the TGT.
+         * Do not attempt kx509 at cc close time -- we're copying a ccache and
+         * we've already got a cert (and private key).
          */
-        id->initialized = 0;
+        id->cc_kx509_done = 1;
+    } else if (id->cc_initialized && id->cc_start_tgt_stored &&
+               !id->cc_kx509_done && strcmp(cfg, "kx509_service_status") == 0) {
+        /*
+         * Do not attempt kx509 at cc close time -- we're copying a ccache and
+         * we know the kx509 service is not available.
+         */
+        id->cc_kx509_done = 1;
+    } else if (id->cc_initialized && strcmp(cfg, "start_realm") == 0) {
+        /*
+         * If the caller is storing a start_realm ccconfig, then stop looking
+         * for root TGTs to mark as the start_realm.
+         *
+         * By honoring any start_realm cc config stored, we interop both, with
+         * ccache implementations that don't preserve insertion order, and
+         * Kerberos implementations that store this cc config before the TGT.
+         */
+        id->cc_need_start_realm = 0;
     }
     return ret;
 }
@@ -1055,8 +1380,34 @@ krb5_cc_clear_mcred(krb5_creds *mcred)
 KRB5_LIB_FUNCTION const krb5_cc_ops * KRB5_LIB_CALL
 krb5_cc_get_prefix_ops(krb5_context context, const char *prefix)
 {
-    char *p, *p1;
+    return cc_get_prefix_ops(context, prefix, NULL);
+}
+
+/**
+ * Get the cc ops that is registered in `context' to handle the
+ * prefix. prefix can be a complete credential cache name or a
+ * prefix, the function will only use part up to the first colon (:)
+ * if there is one. If prefix the argument is NULL, the default ccache
+ * implementation is returned.
+ *
+ * If residual is non-NULL, it is set to the residual component of
+ * prefix (if present) or the prefix itself.
+ *
+ * @return Returns NULL if ops not found.
+ *
+ * @ingroup krb5_ccache
+ */
+
+
+static const krb5_cc_ops *
+cc_get_prefix_ops(krb5_context context,
+		  const char *prefix,
+		  const char **residual)
+{
     int i;
+
+    if (residual)
+	*residual = prefix;
 
     if (prefix == NULL)
 	return KRB5_DEFAULT_CCTYPE;
@@ -1067,26 +1418,26 @@ krb5_cc_get_prefix_ops(krb5_context context, const char *prefix)
 
 #ifdef _WIN32
     /* Is drive letter? */
-    if (isalpha(prefix[0]) && prefix[1] == ':')
+    if (isalpha((unsigned char)prefix[0]) && prefix[1] == ':')
 	return &krb5_fcc_ops;
 #endif
 
-    p = strdup(prefix);
-    if (p == NULL) {
-	krb5_enomem(context);
-	return NULL;
-    }
-    p1 = strchr(p, ':');
-    if (p1)
-	*p1 = '\0';
-
     for(i = 0; i < context->num_cc_ops && context->cc_ops[i]->prefix; i++) {
-	if(strcmp(context->cc_ops[i]->prefix, p) == 0) {
-	    free(p);
+	size_t prefix_len = strlen(context->cc_ops[i]->prefix);
+
+	if (strncmp(context->cc_ops[i]->prefix, prefix, prefix_len) == 0 &&
+	    (prefix[prefix_len] == ':' || prefix[prefix_len] == '\0')) {
+	    if (residual) {
+		if (prefix[prefix_len] == ':' && prefix[prefix_len + 1] != '\0')
+		    *residual = &prefix[prefix_len + 1];
+		else
+		    *residual = NULL;
+	    }
+
 	    return context->cc_ops[i];
 	}
     }
-    free(p);
+
     return NULL;
 }
 
@@ -1266,8 +1617,7 @@ krb5_cc_cache_match (krb5_context context,
     } else if (cache == NULL) {
 	char *str;
 
-	krb5_unparse_name(context, client, &str);
-
+	(void) krb5_unparse_name(context, client, &str);
 	krb5_set_error_message(context, KRB5_CC_NOTFOUND,
 			       N_("Principal %s not found in any "
 				  "credential cache", ""),
@@ -1286,12 +1636,13 @@ krb5_cc_cache_match (krb5_context context,
  * Move the content from one credential cache to another. The
  * operation is an atomic switch.
  *
- * @param context a Keberos context
+ * @param context a Kerberos context
  * @param from the credential cache to move the content from
  * @param to the credential cache to move the content to
 
- * @return On sucess, from is freed. On failure, error code is
- * returned and from and to are both still allocated, see krb5_get_error_message().
+ * @return On sucess, from is destroyed and closed. On failure, error code is
+ *         returned and from and to are both still allocated; see
+ *         krb5_get_error_message().
  *
  * @ingroup krb5_ccache
  */
@@ -1299,20 +1650,39 @@ krb5_cc_cache_match (krb5_context context,
 KRB5_LIB_FUNCTION krb5_error_code KRB5_LIB_CALL
 krb5_cc_move(krb5_context context, krb5_ccache from, krb5_ccache to)
 {
-    krb5_error_code ret;
+    krb5_error_code ret = ENOTSUP;
+    krb5_principal princ = NULL;
 
-    if (strcmp(from->ops->prefix, to->ops->prefix) != 0) {
-	krb5_set_error_message(context, KRB5_CC_NOSUPP,
-			       N_("Moving credentials between diffrent "
-				 "types not yet supported", ""));
-	return KRB5_CC_NOSUPP;
-    }
+    if (to->ops->move &&
+        strcmp(from->ops->prefix, to->ops->prefix) == 0) {
+        /*
+         * NOTE: to->ops->move() is expected to call
+         *       krb5_cc_destroy(context, from) on success.
+         */
+        ret = (*to->ops->move)(context, from, to);
+        if (ret == 0)
+            return 0;
+        if (ret != EXDEV && ret != ENOTSUP && ret != KRB5_CC_NOSUPP &&
+            ret != KRB5_FCC_INTERNAL)
+            return ret;
+        /* Fallback to high-level copy */
+    }   /* Else        high-level copy */
 
-    ret = (*to->ops->move)(context, from, to);
-    if (ret == 0) {
-	memset(from, 0, sizeof(*from));
-	free(from);
-    }
+    /*
+     * Initialize destination, copy the source's contents to the destination,
+     * then destroy the source on success.
+     *
+     * It'd be nice if we could destroy any half-built destination if the copy
+     * fails, but the interface is not documented as doing so.
+     */
+    ret = krb5_cc_get_principal(context, from, &princ);
+    if (ret == 0)
+        ret = krb5_cc_initialize(context, to, princ);
+    krb5_free_principal(context, princ);
+    if (ret == 0)
+        ret = krb5_cc_copy_cache(context, from, to);
+    if (ret == 0)
+        krb5_cc_destroy(context, from);
     return ret;
 }
 
@@ -1358,7 +1728,7 @@ build_conf_principals(krb5_context context, krb5_ccache id,
  * principal (generated part of krb5_cc_set_config()). Returns FALSE
  * (zero) if not a configuration principal.
  *
- * @param context a Keberos context
+ * @param context a Kerberos context
  * @param principal principal to check if it a configuration principal
  *
  * @ingroup krb5_ccache
@@ -1382,7 +1752,7 @@ krb5_is_config_principal(krb5_context context,
  * Store some configuration for the credential cache in the cache.
  * Existing configuration under the same name is over-written.
  *
- * @param context a Keberos context
+ * @param context a Kerberos context
  * @param id the credential cache to store the data for
  * @param principal configuration for a specific principal, if
  * NULL, global for the whole cache.
@@ -1406,7 +1776,8 @@ krb5_cc_set_config(krb5_context context, krb5_ccache id,
 
     /* Remove old configuration */
     ret = krb5_cc_remove_cred(context, id, 0, &cred);
-    if (ret && ret != KRB5_CC_NOTFOUND)
+    if (ret && ret != KRB5_CC_NOTFOUND && ret != KRB5_CC_NOSUPP &&
+        ret != KRB5_FCC_INTERNAL)
         goto out;
 
     if (data) {
@@ -1429,12 +1800,14 @@ out:
 /**
  * Get some configuration for the credential cache in the cache.
  *
- * @param context a Keberos context
+ * @param context a Kerberos context
  * @param id the credential cache to store the data for
  * @param principal configuration for a specific principal, if
  * NULL, global for the whole cache.
  * @param name name under which the configuraion is stored.
  * @param data data to fetched, free with krb5_data_free()
+ * @return 0 on success, KRB5_CC_NOTFOUND or KRB5_CC_END if not found,
+ *           or other system error.
  *
  * @ingroup krb5_ccache
  */
@@ -1480,7 +1853,7 @@ struct krb5_cccol_cursor_data {
  * Get a new cache interation cursor that will interate over all
  * credentials caches independent of type.
  *
- * @param context a Keberos context
+ * @param context a Kerberos context
  * @param cursor passed into krb5_cccol_cursor_next() and free with krb5_cccol_cursor_free().
  *
  * @return Returns 0 or and error code, see krb5_get_error_message().
@@ -1522,7 +1895,7 @@ KRB5_LIB_FUNCTION krb5_error_code KRB5_LIB_CALL
 krb5_cccol_cursor_next(krb5_context context, krb5_cccol_cursor cursor,
 		       krb5_ccache *cache)
 {
-    krb5_error_code ret;
+    krb5_error_code ret = 0;
 
     *cache = NULL;
 
@@ -1554,7 +1927,7 @@ krb5_cccol_cursor_next(krb5_context context, krb5_cccol_cursor cursor,
 	return KRB5_CC_END;
     }
 
-    return 0;
+    return ret;
 }
 
 /**
@@ -1602,6 +1975,11 @@ krb5_cc_last_change_time(krb5_context context,
 			 krb5_timestamp *mtime)
 {
     *mtime = 0;
+
+    if (id->ops->version < KRB5_CC_OPS_VERSION_2
+	 || id->ops->lastchange == NULL)
+	return KRB5_CC_NOSUPP;
+
     return (*id->ops->lastchange)(context, id, mtime);
 }
 
@@ -1816,7 +2194,8 @@ krb5_cc_get_lifetime(krb5_context context, krb5_ccache id, time_t *t)
 KRB5_LIB_FUNCTION krb5_error_code KRB5_LIB_CALL
 krb5_cc_set_kdc_offset(krb5_context context, krb5_ccache id, krb5_deltat offset)
 {
-    if (id->ops->set_kdc_offset == NULL) {
+    if (id->ops->version < KRB5_CC_OPS_VERSION_3
+	|| id->ops->set_kdc_offset == NULL) {
 	context->kdc_sec_offset = offset;
 	context->kdc_usec_offset = 0;
 	return 0;
@@ -1841,7 +2220,8 @@ krb5_cc_set_kdc_offset(krb5_context context, krb5_ccache id, krb5_deltat offset)
 KRB5_LIB_FUNCTION krb5_error_code KRB5_LIB_CALL
 krb5_cc_get_kdc_offset(krb5_context context, krb5_ccache id, krb5_deltat *offset)
 {
-    if (id->ops->get_kdc_offset == NULL) {
+    if (id->ops->version < KRB5_CC_OPS_VERSION_3
+	|| id->ops->get_kdc_offset == NULL) {
 	*offset = context->kdc_sec_offset;
 	return 0;
     }
@@ -1865,8 +2245,8 @@ _get_default_cc_name_from_registry(krb5_context context, HKEY hkBase)
     if (code != ERROR_SUCCESS)
         return NULL;
 
-    ccname = _krb5_parse_reg_value_as_string(context, hk_k5, "ccname",
-                                             REG_NONE, 0);
+    ccname = heim_parse_reg_value_as_string(context->hcontext, hk_k5, "ccname",
+                                            REG_NONE, 0);
 
     RegCloseKey(hk_k5);
 
@@ -1905,8 +2285,8 @@ _krb5_set_default_cc_name_to_registry(krb5_context context, krb5_ccache id)
     if (ret < 0)
         goto cleanup;
 
-    ret = _krb5_store_string_to_reg_value(context, hk_k5, "ccname",
-                                          REG_SZ, ccname, -1, 0);
+    ret = heim_store_string_to_reg_value(context->hcontext, hk_k5, "ccname",
+                                         REG_SZ, ccname, -1, 0);
 
   cleanup:
 

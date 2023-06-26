@@ -37,7 +37,6 @@
 #include <err.h>
 
 /* verify krb5.conf */
-
 static int dumpconfig_flag = 0;
 static int version_flag = 0;
 static int help_flag	= 0;
@@ -217,6 +216,20 @@ check_host(krb5_context context, const char *path, char *data)
 }
 
 static int
+check_directory(krb5_context context, const char *path, char *data)
+{
+    DIR *d = opendir(data);
+    if (d == NULL) {
+	krb5_warn(context, errno, "%s: could not open directory `%s'",
+		  path, data);
+	return 1;
+    }
+
+    closedir(d);
+    return 0;
+}
+
+static int
 mit_entry(krb5_context context, const char *path, char *data)
 {
     if (warn_mit_syntax_flag)
@@ -278,7 +291,7 @@ static struct s2i syslogvals[] = {
 static int
 find_value(const char *s, struct s2i *table)
 {
-    while(table->s && strcasecmp(table->s, s))
+    while (table->s && strcasecmp(table->s, s) != 0)
 	table++;
     return table->val;
 }
@@ -389,8 +402,11 @@ struct entry libdefaults_entries[] = {
     { "clockskew", krb5_config_string, check_time, 0 },
     { "date_format", krb5_config_string, NULL, 0 },
     { "default_as_etypes", krb5_config_string, NULL, 0 },
+    { "default_ccache_name", krb5_config_string, NULL, 0 },
+    { "default_client_keytab_name", krb5_config_string, NULL, 0 },
     { "default_cc_name", krb5_config_string, NULL, 0 },
     { "default_cc_type", krb5_config_string, NULL, 0 },
+    { "default_cc_collection", krb5_config_string, NULL, 0 },
     { "default_etypes", krb5_config_string, NULL, 0 },
     { "default_etypes_des", krb5_config_string, NULL, 0 },
     { "default_keytab_modify_name", krb5_config_string, NULL, 0 },
@@ -398,7 +414,7 @@ struct entry libdefaults_entries[] = {
     { "default_keytab_modify_name", krb5_config_string, NULL, 0 },
     { "default_realm", krb5_config_string, NULL, 0 },
     { "default_tgs_etypes", krb5_config_string, NULL, 0 },
-    { "dns_canonize_hostname", krb5_config_string, check_boolean, 0 },
+    { "dns_canonicalize_hostname", krb5_config_string, check_boolean, 0 },
     { "dns_proxy", krb5_config_string, NULL, 0 },
     { "dns_lookup_kdc", krb5_config_string, check_boolean, 0 },
     { "dns_lookup_realm", krb5_config_string, check_boolean, 0 },
@@ -428,6 +444,7 @@ struct entry libdefaults_entries[] = {
     { "name_canon_rules", krb5_config_string, NULL, 0 },
     { "no-addresses", krb5_config_string, check_boolean, 0 },
     { "pkinit_dh_min_bits", krb5_config_string, NULL, 0 },
+    { "plugin_dir", krb5_config_string, check_directory, 0 },
     { "proxiable", krb5_config_string, check_boolean, 0 },
     { "renew_lifetime", krb5_config_string, check_time, 0 },
     { "scan_interfaces", krb5_config_string, check_boolean, 0 },
@@ -571,6 +588,7 @@ struct entry kdc_entries[] = {
     { "logging", krb5_config_string, check_log, 0 },
     { "max-kdc-datagram-reply-length", krb5_config_string, check_bytes, 0 },
     { "max-request", krb5_config_string, check_bytes, 0 },
+    { "num-kdc-processes", krb5_config_string, check_numeric, 0 },
     { "pkinit_allow_proxy_certificate", krb5_config_string, check_boolean, 0 },
     { "pkinit_anchors", krb5_config_string, NULL, 0 },
     { "pkinit_dh_min_bits", krb5_config_string, check_numeric, 0 },
@@ -586,6 +604,7 @@ struct entry kdc_entries[] = {
     { "preauth-use-strongest-session-key", krb5_config_string, check_boolean, 0 },
     { "require_initial_kca_tickets", krb5_config_string, check_boolean, 0 },
     { "require-preauth", krb5_config_string, check_boolean, 0 },
+    { "strict-nametypes", krb5_config_string, check_boolean, 0 },
     { "svc-use-strongest-session-key", krb5_config_string, check_boolean, 0 },
     { "tgt-use-strongest-session-key", krb5_config_string, check_boolean, 0 },
     { "transited-policy", krb5_config_string, NULL, 0 },
@@ -599,6 +618,7 @@ struct entry kadmin_entries[] = {
     { "allow_self_change_password", krb5_config_string, check_boolean, 0 },
     { "default_keys", krb5_config_string, NULL, 0 },
     { "password_lifetime", krb5_config_string, check_time, 0 },
+    { "plugin_dir", krb5_config_string, check_directory, 0 },
     { "require-preauth", krb5_config_string, check_boolean, 0 },
     { "save-password", krb5_config_string, check_boolean, 0 },
     { "use_v4_salt", krb5_config_string, NULL, 0 },
@@ -632,6 +652,7 @@ struct entry kcm_entries[] = {
 };
 
 struct entry password_quality_entries[] = {
+    { "enforce_on_admin_set", krb5_config_string, check_boolean, 0 },
     { "check_function", krb5_config_string, NULL, 0 },
     { "check_library", krb5_config_string, NULL, 0 },
     { "external_program", krb5_config_string, NULL, 0 },

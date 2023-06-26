@@ -39,7 +39,7 @@
 #include <getarg.h>
 #include <roken.h>
 
-static int verify_pac = 0;
+static int verify_pac = 1;
 static int server_any = 0;
 static int version_flag = 0;
 static int help_flag	= 0;
@@ -153,6 +153,7 @@ test_ap(krb5_context context,
 	    krb5_err(context, 1, ret, "pac parse");
 
 	krb5_pac_free(context, pac);
+        krb5_data_free(&data);
     }
 
     krb5_free_ticket(context, ticket);

@@ -103,6 +103,8 @@ krb5_free_principal(krb5_context context,
 		    krb5_principal p)
 {
     if(p){
+	if (p->nameattrs && p->nameattrs->pac)
+	    heim_release(p->nameattrs->pac);
 	free_Principal(p);
 	free(p);
     }
@@ -234,10 +236,10 @@ krb5_parse_name_flags(krb5_context context,
     *principal = NULL;
 
     if (no_realm && require_realm) {
-	krb5_set_error_message(context, KRB5_ERR_NO_SERVICE,
+	krb5_set_error_message(context, EINVAL,
 			       N_("Can't require both realm and "
 				  "no realm at the same time", ""));
-	return KRB5_ERR_NO_SERVICE;
+	return EINVAL;
     }
 
     /* count number of component,
@@ -279,9 +281,24 @@ krb5_parse_name_flags(krb5_context context,
 		c = '\t';
 	    else if (c == 'b')
 		c = '\b';
-	    else if (c == '0')
-		c = '\0';
-	    else if (c == '\0') {
+	    else if (c == '0') {
+                /*
+                 * We'll ignore trailing embedded NULs in components and
+                 * realms, but can't support any other embedded NULs.
+                 */
+                while (*p) {
+                    if ((*p == '/' || *p == '@') && !got_realm)
+                        break;
+                    if (*(p++) != '\\' || *(p++) != '0') {
+                        ret = KRB5_PARSE_MALFORMED;
+                        krb5_set_error_message(context, ret,
+                                               N_("embedded NULs in principal "
+                                                  "name not supported", ""));
+                        goto exit;
+                    }
+                }
+                continue;
+            } else if (c == '\0') {
 		ret = KRB5_PARSE_MALFORMED;
 		krb5_set_error_message(context, ret,
 				       N_("trailing \\ in principal name", ""));
@@ -441,6 +458,22 @@ unparse_name_fixed(krb5_context context,
     int short_form = (flags & KRB5_PRINCIPAL_UNPARSE_SHORT) != 0;
     int no_realm = (flags & KRB5_PRINCIPAL_UNPARSE_NO_REALM) != 0;
     int display = (flags & KRB5_PRINCIPAL_UNPARSE_DISPLAY) != 0;
+
+    if (name == NULL) {
+	krb5_set_error_message(context, EINVAL,
+			       N_("Invalid name buffer, "
+				  "can't unparse", ""));
+	return EINVAL;
+    }
+
+    if (len == 0) {
+	krb5_set_error_message(context, ERANGE,
+			       N_("Invalid name buffer length, "
+				  "can't unparse", ""));
+	return ERANGE;
+    }
+
+    name[0] = '\0';
 
     if (!no_realm && princ_realm(principal) == NULL) {
 	krb5_set_error_message(context, ERANGE,
@@ -756,6 +789,9 @@ krb5_make_principal(krb5_context context,
     krb5_error_code ret;
     krb5_realm r = NULL;
     va_list ap;
+
+    *principal = NULL;
+
     if(realm == NULL) {
 	ret = krb5_get_default_realm(context, &r);
 	if(ret)
@@ -910,13 +946,20 @@ krb5_copy_principal(krb5_context context,
 		    krb5_const_principal inprinc,
 		    krb5_principal *outprinc)
 {
-    krb5_principal p = malloc(sizeof(*p));
+    krb5_principal p;
+
+    *outprinc = NULL;
+
+    p = malloc(sizeof(*p));
     if (p == NULL)
 	return krb5_enomem(context);
     if(copy_Principal(inprinc, p)) {
 	free(p);
 	return krb5_enomem(context);
     }
+    if (inprinc->nameattrs && inprinc->nameattrs->pac)
+	p->nameattrs->pac = heim_retain(inprinc->nameattrs->pac);
+
     *outprinc = p;
     return 0;
 }
@@ -1297,10 +1340,32 @@ krb5_principal_is_anonymous(krb5_context context,
     return strcmp(p->realm, KRB5_ANON_REALM) != 0;
 }
 
+/**
+ * Returns true iff name is WELLKNOWN/FEDERATED
+ *
+ * @ingroup krb5_principal
+ */
+
+KRB5_LIB_FUNCTION krb5_boolean KRB5_LIB_CALL
+krb5_principal_is_federated(krb5_context context,
+			     krb5_const_principal p)
+{
+    if (p->name.name_type != KRB5_NT_WELLKNOWN &&
+	p->name.name_type != KRB5_NT_UNKNOWN)
+	return FALSE;
+
+    if (p->name.name_string.len != 2 ||
+        strcmp(p->name.name_string.val[0], KRB5_WELLKNOWN_NAME) != 0 ||
+        strcmp(p->name.name_string.val[1], KRB5_FEDERATED_NAME) != 0)
+        return FALSE;
+
+    return TRUE;
+}
+
 static int
 tolower_ascii(int c)
 {
-    if (c >= 'A' || c <= 'Z')
+    if (c >= 'A' && c <= 'Z')
         return 'a' + (c - 'A');
     return c;
 }
@@ -1398,8 +1463,8 @@ krb5_sname_to_principal(krb5_context context,
 
 	/* Lower-case the hostname, because that's the convention */
 	for (cp = remote_host; *cp; cp++)
-	    if (isupper((int) (*cp)))
-		*cp = tolower((int) (*cp));
+	    if (isupper((unsigned char) (*cp)))
+		*cp = tolower((unsigned char) (*cp));
 
         /*
          * If there is only one name canon rule and it says to
@@ -1465,7 +1530,7 @@ static void
 tolower_str(char *s)
 {
     for (; *s != '\0'; s++) {
-        if (isupper(*s))
+        if (isupper((unsigned char)*s))
             *s = tolower_ascii(*s);
     }
 }
@@ -1720,12 +1785,14 @@ _krb5_get_name_canon_rules(krb5_context context, krb5_name_canon_rule *rules)
     krb5_config_free_strings(values);
     if (ret)
 	return ret;
+    if (*rules == NULL)
+        return krb5_enomem(context);
 
     if (krb5_config_get_bool_default(context, NULL, FALSE,
                                      "libdefaults", "safe_name_canon", NULL))
         make_rules_safe(context, *rules);
 
-    heim_assert(rules != NULL && (*rules)[0].type != KRB5_NCRT_BOGUS,
+    heim_assert((*rules)[0].type != KRB5_NCRT_BOGUS,
                 "internal error in parsing principal name "
                 "canonicalization rules");
 
@@ -1788,7 +1855,7 @@ apply_name_canon_rule(krb5_context context, krb5_name_canon_rule rules,
                       krb5_name_canon_rule_options *rule_opts)
 {
     krb5_name_canon_rule rule = &rules[rule_idx];
-    krb5_error_code ret;
+    krb5_error_code ret = 0;
     unsigned int ndots = 0;
     krb5_principal nss = NULL;
     const char *sname = NULL;
@@ -1833,17 +1900,17 @@ apply_name_canon_rule(krb5_context context, krb5_name_canon_rule rules,
             ndots++;
     }
     if (rule->mindots > 0 && ndots < rule->mindots)
-            return 0;
+        goto out;
     if (ndots > rule->maxdots)
-            return 0;
+        goto out;
 
     if (rule->match_domain != NULL &&
         !is_domain_suffix(orig_hostname, rule->match_domain))
-        return 0;
+        goto out;
 
     if (rule->match_realm != NULL &&
         strcmp(rule->match_realm, in_princ->realm) != 0)
-          return 0;
+        goto out;
 
     new_realm = rule->realm;
     switch (rule->type) {
@@ -1927,10 +1994,12 @@ apply_name_canon_rule(krb5_context context, krb5_name_canon_rule rules,
         new_hostname = hostname_with_port;
     }
 
-    if (new_realm != NULL)
-        krb5_principal_set_realm(context, *out_princ, new_realm);
-    if (new_hostname != NULL)
-        krb5_principal_set_comp_string(context, *out_princ, 1, new_hostname);
+    if (new_realm != NULL &&
+        (ret = krb5_principal_set_realm(context, *out_princ, new_realm)))
+        goto out;
+    if (new_hostname != NULL &&
+        (ret = krb5_principal_set_comp_string(context, *out_princ, 1, new_hostname)))
+        goto out;
     if (princ_type(*out_princ) == KRB5_NT_SRV_HST_NEEDS_CANON)
         princ_type(*out_princ) = KRB5_NT_SRV_HST;
 

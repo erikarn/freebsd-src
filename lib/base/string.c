@@ -36,7 +36,7 @@
 #include "baselocl.h"
 #include <string.h>
 
-static void
+static void HEIM_CALLCONV
 string_dealloc(void *ptr)
 {
     heim_string_t s = ptr;
@@ -73,11 +73,11 @@ string_cmp(void *a, void *b)
     return strcmp(a, b);
 }
 
-static unsigned long
+static uintptr_t
 string_hash(void *ptr)
 {
     const char *s = ptr;
-    unsigned long n;
+    uintptr_t n;
 
     for (n = 0; *s; ++s)
 	n += *s;
@@ -153,7 +153,8 @@ heim_string_create_with_bytes(const void *data, size_t len)
 
     s = _heim_alloc_object(&_heim_string_object, len + 1);
     if (s) {
-	memcpy(s, data, len);
+        if (len)
+            memcpy(s, data, len);
 	((char *)s)[len] = '\0';
     }
     return s;
@@ -182,7 +183,7 @@ heim_string_create_with_format(const char *fmt, ...)
     if (ret < 0 || str == NULL)
 	return NULL;
 
-    s = heim_string_ref_create(str, string_dealloc);
+    s = heim_string_ref_create(str, free);
     if (s == NULL)
 	free(str);
     return s;
@@ -238,7 +239,7 @@ heim_string_t
 __heim_string_constant(const char *_str)
 {
     static HEIMDAL_MUTEX mutex = HEIMDAL_MUTEX_INITIALIZER;
-    static heim_base_once_t once;
+    static heim_base_once_t once = HEIM_BASE_ONCE_INIT;
     static heim_dict_t dict = NULL;
     heim_string_t s, s2;
 

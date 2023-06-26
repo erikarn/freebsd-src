@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 AC_REVISION($Revision$)
 AC_PREREQ(2.62)
 test -z "$CFLAGS" && CFLAGS="-g"
-AC_INIT([Heimdal],[7.8.0],[https://github.com/heimdal/heimdal/issues])
+AC_INIT([Heimdal],[7.99.1],[https://github.com/heimdal/heimdal/issues])
 AC_CONFIG_SRCDIR([kuser/kinit.c])
 AC_CONFIG_HEADERS(include/config.h)
 AC_CONFIG_MACRO_DIR([cf])
@@ -20,6 +20,7 @@ AM_PROG_CC_C_O
 AC_PROG_CPP
 AM_PATH_PYTHON
 AC_CHECK_PROG(CLANG_FORMAT, clang-format, [clang-format], [no])
+test "$CLANG_FORMAT" = no && CLANG_FORMAT=true
 
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 
@@ -55,12 +56,14 @@ if ! test -f "$srcdir/lib/asn1/der-protos.h" ||
     AC_KRB_PROG_PERL
     AC_KRB_PERL_MOD(Getopt::Std)
     AC_KRB_PERL_MOD(File::Compare)
-    AC_KRB_PERL_MOD(JSON)
 fi
 
-dnl AC_KRB_PROG_YACC
-AC_PROG_YACC
+AC_KRB_PROG_YACC
+dnl AC_PROG_YACC
 AM_PROG_LEX
+AS_IF([$LEX --nounput -V > /dev/null 2>&1 && test $? -eq 0],
+      [AC_SUBST([FLEXNOUNPUTARGS], ["--nounput"])],
+      [AC_SUBST([FLEXNOUNPUTARGS], [""])])
 dnl AC_PROG_RANLIB
 AC_PROG_AWK
 AC_KRB_PROG_LN_S
@@ -74,11 +77,15 @@ AC_C___ATTRIBUTE__
 AM_CONDITIONAL(ENABLE_SHARED, test "$enable_shared" = "yes")
 rk_VERSIONSCRIPT
 
+dnl Code coverage
+AC_ARG_ENABLE([gcov],
+        AC_HELP_STRING([--enable-gcov], [enable gcov code coverage tool]))
+AM_CONDITIONAL([ENABLE_GCOV], [test "x$enable_gcov" = xyes])
+
+
 dnl
 dnl Helper bits for cross compiling
 dnl
-
-
 
 AM_CONDITIONAL(CROSS_COMPILE, test "${cross_compiling}" = yes)
 
@@ -108,6 +115,14 @@ else
 
 fi
 
+AX_CHECK_COMPILE_FLAG([-Wno-error=enum-conversion],
+                      [WFLAGS_ENUM_CONV=-Wno-error=enum-conversion],
+                      [WFLAGS_ENUM_CONV=], [-Werror])
+AX_CHECK_COMPILE_FLAG([-Wno-unused-but-set-variable],
+                      [WFLAGS_UNUSED_BUT_SET_VAR=-Wno-unused-but-set-variable],
+                      [WFLAGS_UNUSED_BUT_SET_VAR=], [-Werror])
+
+AC_SUBST([WFLAGS_ENUM_CONV])
 AC_SUBST([ASN1_COMPILE])
 AC_SUBST([ASN1_COMPILE_DEP])
 AC_SUBST([SLC])
@@ -121,6 +136,7 @@ rk_TEST_PACKAGE(openldap,
 [#include <lber.h>
 #include <ldap.h>],
 [-lldap -llber],,,OPENLDAP)
+AM_CONDITIONAL(OPENLDAP, test "$with_openldap" != "no")
 
 AC_ARG_ENABLE(hdb-openldap-module, 
 	AS_HELP_STRING([--enable-hdb-openldap-module],
@@ -129,6 +145,11 @@ if test "$enable_hdb_openldap_module" = yes -a "$with_openldap" = yes; then
     AC_DEFINE(OPENLDAP_MODULE, 1, [Define if you want support for hdb ldap module])
 fi
 AM_CONDITIONAL(OPENLDAP_MODULE, test "$enable_hdb_openldap_module" = yes -a "$with_openldap" = yes)
+
+AC_ARG_ENABLE(asn1-templating, 
+	AS_HELP_STRING([--disable-asn1-templating],
+		[if you want disable to use of the ASN.1 templating compiler]))
+AM_CONDITIONAL(ASN1_TEMPLATING, test "x$enable_asn1_templating" != xno)
 
 dnl
 dnl Optional modules, pk-init, digest, kx509
@@ -174,6 +195,61 @@ fi
 AM_CONDITIONAL([HAVE_CAPNG], [test "$with_capng" != "no"])
 AC_SUBST([CAPNG_CFLAGS])
 AC_SUBST([CAPNG_LIBS])
+
+dnl libmicrohttpd
+AC_ARG_WITH([microhttpd],
+  AC_HELP_STRING([--with-microhttpd], [use microhttpd to serve KDC REST API @<:@default=check@:>@]),
+  [],
+  [with_microhttpd=check])
+if test "$with_microhttpd" != "no"; then
+  PKG_CHECK_MODULES([MICROHTTPD], [libmicrohttpd >= 0.9.37],
+		    [with_microhttpd=yes],[with_microhttpd=no])
+fi
+if test "$with_microhttpd" = "yes"; then
+  AC_DEFINE_UNQUOTED([HAVE_MICROHTTPD], 1, [whether libmicrohttpd is available for KDC REST API])
+fi
+AM_CONDITIONAL([HAVE_MICROHTTPD], [test "$with_microhttpd" != "no"])
+AC_SUBST([MICROHTTPD_CFLAGS])
+AC_SUBST([MICROHTTPD_LIBS])
+
+dnl libcjwt
+AC_ARG_WITH([cjwt],
+  AC_HELP_STRING([--with-cjwt], [(Experimental) use cjwt to validate JWT tokens @<:@default=check@:>@]),
+  [],
+  [with_cjwt=check])
+if test "$with_cjwt" != "no"; then
+  PKG_CHECK_MODULES([CJWT], [libcjwt >= 1.0.0],
+		    [with_cjwt=yes],[with_cjwt=no])
+fi
+if test "$with_cjwt" = "yes"; then
+  AC_DEFINE_UNQUOTED([HAVE_CJWT], 1, [whether libcjwt is available for KDC REST API])
+fi
+AM_CONDITIONAL([HAVE_CJWT], [test "$with_cjwt" != "no"])
+AC_SUBST([CJWT_CFLAGS])
+AC_SUBST([CJWT_LIBS])
+
+dnl libcjson
+AC_ARG_WITH([cjson],
+  AC_HELP_STRING([--with-cjson], [(Experimental) use cJSON to extract private claims from JWT tokens @<:@default=check@:>@]),
+  [],
+  [with_cjson=check])
+if test "$with_cjson" != "no"; then
+  PKG_CHECK_MODULES([CJSON], [libcjson >= 1.0.0],
+		    [with_cjson=yes],[with_cjson=no])
+fi
+if test "$with_cjson" = "yes"; then
+  AC_DEFINE_UNQUOTED([HAVE_CJSON], 1, [whether libcjson is available for KDC REST API])
+fi
+AM_CONDITIONAL([HAVE_CJSON], [test "$with_cjson" != "no"])
+AC_SUBST([CJSON_CFLAGS])
+AC_SUBST([CJSON_LIBS])
+
+dnl mitkrb5
+AC_ARG_WITH([mitkrb5],
+  AC_HELP_STRING([--with-mitkrb5], [Path to MIT Kerberos for interop testing @<:@default=check@:>@]),
+  [],
+  [with_mikrb5=check])
+AM_CONDITIONAL([MITKRB5], [test "$with_mitkrb5" != "no"])
 
 dnl Check for sqlite
 rk_TEST_PACKAGE(sqlite3,
@@ -342,6 +418,7 @@ AC_CHECK_HEADERS([\
 	fnmatch.h				\
 	inttypes.h				\
 	io.h					\
+	keyutils.h				\
 	libutil.h				\
 	limits.h				\
 	maillock.h				\
@@ -356,6 +433,7 @@ AC_CHECK_HEADERS([\
 	signal.h				\
 	strings.h				\
 	stropts.h				\
+	stdatomic.h				\
 	sys/bitypes.h				\
 	sys/category.h				\
 	sys/file.h				\
@@ -431,26 +509,34 @@ dnl export symbols
 rk_WIN32_EXPORT(BUILD_KRB5_LIB, KRB5_LIB)
 rk_WIN32_EXPORT(BUILD_ROKEN_LIB, ROKEN_LIB)
 rk_WIN32_EXPORT(BUILD_GSSAPI_LIB, GSSAPI_LIB)
+rk_WIN32_EXPORT(BUILD_KDC_LIB, KDC_LIB)
+
+dnl Deal with switch fallthrough warnings
+AH_TOP([
+#if defined(DISPATCH_FALLTHROUGH)
+# define HEIM_FALLTHROUGH DISPATCH_FALLTHROUGH
+#else
+# if defined(__GNUC__)
+#  if __GNUC__ >= 7
+#   define HEIM_FALLTHROUGH __attribute__((fallthrough))
+#  else
+#   define HEIM_FALLTHROUGH do {} while (0) /* fallthrough */
+#  endif
+# else
+#  define HEIM_FALLTHROUGH do {} while (0) /* fallthrough */
+# endif
+#endif
+])
 
 dnl Checks for libraries.
 
-AC_FIND_FUNC_NO_LIBS(logwtmp, util,[
-#ifdef HAVE_UTIL_H
-#include <util.h>
-#endif
-],[0,0,0])
-AC_FIND_FUNC_NO_LIBS(logout, util,[
-#ifdef HAVE_UTIL_H
-#include <util.h>
-#endif
-],[0])
 AC_FIND_FUNC_NO_LIBS(openpty, util,[
 #ifdef HAVE_UTIL_H
 #include <util.h>
 #endif
 ],[0,0,0,0,0])
 
-AC_FIND_FUNC_NO_LIBS(tgetent, termcap ncurses curses,[
+AC_FIND_FUNC_NO_LIBS(tgetent, termcap ncurses curses tinfo,[
 #ifdef HAVE_TERMCAP_H
 #include <termcap.h>
 #endif
@@ -462,40 +548,29 @@ AC_FIND_FUNC_NO_LIBS(tgetent, termcap ncurses curses,[
 dnl Checks for library functions.
 
 AC_CHECK_FUNCS([				\
-	_getpty					\
 	_scrsize				\
 	arc4random				\
 	backtrace				\
 	fcntl					\
 	fork					\
+	fseeko					\
+	ftello					\
 	getpeereid				\
 	getpeerucred				\
+	getresgid				\
+	getresuid				\
 	grantpt					\
-	kill					\
-	mktime					\
-	ptsname					\
+	ptsname_r				\
 	rand					\
-	revoke					\
-	select					\
 	setitimer				\
-	setpcred				\
-	setpgid					\
-	setproctitle				\
 	setregid				\
 	setresgid				\
 	setresuid				\
 	setreuid				\
 	setsid					\
-	setutent				\
 	sigaction				\
-	strstr					\
-	ttyname					\
-	ttyslot					\
-	umask					\
 	unlockpt				\
-	vhangup					\
 	waitpid					\
-	yp_get_default_domain			\
 ])
 
 AC_MSG_CHECKING([checking for __sync_add_and_fetch])
@@ -509,10 +584,10 @@ AC_MSG_RESULT($ac_rk_have___sync_add_and_fetch)
 
 AC_FUNC_MMAP
 
-KRB_CAPABILITIES
 rk_DLADDR
 
 AC_CHECK_GETPWNAM_R_POSIX
+AC_CHECK_GETPWUID_R_POSIX
 
 dnl detect doors on solaris
 if test "$enable_pthread_support" != no; then
@@ -537,12 +612,38 @@ if test "$enable_kcm" = yes; then
 fi
 AM_CONDITIONAL(KCM, test "$enable_kcm" = yes)
 
+dnl detect keyring on Linux
+if test "$ac_cv_header_keyutils_h" = yes; then
+    AC_CHECK_SIZEOF([key_serial_t],,[
+	#ifdef HAVE_INTTYPES_H
+	#include <inttypes.h>
+	#endif
+	#ifdef HAVE_SYS_TYPES_H
+	#include <sys/types.h>
+	#endif
+	#include <keyutils.h>
+    ])
+fi
 
+AC_FIND_FUNC_NO_LIBS(add_key, keyutils)
+if test -n "$LIB_add_key"; then
+    saved_LIBS="$LIBS"
+    LIBS="$LIBS $LIB_add_key"
+    AC_CHECK_FUNCS(keyctl_get_persistent)
+    LIBS="$saved_LIBS"
+fi
+AM_CONDITIONAL(HAVE_KEYUTILS, test "$ac_cv_func_keyctl_get_persistent" = yes)
 
-dnl Cray stuff
-AC_CHECK_FUNCS(getudbnam setlim)
+AC_CHECK_SIZEOF([time_t])
 
-dnl AC_KRB_FUNC_GETCWD_BROKEN
+AX_CHECK_SIGN([time_t],
+  [ AC_DEFINE(TIME_T_SIGNED, 1, [Define if time_t is signed]) ],
+  [ AC_DEFINE(TIME_T_UNSIGNED, 1, [Define if time_t is unsigned]) ], [
+#ifdef HAVE_TIME_H
+#include <time.h>
+#endif
+])
+
 
 AC_CHECK_TYPES([int8_t, int16_t, int32_t, int64_t, 
 	u_int8_t, u_int16_t, u_int32_t, u_int64_t,
@@ -565,6 +666,7 @@ AC_CHECK_TYPES([int8_t, int16_t, int32_t, int64_t,
 ])
 
 rk_FRAMEWORK_SECURITY
+rk_FRAMEWORK_COREFOUNDATION
 
 KRB_READLINE
 
@@ -619,6 +721,7 @@ AC_CONFIG_FILES(Makefile 		\
 	lib/sqlite/Makefile		\
 	lib/vers/Makefile		\
 	lib/wind/Makefile		\
+	lib/gss_preauth/Makefile	\
 	po/Makefile			\
 	kuser/Makefile			\
 	kpasswd/Makefile		\
@@ -631,7 +734,6 @@ AC_CONFIG_FILES(Makefile 		\
 	appl/dbutils/Makefile		\
 	appl/gssmask/Makefile		\
 	appl/otp/Makefile		\
-	appl/su/Makefile		\
 	appl/test/Makefile		\
 	appl/kf/Makefile		\
 	appl/dceutils/Makefile		\
@@ -656,22 +758,71 @@ dnl
 dnl This is the release version name-number[beta]
 dnl
 
-cat > include/newversion.h.in <<EOF
+if test -d "$srcdir/.git"; then
+    cat > include/newversion.h.in <<EOF
 #ifndef VERSION_HIDDEN
 #define VERSION_HIDDEN
 #endif
-VERSION_HIDDEN const char *heimdal_long_version = "@([#])\$Version: $PACKAGE_STRING by @USER@ on @HOST@ ($host) @DATE@ \$";
-VERSION_HIDDEN const char *heimdal_version = "AC_PACKAGE_STRING";
+VERSION_HIDDEN const char *const heimdal_long_version = "@([#])\$Version: $PACKAGE_STRING by @USER@ on @HOST@ @BRANCH@ @TAG@ ($host) @COMMIT@ @DATE@ \$";
+VERSION_HIDDEN const char *const heimdal_version = "AC_PACKAGE_STRING";
 EOF
+else
+    cat > include/newversion.h.in <<EOF
+#ifndef VERSION_HIDDEN
+#define VERSION_HIDDEN
+#endif
+VERSION_HIDDEN const char *const heimdal_long_version = "@([#])\$Version: $PACKAGE_STRING by @USER@ on @HOST@ ($host) @DATE@ \$";
+VERSION_HIDDEN const char *const heimdal_version = "AC_PACKAGE_STRING";
+EOF
+fi
 
 if test -f include/version.h && cmp -s include/newversion.h.in include/version.h.in; then
 	echo "include/version.h is unchanged"
 	rm -f include/newversion.h.in
 else
  	echo "creating include/version.h"
- 	User=${USER-${LOGNAME}}
- 	Host=`(hostname || uname -n || echo unknown) 2>/dev/null | sed 1q`
- 	Date=`date`
+        if test -n "$SOURCE_DATE_EPOCH"; then
+            Date=`
+                  # BSD, OS X
+                  date -u -r "$SOURCE_DATE_EPOCH" "+%Y-%m-%dT%H:%M:%SZ" 2>/dev/null ||
+                  # Linux
+                  date -u -d "@${SOURCE_DATE_EPOCH}" 2>/dev/null ||
+                  # Illumos -- sorry, no -r/-d here
+                  date -u ||
+                  date`
+        else
+            Date=`date -u "+%Y-%m-%dT%H:%M:%SZ"`
+        fi
+        if test -n "$SOURCE_HOST"; then
+            Host=$SOURCE_HOST
+        else
+            Host=`uname -n`
+        fi
+        if test -n "$SOURCE_USER"; then
+            User=$SOURCE_USER
+        else
+            User=${USER:-${LOGNAME:-`id -nu`}}
+        fi
+        if test -d "$srcdir/.git"; then
+            GitCommit=`cd $srcdir && git rev-parse HEAD`
+            GitBranch=`cd $srcdir && git rev-parse --abbrev-ref HEAD`
+            if test "x$GitBranch" = master; then
+                GitDesc=`cd $srcdir && git describe --all --dirty`
+            else
+                GitDesc=`cd $srcdir && \
+			 git describe --tags --match 'heimdal-*' --dirty`
+            fi
+        else
+            GitCommit='<commit-unknown>'
+            GitBranch='<branch-unknown>'
+            GitDesc='<tag-unknown>'
+        fi
 	mv -f include/newversion.h.in include/version.h.in
-	sed -e "s/@USER@/$User/" -e "s/@HOST@/$Host/" -e "s/@DATE@/$Date/" include/version.h.in > include/version.h
+	sed -e "s/@HOST@/$Host/" \
+            -e "s;@USER@;$User;" \
+            -e "s;@DATE@;$Date;" \
+            -e "s;@BRANCH@;$GitBranch;" \
+            -e "s;@TAG@;$GitDesc;" \
+            -e "s;@COMMIT@;$GitCommit;" \
+            include/version.h.in > include/version.h
 fi

@@ -40,7 +40,7 @@
  * revocation for destroyed private keys too (smartcard broken), but
  * that should not be a problem.
  *
- * CRL is a list of certifiates that have expired.
+ * CRL is a list of certificates that have expired.
  *
  * OCSP is an online checking method where the requestor sends a list
  * of certificates to the OCSP server to return a signed reply if they
@@ -91,7 +91,7 @@ struct hx509_revoke_ctx_data {
  * @ingroup hx509_revoke
  */
 
-int
+HX509_LIB_FUNCTION int HX509_LIB_CALL
 hx509_revoke_init(hx509_context context, hx509_revoke_ctx *ctx)
 {
     *ctx = calloc(1, sizeof(**ctx));
@@ -107,7 +107,7 @@ hx509_revoke_init(hx509_context context, hx509_revoke_ctx *ctx)
     return 0;
 }
 
-hx509_revoke_ctx
+HX509_LIB_FUNCTION hx509_revoke_ctx HX509_LIB_CALL
 _hx509_revoke_ref(hx509_revoke_ctx ctx)
 {
     if (ctx == NULL)
@@ -137,7 +137,7 @@ free_ocsp(struct revoke_ocsp *ocsp)
  * @ingroup hx509_revoke
  */
 
-void
+HX509_LIB_FUNCTION void HX509_LIB_CALL
 hx509_revoke_free(hx509_revoke_ctx *ctx)
 {
     size_t i ;
@@ -202,6 +202,8 @@ verify_ocsp(hx509_context context,
     ret = hx509_certs_find(context, certs, &q, &signer);
     if (ret && ocsp->certs)
 	ret = hx509_certs_find(context, ocsp->certs, &q, &signer);
+    if (ret == 0 && signer == NULL)
+        ret = HX509_CERT_NOT_FOUND;
     if (ret)
 	goto out;
 
@@ -217,7 +219,7 @@ verify_ocsp(hx509_context context,
 	ret = _hx509_cert_is_parent_cmp(s, p, 0);
 	if (ret != 0) {
 	    ret = HX509_PARENT_NOT_CA;
-	    hx509_set_error_string(context, 0, ret, "Revoke OCSP signer is "
+	    hx509_set_error_string(context, 0, ret, "Revoke OCSP signer "
 				   "doesn't have CA as signer certificate");
 	    goto out;
 	}
@@ -399,7 +401,7 @@ load_ocsp(hx509_context context, struct revoke_ocsp *ocsp)
  * @ingroup hx509_revoke
  */
 
-int
+HX509_LIB_FUNCTION int HX509_LIB_CALL
 hx509_revoke_add_ocsp(hx509_context context,
 		      hx509_revoke_ctx ctx,
 		      const char *path)
@@ -500,6 +502,8 @@ verify_crl(hx509_context context,
 	q.subject_name = &crl->tbsCertList.issuer;
 
 	ret = hx509_certs_find(context, certs, &q, &signer);
+        if (ret == 0 && signer == NULL)
+            ret = HX509_CERT_NOT_FOUND;
 	if (ret) {
 	    hx509_set_error_string(context, HX509_ERROR_APPEND, ret,
 				   "Failed to find certificate for CRL");
@@ -550,7 +554,7 @@ verify_crl(hx509_context context,
 	signer = crl_parent;
 	if (ret) {
 	    hx509_set_error_string(context, HX509_ERROR_APPEND, ret,
-				   "Failed to verify revoke "
+				   "Failed to verify revocation "
 				   "status of CRL signer");
 	    goto out;
 	}
@@ -596,18 +600,15 @@ load_crl(hx509_context context, const char *path, time_t *t, CRLCertificateList 
     FILE *f;
     int ret;
 
+    *t = 0;
     memset(crl, 0, sizeof(*crl));
-
-    ret = stat(path, &sb);
-    if (ret)
-	return errno;
-    
-    *t = sb.st_mtime;
 	
     if ((f = fopen(path, "r")) == NULL)
 	return errno;
 
     rk_cloexec_file(f);
+    if (fstat(fileno(f), &sb) == 0)
+	*t = sb.st_mtime;
 
     ret = hx509_pem_read(context, f, crl_parser, crl);
     fclose(f);
@@ -636,7 +637,7 @@ load_crl(hx509_context context, const char *path, time_t *t, CRLCertificateList 
  * @ingroup hx509_revoke
  */
 
-int
+HX509_LIB_FUNCTION int HX509_LIB_CALL
 hx509_revoke_add_crl(hx509_context context,
 		     hx509_revoke_ctx ctx,
 		     const char *path)
@@ -647,7 +648,7 @@ hx509_revoke_add_crl(hx509_context context,
 
     if (strncmp(path, "FILE:", 5) != 0) {
 	hx509_set_error_string(context, 0, HX509_UNSUPPORTED_OPERATION,
-			       "unsupport type in %s", path);
+			       "unsupported type in %s", path);
 	return HX509_UNSUPPORTED_OPERATION;
     }
 
@@ -706,7 +707,7 @@ hx509_revoke_add_crl(hx509_context context,
  * @ingroup hx509_revoke
  */
 
-int
+HX509_LIB_FUNCTION int HX509_LIB_CALL
 hx509_revoke_verify(hx509_context context,
 		    hx509_revoke_ctx ctx,
 		    hx509_certs certs,
@@ -879,8 +880,7 @@ hx509_revoke_verify(hx509_context context,
 	return 0;
     hx509_set_error_string(context, HX509_ERROR_APPEND,
 			   HX509_REVOKE_STATUS_MISSING,
-			   "No revoke status found for "
-			   "certificates");
+			   "No revocation status found for certificates");
     return HX509_REVOKE_STATUS_MISSING;
 }
 
@@ -891,7 +891,7 @@ struct ocsp_add_ctx {
     hx509_cert parent;
 };
 
-static int
+static int HX509_LIB_CALL
 add_to_req(hx509_context context, void *ptr, hx509_cert cert)
 {
     struct ocsp_add_ctx *ctx = ptr;
@@ -994,7 +994,7 @@ out:
  * @ingroup hx509_revoke
  */
 
-int
+HX509_LIB_FUNCTION int HX509_LIB_CALL
 hx509_ocsp_request(hx509_context context,
 		   hx509_certs reqcerts,
 		   hx509_certs pool,
@@ -1194,7 +1194,7 @@ print_crl(hx509_context context, struct revoke_crl *crl, FILE *out)
  *
  */
 
-int
+HX509_LIB_FUNCTION int HX509_LIB_CALL
 hx509_revoke_print(hx509_context context,
 		   hx509_revoke_ctx ctx,
 		   FILE *out)
@@ -1241,7 +1241,7 @@ hx509_revoke_print(hx509_context context,
  * @ingroup hx509_revoke
  */
 
-int
+HX509_LIB_FUNCTION int HX509_LIB_CALL
 hx509_revoke_ocsp_print(hx509_context context, const char *path, FILE *out)
 {
     struct revoke_ocsp ocsp;
@@ -1287,7 +1287,7 @@ hx509_revoke_ocsp_print(hx509_context context, const char *path, FILE *out)
  * @ingroup hx509_verify
  */
 
-int
+HX509_LIB_FUNCTION int HX509_LIB_CALL
 hx509_ocsp_verify(hx509_context context,
 		  time_t now,
 		  hx509_cert cert,
@@ -1396,7 +1396,7 @@ struct hx509_crl {
  * @ingroup hx509_verify
  */
 
-int
+HX509_LIB_FUNCTION int HX509_LIB_CALL
 hx509_crl_alloc(hx509_context context, hx509_crl *crl)
 {
     int ret;
@@ -1429,7 +1429,7 @@ hx509_crl_alloc(hx509_context context, hx509_crl *crl)
  * @ingroup hx509_verify
  */
 
-int
+HX509_LIB_FUNCTION int HX509_LIB_CALL
 hx509_crl_add_revoked_certs(hx509_context context,
 			    hx509_crl crl,
 			    hx509_certs certs)
@@ -1450,7 +1450,7 @@ hx509_crl_add_revoked_certs(hx509_context context,
  * @ingroup hx509_verify
  */
 
-int
+HX509_LIB_FUNCTION int HX509_LIB_CALL
 hx509_crl_lifetime(hx509_context context, hx509_crl crl, int delta)
 {
     crl->expire = time(NULL) + delta;
@@ -1466,7 +1466,7 @@ hx509_crl_lifetime(hx509_context context, hx509_crl crl, int delta)
  * @ingroup hx509_verify
  */
 
-void
+HX509_LIB_FUNCTION void HX509_LIB_CALL
 hx509_crl_free(hx509_context context, hx509_crl *crl)
 {
     if (*crl == NULL)
@@ -1477,7 +1477,7 @@ hx509_crl_free(hx509_context context, hx509_crl *crl)
     *crl = NULL;
 }
 
-static int
+static int HX509_LIB_CALL
 add_revoked(hx509_context context, void *ctx, hx509_cert cert)
 {
     TBSCRLCertList *c = ctx;
@@ -1525,7 +1525,7 @@ add_revoked(hx509_context context, void *ctx, hx509_cert cert)
  * @ingroup hx509_verify
  */
 
-int
+HX509_LIB_FUNCTION int HX509_LIB_CALL
 hx509_crl_sign(hx509_context context,
 	       hx509_cert signer,
 	       hx509_crl crl,

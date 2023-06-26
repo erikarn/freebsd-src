@@ -116,7 +116,7 @@ unwrap_des
       EVP_Cipher(&des_ctx, p, p, input_message_buffer->length - len);
       EVP_CIPHER_CTX_cleanup(&des_ctx);
 
-      memset (&schedule, 0, sizeof(schedule));
+      memset (&deskey, 0, sizeof(deskey));
   }
 
   if (IS_DCE_STYLE(context_handle)) {
@@ -142,8 +142,11 @@ unwrap_des
   DES_set_key_unchecked (&deskey, &schedule);
   DES_cbc_cksum ((void *)hash, (void *)hash, sizeof(hash),
 		 &schedule, &zero);
-  if (ct_memcmp (p - 8, hash, 8) != 0)
+  if (ct_memcmp (p - 8, hash, 8) != 0) {
+    memset_s(&deskey, sizeof(deskey), 0, sizeof(deskey));
+    memset_s(&schedule, sizeof(schedule), 0, sizeof(schedule));
     return GSS_S_BAD_MIC;
+  }
 
   /* verify sequence number */
 
@@ -160,7 +163,7 @@ unwrap_des
   memset (&schedule, 0, sizeof(schedule));
 
   seq = p;
-  _gsskrb5_decode_om_uint32(seq, &seq_number);
+  _gss_mg_decode_be_uint32(seq, &seq_number);
 
   if (context_handle->more_flags & LOCAL)
       cmp = ct_memcmp(&seq[4], "\xff\xff\xff\xff", 4);
@@ -332,7 +335,7 @@ unwrap_des3
   }
 
   seq = seq_data.data;
-  _gsskrb5_decode_om_uint32(seq, &seq_number);
+  _gss_mg_decode_be_uint32(seq, &seq_number);
 
   if (context_handle->more_flags & LOCAL)
       cmp = ct_memcmp(&seq[4], "\xff\xff\xff\xff", 4);

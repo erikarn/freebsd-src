@@ -1,7 +1,32 @@
-# /* contact Love Hörnquist Åstrand <lha@h5l.org> for new oid arcs */
+# /*
+#  * Contact Love Hörnquist Åstrand <lha at h5l.org> for new oid arcs */
+#  */
+# /*
+#  * 1.2.752.43 is SU's arc.  SU's registry has arcs 13, 14, and 16
+#  * below that registered for Heimdal to use.  The Heimdal source tree
+#  * is the authoritative registry for Heimdal's three arcs off of SU's arc.
+#  * This file is the authoritative registry for 1.2.752.43.13 and 1.2.752.14.
+#  * ASN.1 modules in lib/asn1/ are authoritative for 1.2.752.43.16.
+#  *
+#  * Confirmed by SU's erstwhile registrar, Leif Johansson <leifj at sunet.se>,
+#  * as well as by SU's current registrar (through Leif), as:
+#  *
+#  *  1.2.752.43.13 Namn Heimdal GSS-API extentions
+#  *  Beskrivning OIDar för användning av Heimdal projektet
+#  *  1.2.752.43.14 Namn Heimdal GSS-API mechs
+#  *  Beskrivning OIDar för användning av Heimdal projektet
+#  *  1.2.752.43.16 Namn Heimdal Internal crypto ops
+#  *  Beskrivning OIDar för användning av Heimdal projektet
+#  *
+#  * 1.2.752.43.16 is now also used in Heimdal for PKIX-related things.
+#  * See lib/asn1/ and lib/hx509/.
+#  *
+#  * Contact the SU registrar for new oid arcs if any are needed, or carve
+#  * out an arc of one of the above, preferably off 1.2.752.43.16.
+#  */
 
 # /*
-#  * 1.2.752.43.13 Heimdal GSS-API Extentions
+#  * 1.2.752.43.13 Heimdal GSS-API Extensions
 #  */
 
 oid	base	GSS_KRB5_COPY_CCACHE_X			1.2.752.43.13.1
@@ -35,15 +60,12 @@ oid	base	GSS_C_NTLM_SESSION_KEY			1.2.752.43.13.27
 oid	base	GSS_C_NTLM_FORCE_V1			1.2.752.43.13.28
 oid	base	GSS_KRB5_CRED_NO_CI_FLAGS_X		1.2.752.43.13.29
 oid	base	GSS_KRB5_IMPORT_CRED_X			1.2.752.43.13.30
+oid	base	GSS_KRB5_IMPORT_RFC4121_CONTEXT_X	1.2.752.43.13.31
 
 # /* glue for gss_inquire_saslname_for_mech */
 oid	base	GSS_C_MA_SASL_MECH_NAME			1.2.752.43.13.100
 oid	base	GSS_C_MA_MECH_NAME			1.2.752.43.13.101
 oid	base	GSS_C_MA_MECH_DESCRIPTION		1.2.752.43.13.102
-
-# /* credential types */
-oid	base	GSS_C_CRED_PASSWORD			1.2.752.43.13.200
-oid	base	GSS_C_CRED_CERTIFICATE			1.2.752.43.13.201
 
 #/* Heimdal mechanisms - 1.2.752.43.14 */
 
@@ -56,6 +78,9 @@ oid	base	GSS_NETLOGON_NT_NETBIOS_DNS_NAME	1.2.752.43.14.5
 #/* GSS_KRB5_EXTRACT_AUTHZ_DATA_FROM_SEC_CONTEXT_X.128 */
 oid	base	GSS_C_INQ_WIN2K_PAC_X			1.2.752.43.13.3.128
 oid	base	GSS_C_INQ_SSPI_SESSION_KEY		1.2.840.113554.1.2.2.5.5
+oid	base	GSS_C_INQ_NEGOEX_KEY			1.2.840.113554.1.2.2.5.16
+oid	base	GSS_C_INQ_NEGOEX_VERIFY_KEY		1.2.840.113554.1.2.2.5.17
+oid	base	GSS_C_INQ_REQUIRE_MECHLIST_MIC		1.3.6.1.4.1.7165.655.1.2
 
 #/*
 # * "Standard" mechs
@@ -67,7 +92,10 @@ oid	base	GSS_SPNEGO_MECHANISM			1.3.6.1.5.5.2
 
 # /* From Luke Howard */
 
-oid	base	GSS_C_PEER_HAS_UPDATED_SPNEGO		1.3.6.1.4.1.5322.19.5
+oid	base	GSS_C_INQ_PEER_HAS_BUGGY_SPNEGO		1.3.6.1.4.1.5322.19.6
+oid	base	GSS_C_NTLM_RESET_CRYPTO			1.3.6.1.4.1.7165.655.1.3
+oid	base	GSS_NEGOEX_MECHANISM			1.3.6.1.4.1.311.2.2.30
+oid	base	GSS_SANON_X25519_MECHANISM		1.3.6.1.4.1.5322.26.1.110
 
 #/*
 # * OID mappings with name and short description and and slightly longer description
@@ -76,6 +104,7 @@ oid	base	GSS_C_PEER_HAS_UPDATED_SPNEGO		1.3.6.1.4.1.5322.19.5
 desc	mech	GSS_KRB5_MECHANISM	"Kerberos 5"	"Heimdal Kerberos 5 mechanism"
 desc	mech	GSS_NTLM_MECHANISM	"NTLM"		"Heimdal NTLM mechanism"
 desc	mech	GSS_SPNEGO_MECHANISM	"SPNEGO"	"Heimdal SPNEGO mechanism"
+desc	mech	GSS_SANON_X25519_MECHANISM	"SAnon-X25519"	"Heimdal Simple Anonymous (X25519) mechanism"
 
 desc	ma	GSS_C_MA_MECH_NAME	"GSS mech name"		"The name of the GSS-API mechanism"
 desc	ma	GSS_C_MA_SASL_MECH_NAME	"SASL mechanism name"	"The name of the SASL mechanism"
@@ -112,6 +141,7 @@ oid	base	GSS_C_MA_CBINDINGS      		1.3.6.1.5.5.13.24
 oid	base	GSS_C_MA_PFS            		1.3.6.1.5.5.13.25
 oid	base	GSS_C_MA_COMPRESS       		1.3.6.1.5.5.13.26
 oid	base	GSS_C_MA_CTX_TRANS      		1.3.6.1.5.5.13.27
+oid	base	GSS_C_MA_NEGOEX_AND_SPNEGO		1.2.840.113554.1.2.2.5.18
 
 desc	ma	GSS_C_MA_MECH_CONCRETE	"concrete-mech" "Indicates that a mech is neither a pseudo-mechanism nor a composite mechanism"
 desc	ma	GSS_C_MA_MECH_PSEUDO "pseudo-mech" ""
@@ -140,3 +170,4 @@ desc	ma	GSS_C_MA_CBINDINGS "channel-bindings" ""
 desc	ma	GSS_C_MA_PFS "pfs" ""
 desc	ma	GSS_C_MA_COMPRESS "compress" ""
 desc	ma	GSS_C_MA_CTX_TRANS "context-transfer" ""
+desc	ma	GSS_C_MA_NEGOEX_AND_SPNEGO "negoex-and-spnego" "Indicates that a mechanism supports both NegoEx and SPNEGO"

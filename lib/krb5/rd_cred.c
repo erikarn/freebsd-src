@@ -96,7 +96,7 @@ krb5_rd_cred(krb5_context context,
 	goto out;
     }
 
-    if (cred.enc_part.etype == (krb5_enctype)ETYPE_NULL) {
+    if (cred.enc_part.etype == ETYPE_NULL) {
 	/* DK: MIT GSS-API Compatibility */
 	enc_krb_cred_part_data.length = cred.enc_part.cipher.length;
 	enc_krb_cred_part_data.data   = cred.enc_part.cipher.data;
@@ -222,7 +222,7 @@ krb5_rd_cred(krb5_context context,
 
 	if (enc_krb_cred_part.timestamp == NULL ||
 	    enc_krb_cred_part.usec      == NULL ||
-	    labs(*enc_krb_cred_part.timestamp - sec)
+	    krb5_time_abs(*enc_krb_cred_part.timestamp, sec)
 	    > context->max_skew) {
 	    krb5_clear_error_message (context);
 	    ret = KRB5KRB_AP_ERR_SKEW;

@@ -38,14 +38,17 @@ static krb5_log_facility *log_facility;
 
 static int verbose;
 
-const char *slave_stats_file;
-const char *slave_time_missing = "2 min";
-const char *slave_time_gone = "5 min";
+static const char *slave_stats_file;
+static const char *slave_stats_temp_file;
+static const char *slave_time_missing = "2 min";
+static const char *slave_time_gone = "5 min";
 
 static int time_before_missing;
 static int time_before_gone;
 
 const char *master_hostname;
+const char *pidfile_basename;
+static char hostname[128];
 
 static krb5_socket_t
 make_signal_socket (krb5_context context)
@@ -93,7 +96,7 @@ make_listen_socket (krb5_context context, const char *port_str)
     fd = socket (AF_INET, SOCK_STREAM, 0);
     if (rk_IS_BAD_SOCKET(fd))
 	krb5_err (context, 1, rk_SOCK_ERRNO, "socket AF_INET");
-    setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (void *)&one, sizeof(one));
+    (void) setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (void *)&one, sizeof(one));
     memset (&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
 
@@ -273,12 +276,11 @@ static void
 add_slave (krb5_context context, krb5_keytab keytab, slave **root,
 	   krb5_socket_t fd)
 {
-    krb5_principal server;
+    krb5_principal server = NULL;
     krb5_error_code ret;
     slave *s;
     socklen_t addr_len;
     krb5_ticket *ticket = NULL;
-    char hostname[128];
 
     s = calloc(1, sizeof(*s));
     if (s == NULL) {
@@ -299,10 +301,18 @@ add_slave (krb5_context context, krb5_keytab keytab, slave **root,
 	goto error;
     }
 
-    if (master_hostname)
-	strlcpy(hostname, master_hostname, sizeof(hostname));
-    else
-	gethostname(hostname, sizeof(hostname));
+    /*
+     * We write message lengths separately from the payload, and may do
+     * back-to-back small writes when flushing pending input and then a new
+     * update.  Avoid Nagle delays.
+     */
+#if defined(IPPROTO_TCP) && defined(TCP_NODELAY)
+    {
+        int nodelay = 1;
+        (void) setsockopt(s->fd, IPPROTO_TCP, TCP_NODELAY,
+                          (void *)&nodelay, sizeof(nodelay));
+    }
+#endif
 
     ret = krb5_sname_to_principal (context, hostname, IPROP_NAME,
 				   KRB5_NT_SRV_HST, &server);
@@ -329,26 +339,11 @@ add_slave (krb5_context context, krb5_keytab keytab, slave **root,
      */
     socket_set_nonblocking(s->fd, 1);
 
-    /*
-     * We write message lengths separately from the payload, and may do
-     * back-to-back small writes when flushing pending input and then a new
-     * update.  Avoid Nagle delays.
-     */
-#if defined(IPPROTO_TCP) && defined(TCP_NODELAY)
-    {
-        int nodelay = 1;
-        (void) setsockopt(s->fd, IPPROTO_TCP, TCP_NODELAY,
-                          (void *)&nodelay, sizeof(nodelay));
-    }
-#endif
-
-    krb5_free_principal (context, server);
     if (ret) {
 	krb5_warn (context, ret, "krb5_recvauth");
 	goto error;
     }
     ret = krb5_unparse_name (context, ticket->client, &s->name);
-    krb5_free_ticket (context, ticket);
     if (ret) {
 	krb5_warn (context, ret, "krb5_unparse_name");
 	goto error;
@@ -376,6 +371,8 @@ add_slave (krb5_context context, krb5_keytab keytab, slave **root,
 	}
     }
 
+    krb5_free_principal(context, server);
+    krb5_free_ticket(context, ticket);
     krb5_warnx (context, "connection from %s", s->name);
 
     s->version = 0;
@@ -387,17 +384,20 @@ add_slave (krb5_context context, krb5_keytab keytab, slave **root,
     return;
 error:
     remove_slave(context, s, root);
+    krb5_free_principal(context, server);
+    if (ticket)
+	krb5_free_ticket(context, ticket);
 }
 
 static int
-dump_one (krb5_context context, HDB *db, hdb_entry_ex *entry, void *v)
+dump_one (krb5_context context, HDB *db, hdb_entry *entry, void *v)
 {
     krb5_error_code ret;
     krb5_storage *dump = (krb5_storage *)v;
     krb5_storage *sp;
     krb5_data data;
 
-    ret = hdb_entry2value (context, &entry->entry, &data);
+    ret = hdb_entry2value (context, entry, &data);
     if (ret)
 	return ret;
     ret = krb5_data_realloc (&data, data.length + 4);
@@ -406,7 +406,7 @@ dump_one (krb5_context context, HDB *db, hdb_entry_ex *entry, void *v)
     memmove ((char *)data.data + 4, data.data, data.length - 4);
     sp = krb5_storage_from_data(&data);
     if (sp == NULL) {
-	ret = ENOMEM;
+	ret = krb5_enomem(context);
 	goto done;
     }
     ret = krb5_store_uint32(sp, ONE_PRINC);
@@ -675,10 +675,8 @@ send_complete(krb5_context context, slave *s, const char *database,
     char *dfn;
 
     ret = asprintf(&dfn, "%s/ipropd.dumpfile", hdb_db_dir(context));
-    if (ret == -1 || !dfn) {
-	krb5_warn(context, ENOMEM, "Cannot allocate memory");
-	return ENOMEM;
-    }
+    if (ret == -1 || !dfn)
+	return krb5_enomem(context);
 
     fd = open(dfn, O_CREAT|O_RDWR, 0600);
     if (fd == -1) {
@@ -940,9 +938,13 @@ get_first(kadm5_server_context *server_context, int log_fd,
 
     ret = kadm5_log_get_version_fd(server_context, log_fd, LOG_VERSION_FIRST,
                                    initial_verp, initial_timep);
+    if (ret == HEIM_ERR_EOF)
+        ret = kadm5_log_get_version_fd(server_context, log_fd,
+                                       LOG_VERSION_UBER, initial_verp,
+                                       initial_timep);
     if (ret != 0) {
         flock(log_fd, LOCK_UN);
-        krb5_warnx(context, "could not read initial log entry");
+        krb5_warn(context, ret, "could not read initial log entry");
         return -1;
     }
 
@@ -1067,8 +1069,6 @@ get_left(kadm5_server_context *server_context, slave *s, krb5_storage *sp,
          */
     }
 
-    return left;
-
  err:
     flock(log_fd, LOCK_UN);
     return -1;
@@ -1117,7 +1117,7 @@ send_diffs(kadm5_server_context *server_context, slave *s, int log_fd,
     krb5_storage *sp;
     uint32_t initial_version;
     uint32_t initial_tstamp;
-    uint32_t ver;
+    uint32_t ver = 0;
     off_t left = 0;
     off_t right = 0;
     krb5_ssize_t bytes;
@@ -1193,13 +1193,13 @@ send_diffs(kadm5_server_context *server_context, slave *s, int log_fd,
     sp = krb5_storage_from_data(&data);
     if (sp == NULL) {
         krb5_err(context, IPROPD_RESTART_SLOW, ENOMEM, "out of memory");
-        krb5_warnx(context, "send_diffs: krb5_storage_from_data");
         return;
     }
-    krb5_store_uint32(sp, FOR_YOU);
+    ret = krb5_store_uint32(sp, FOR_YOU);
     krb5_storage_free(sp);
 
-    ret = mk_priv_tail(context, s, &data);
+    if (ret == 0)
+	ret = mk_priv_tail(context, s, &data);
     krb5_data_free(&data);
     if (ret == 0) {
         /* Save the fast-path continuation */
@@ -1252,7 +1252,8 @@ fill_input(krb5_context context, slave *s)
             return EWOULDBLOCK;
 
         buf = s->input.header_buf;
-        len = (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3];
+        len = ((unsigned long)buf[0] << 24) | (buf[1] << 16)
+	    | (buf[2] << 8) | buf[3];
         if (len > SLAVE_MSG_MAX)
             return EINVAL;
         ret = krb5_data_alloc(&s->input.packet, len);
@@ -1400,32 +1401,26 @@ process_msg(kadm5_server_context *server_context, slave *s, int log_fd,
 #define SLAVE_STATUS	"Status"
 #define SLAVE_SEEN	"Last Seen"
 
-static FILE *
-open_stats(krb5_context context)
+static void
+init_stats_names(krb5_context context)
 {
-    char *statfile = NULL;
     const char *fn = NULL;
-    FILE *out = NULL;
+    char *buf = NULL;
 
-    /*
-     * krb5_config_get_string_default() returs default value as-is,
-     * delay free() of "statfile" until we're done with "fn".
-     */
     if (slave_stats_file)
 	fn = slave_stats_file;
-    else if (asprintf(&statfile,  "%s/slaves-stats", hdb_db_dir(context)) != -1
-	     && statfile != NULL)
-	fn = krb5_config_get_string_default(context,
-					    NULL,
-					    statfile,
-					    "kdc",
-					    "iprop-stats",
-					    NULL);
-    if (fn != NULL)
-	out = fopen(fn, "w");
-    if (statfile != NULL)
-	free(statfile);
-    return out;
+    else if ((fn = krb5_config_get_string(context, NULL, "kdc",
+                                          "iprop-stats", NULL)) == NULL) {
+        if (asprintf(&buf, "%s/slaves-stats", hdb_db_dir(context)) != -1
+	    && buf != NULL)
+            fn = buf;
+        buf = NULL;
+    }
+    if (fn != NULL) {
+        slave_stats_file = fn;
+        if (asprintf(&buf, "%s.tmp", fn) != -1 && buf != NULL)
+            slave_stats_temp_file = buf;
+    }
 }
 
 static void
@@ -1433,15 +1428,19 @@ write_master_down(krb5_context context)
 {
     char str[100];
     time_t t = time(NULL);
-    FILE *fp;
+    FILE *fp = NULL;
 
-    fp = open_stats(context);
+    if (slave_stats_temp_file != NULL)
+        fp = fopen(slave_stats_temp_file, "w");
     if (fp == NULL)
 	return;
-    krb5_format_time(context, t, str, sizeof(str), TRUE);
-    fprintf(fp, "master down at %s\n", str);
+    if (krb5_format_time(context, t, str, sizeof(str), TRUE) == 0)
+        fprintf(fp, "master down at %s\n", str);
+    else
+        fprintf(fp, "master down\n");
 
-    fclose(fp);
+    if (fclose(fp) != EOF)
+        (void) rk_rename(slave_stats_temp_file, slave_stats_file);
 }
 
 static void
@@ -1450,13 +1449,15 @@ write_stats(krb5_context context, slave *slaves, uint32_t current_version)
     char str[100];
     rtbl_t tbl;
     time_t t = time(NULL);
-    FILE *fp;
+    FILE *fp = NULL;
 
-    fp = open_stats(context);
+    if (slave_stats_temp_file != NULL)
+        fp = fopen(slave_stats_temp_file, "w");
     if (fp == NULL)
 	return;
 
-    krb5_format_time(context, t, str, sizeof(str), TRUE);
+    if (krb5_format_time(context, t, str, sizeof(str), TRUE))
+        snprintf(str, sizeof(str), "<unknown-time>");
     fprintf(fp, "Status for slaves, last updated: %s\n\n", str);
 
     fprintf(fp, "Master version: %lu\n\n", (unsigned long)current_version);
@@ -1509,7 +1510,8 @@ write_stats(krb5_context context, slave *slaves, uint32_t current_version)
     rtbl_format(tbl, fp);
     rtbl_destroy(tbl);
 
-    fclose(fp);
+    if (fclose(fp) != EOF)
+        (void) rk_rename(slave_stats_temp_file, slave_stats_file);
 }
 
 
@@ -1540,8 +1542,10 @@ static struct getargs args[] = {
       "port ipropd will listen to", "port"},
     { "detach", 0, arg_flag, &detach_from_console,
       "detach from console", NULL },
-    { "daemon-child",       0 ,      arg_integer, &daemon_child,
+    { "daemon-child", 0, arg_integer, &daemon_child,
       "private argument, do not use", NULL },
+    { "pidfile-basename", 0, arg_string, &pidfile_basename,
+      "basename of pidfile; private argument for testing", "NAME" },
     { "hostname", 0, arg_string, rk_UNCONST(&master_hostname),
       "hostname of master (if not same as hostname)", "hostname" },
     { "verbose", 0, arg_flag, &verbose, NULL, NULL },
@@ -1582,9 +1586,23 @@ main(int argc, char **argv)
 	exit(0);
     }
 
+    memset(hostname, 0, sizeof(hostname));
+
+    if (master_hostname &&
+        strlcpy(hostname, master_hostname,
+                sizeof(hostname)) >= sizeof(hostname)) {
+        errx(1, "Hostname too long: %s", master_hostname);
+    } else if (master_hostname == NULL) {
+        if (gethostname(hostname, sizeof(hostname)) == -1)
+            err(1, "Could not get hostname");
+        if (hostname[sizeof(hostname) - 1] != '\0')
+            errx(1, "Hostname too long %.*s...",
+                 (int)sizeof(hostname), hostname);
+    }
+
     if (detach_from_console && daemon_child == -1)
-        roken_detach_prep(argc, argv, "--daemon-child");
-    rk_pidfile(NULL);
+        daemon_child = roken_detach_prep(argc, argv, "--daemon-child");
+    rk_pidfile(pidfile_basename);
 
     ret = krb5_init_context(&context);
     if (ret)
@@ -1606,6 +1624,8 @@ main(int argc, char **argv)
     krb5_free_config_files(files);
     if (ret)
 	krb5_err(context, 1, ret, "reading configuration files");
+
+    init_stats_names(context);
 
     time_before_gone = parse_time (slave_time_gone,  "s");
     if (time_before_gone < 0)

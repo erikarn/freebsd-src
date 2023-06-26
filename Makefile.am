@@ -45,12 +45,10 @@ EXTRA_DIST = \
 	cf/ChangeLog \
 	cf/have-pragma-weak.m4 \
 	cf/have-types.m4 \
-	cf/krb-func-getcwd-broken.m4 \
 	cf/krb-prog-ranlib.m4 \
 	cf/krb-prog-yacc.m4 \
 	cf/krb-sys-aix.m4 \
 	cf/krb-sys-nextstep.m4 \
-	cf/krb-version.m4 \
 	cf/roken.m4 \
 	cf/valgrind-suppressions \
 	cf/maybe-valgrind.sh \
@@ -64,3 +62,9 @@ EXTRA_DIST = \
 
 print-distdir:
 	@echo $(distdir)
+
+clean-local-gcov:
+	find . '(' -name '*.gcno' -o -name '*.gcda' -o -name '*.gcov' ')' -a -print|xargs rm -f
+
+.PHONY: clean-local-gcov
+

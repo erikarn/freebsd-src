@@ -63,6 +63,7 @@ context="${TESTS_ENVIRONMENT} ../../lib/gssapi/test_context"
 KRB5_CONFIG="${objdir}/krb5.conf"
 export KRB5_CONFIG
 
+KRB5CCNAME=${cache}
 KRB5_KTNAME="${keytab}"
 export KRB5_KTNAME
 KRB5CCNAME="${cache}"
@@ -106,10 +107,10 @@ echo u1 > ${objdir}/foopassword
 echo ds > ${objdir}/barpassword
 
 echo Starting kdc
-${kdc} --detach --testing || { echo "kdc failed to start"; exit 1; }
+${kdc} --detach --testing || { echo "kdc failed to start"; cat messages.log; exit 1; }
 kdcpid=`getpid kdc`
 
-trap "kill ${kdcpid}; echo signal killing kdc; exit 1;" EXIT
+trap "kill -9 ${kdcpid}; echo signal killing kdc; exit 1;" EXIT
 
 exitcode=0
 

@@ -96,6 +96,17 @@ realmcallback(krb5_context context, const void *plug, void *plugctx, void *userc
 				  ctx->send_data, ctx->receive);
 }
 
+static const char *const send_to_kdc_plugin_deps[] = { "krb5", NULL };
+
+static const struct heim_plugin_data
+send_to_kdc_plugin_data = {
+    "krb5",
+    KRB5_PLUGIN_SEND_TO_KDC,
+    KRB5_PLUGIN_SEND_TO_KDC_VERSION_0,
+    send_to_kdc_plugin_deps,
+    krb5_get_instance
+};
+
 static krb5_error_code
 kdc_via_plugin(krb5_context context,
 	       krb5_krbhst_info *hi,
@@ -111,8 +122,7 @@ kdc_via_plugin(krb5_context context,
     userctx.send_data = send_data;
     userctx.receive = receive;
 
-    return _krb5_plugin_run_f(context, "krb5", KRB5_PLUGIN_SEND_TO_KDC,
-			      KRB5_PLUGIN_SEND_TO_KDC_VERSION_0, 0,
+    return _krb5_plugin_run_f(context, &send_to_kdc_plugin_data, 0,
 			      &userctx, kdccallback);
 }
 
@@ -131,8 +141,7 @@ realm_via_plugin(krb5_context context,
     userctx.send_data = send_data;
     userctx.receive = receive;
 
-    return _krb5_plugin_run_f(context, "krb5", KRB5_PLUGIN_SEND_TO_KDC,
-			      KRB5_PLUGIN_SEND_TO_KDC_VERSION_2, 0,
+    return _krb5_plugin_run_f(context, &send_to_kdc_plugin_data, 0,
 			      &userctx, realmcallback);
 }
 
@@ -142,6 +151,7 @@ struct krb5_sendto_ctx_data {
     krb5_sendto_ctx_func func;
     void *data;
     char *hostname;
+    char *sitename;
     krb5_krbhst_handle krbhst;
 
     /* context2 */
@@ -166,12 +176,14 @@ struct krb5_sendto_ctx_data {
     unsigned int stid;
 };
 
-static void
+static void KRB5_CALLCONV
 dealloc_sendto_ctx(void *ptr)
 {
     krb5_sendto_ctx ctx = (krb5_sendto_ctx)ptr;
     if (ctx->hostname)
 	free(ctx->hostname);
+    if (ctx->sitename)
+	free(ctx->sitename);
     heim_release(ctx->hosts);
     heim_release(ctx->krbhst);
 }
@@ -228,13 +240,32 @@ krb5_sendto_set_hostname(krb5_context context,
 			 krb5_sendto_ctx ctx,
 			 const char *hostname)
 {
-    if (ctx->hostname == NULL)
-	free(ctx->hostname);
-    ctx->hostname = strdup(hostname);
-    if (ctx->hostname == NULL) {
-	krb5_set_error_message(context, ENOMEM, N_("malloc: out of memory", ""));
-	return ENOMEM;
-    }
+    char *newname;
+
+    /*
+     * Handle the case where hostname == ctx->hostname by copying it first, and
+     * disposing of any previous value after.
+     */
+    newname = strdup(hostname);
+    if (newname == NULL)
+	return krb5_enomem(context);
+    free(ctx->hostname);
+    ctx->hostname = newname;
+    return 0;
+}
+
+KRB5_LIB_FUNCTION krb5_error_code KRB5_LIB_CALL
+krb5_sendto_set_sitename(krb5_context context,
+			 krb5_sendto_ctx ctx,
+			 const char *sitename)
+{
+    char *newname;
+
+    newname = strdup(sitename);
+    if (newname == NULL)
+	return krb5_enomem(context);
+    free(ctx->sitename);
+    ctx->sitename = newname;
     return 0;
 }
 
@@ -275,7 +306,7 @@ _krb5_kdc_retry(krb5_context context, krb5_sendto_ctx ctx, void *data,
 	break;
     }
     case KRB5KDC_ERR_SVC_UNAVAILABLE:
-	*action = KRB5_SENDTO_CONTINUE;
+	*action = KRB5_SENDTO_RESET;
 	break;
     }
     return 0;
@@ -299,7 +330,7 @@ struct host {
     krb5_krbhst_info *hi;
     struct addrinfo *ai;
     rk_socket_t fd;
-    struct host_fun *fun;
+    const struct host_fun *fun;
     unsigned int tries;
     time_t timeout;
     krb5_data data;
@@ -355,7 +386,7 @@ debug_host(krb5_context context, int level, struct host *host, const char *fmt, 
 }
 
 
-static void
+static void HEIM_CALLCONV
 deallocate_host(void *ptr)
 {
     struct host *host = ptr;
@@ -684,19 +715,19 @@ recv_udp(krb5_context context, struct host *host, krb5_data *data)
     return 0;
 }
 
-static struct host_fun http_fun = {
+static const struct host_fun http_fun = {
     prepare_http,
     send_stream,
     recv_http,
     1
 };
-static struct host_fun tcp_fun = {
+static const struct host_fun tcp_fun = {
     prepare_tcp,
     send_stream,
     recv_tcp,
     1
 };
-static struct host_fun udp_fun = {
+static const struct host_fun udp_fun = {
     prepare_udp,
     send_udp,
     recv_udp,
@@ -1149,7 +1180,7 @@ krb5_sendto_context(krb5_context context,
 
     action = KRB5_SENDTO_INITIAL;
 
-    while (action != KRB5_SENDTO_DONE && action != KRB5_SENDTO_FAILED) {
+    while (1) {
 	krb5_krbhst_info *hi;
 
 	switch (action) {
@@ -1161,7 +1192,7 @@ krb5_sendto_context(krb5_context context,
 		break;
 	    }
 	    action = KRB5_SENDTO_KRBHST;
-	    /* FALLTHROUGH */
+            HEIM_FALLTHROUGH;
 	case KRB5_SENDTO_KRBHST:
 	    if (ctx->krbhst == NULL) {
 		ret = krb5_krbhst_init_flags(context, realm, type,
@@ -1174,12 +1205,16 @@ krb5_sendto_context(krb5_context context,
 		    if (ret)
 			goto out;
 		}
-
+		if (ctx->sitename) {
+		    ret = krb5_krbhst_set_sitename(context, handle, ctx->sitename);
+		    if (ret)
+			goto out;
+		}
 	    } else {
 		handle = heim_retain(ctx->krbhst);
 	    }
 	    action = KRB5_SENDTO_TIMEOUT;
-	    /* FALLTHROUGH */
+            HEIM_FALLTHROUGH;
 	case KRB5_SENDTO_TIMEOUT:
 
 	    /*
@@ -1251,14 +1286,32 @@ krb5_sendto_context(krb5_context context,
 				   &ctx->response, &action);
 		if (ret)
 		    goto out;
+
+		/*
+		 * If we are not done, ask to continue/reset
+		 */
+		switch (action) {
+		case KRB5_SENDTO_DONE:
+		    break;
+		case KRB5_SENDTO_RESET:
+		case KRB5_SENDTO_CONTINUE:
+		    /* free response to clear it out so we don't loop */
+		    krb5_data_free(&ctx->response);
+		    break;
+		default:
+		    ret = KRB5_KDC_UNREACH;
+		    krb5_set_error_message(context, ret,
+					   "sendto filter funcation return unsupported state: %d", (int)action);
+		    goto out;
+		}
 	    }
 	    break;
 	case KRB5_SENDTO_FAILED:
 	    ret = KRB5_KDC_UNREACH;
-	    break;
+	    goto out;
 	case KRB5_SENDTO_DONE:
 	    ret = 0;
-	    break;
+	    goto out;
 	default:
 	    heim_abort("invalid krb5_sendto_context state");
 	}

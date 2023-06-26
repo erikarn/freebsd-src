@@ -1,3 +1,101 @@
+
+Partial news for a future Heimdal 8.0 release -- but NOTE WELL that this is NOT
+a release at this time!
+
+Bug fixes
+
+ - Errors found by the Coverity static analysis.
+ - Errors found by the LLVM scan-build static analyzer.
+ - Errors found by the valgrind memory debugger.
+ - Fix out-of-tree SQLite3 ccache permissions / umask issues.
+ - iprop bugs, race conditions, and performance
+ - Many misc. bugs
+
+Features:
+
+ - KDC: Add FAST support for TGS.
+ - KDC: Greatly improved plugin facility for Samba.
+ - KDC: Add httpkadmind service providing a subset of kadmin
+        functionality over HTTP.
+ - KDC: Add support for virtual service principal namespaces.
+ - KDC: Add support for synthetic client principals that exist if the
+        pre-authentication mechanism (e.g., PKINIT) can authenticate
+        them, thus not requiring an HDB entry.
+ - KDC: Add experimental GSS-API pre-authentication support.
+ - KDC: Revamp and enhance kx509 support (though bx509d mostly replaces kx509).
+ - KDC: Better support for aliases and referrals.
+ - KDC: Always return the salt in the PA-ETYPE-INFO[2].
+ - KDC: Add warn_ticket_addresses configuration parameter.
+ - KDC: allow anonymous AS requests with long-term keys.
+ - KDC: Do not include PAC for anonymous AS requests.
+ - KDC: Enable keepalive mode on incoming sockets.
+ - KDC: Greatly improved logging.
+ - KDC: Remove KRB5SignedPath, to be replaced with PAC.
+ - PKIX: Add bx509d -- an online certification authority (CA) with an HTTP API.
+ - kadmin: Add HTTP-based kadmin protocol.
+ - kadmin: Add add_alias, del_alias.
+ - kadmin: Add command aliases to man page.
+ - kadmin: Add disallow-client attribute.
+ - kadmin: add --hdb / -H argument.
+ - kadmin: Allow enforcing password quality on admin password change.
+ - kadmin: Improve ext_keytab usage.
+ - kadmin: Selective pruning of historic key for principal.
+ - krb5: Add client_aware_channel_bindings option.
+ - krb5: Add constrained credential delegation option "destination TGT"
+ - krb5: Add "EFILE:" target for logging.
+ - krb5: Add include/includedir directives for krb5.conf.
+ - krb5: Complete DIR ccache collection support.
+ - krb5: Add FILE ccache collection support.
+ - krb5: Improved FILE ccache performance.
+ - krb5: Add KEYRING ccache support.
+ - krb5: Add kx509 client.
+ - krb5: Improve FILE keytab performance.
+ - krb5: Implement KRB5_TRACE environment variable.
+ - krb5: Add experimental name canonicalization rules configuration.
+ - krb5: Support start_realm ccconfig entry type.
+ - kinit: Add --default-for option for ccache collection support.
+ - kinit: Add --pk-anon-fast-armor option.
+ - kinit: Don't leave dangling temporary ccaches.
+ - klist: Better --json
+ - iprop: Many performance and scaling enhancements.
+ - iprop: Support hierarchical propagation.
+ - ASN.1: Document fuzzing process.
+ - ASN.1: Complete template backend.
+ - ASN.1: Add partial Information Object System support (template backend
+          only).  This means that open type holes can be decoded recursively
+          with one codec function call.
+ - ASN.1: Add JSON encoder functionality (template backend only).
+ - ASN.1: Greatly enhanced asn1_print(1) command, which can now print a
+          JSON representation of any DER-encoded value of any type exported
+          by ASN.1 modules in Heimdal.
+ - ASN.1: Support circular types.
+ - ASN.1: Topographically sort declarations.
+ - ASN.1: Proper support for IMPLICIT tags.
+ - GSS: Import gss-token(1) command.
+ - GSS: Add advanced credential store / load functionality.
+ - GSS: Add name attributes support, with support for many basic attributes
+        and PAC buffer accessors too.
+ - GSS: Add SANON mechanism for anonymous-only key exchange using
+   elliptic curve Diffie-Hellman (ECDH) with Curve25519.
+ - GSS: Add gss_acquire_cred_from() and credential store extensions.
+ - GSS: Support fragmented tokens reassembly (for SMB).
+ - GSS: Support client keytab.
+ - GSS: Add NegoEx support.
+ - libhx509: Lots of improvements.
+ - hxtool: Add "acert" (assert cert contents) command
+ - hxtool: add cert type: https-negotiate-server
+ - hxtool: add generate-key command
+ - hxtool: Add OID symbol resolution and printing of OIDs known to hxtool.
+ - hxtool: Add print --raw-json option that shows certificates in JSON, with
+           all extensions and attributes known to Heimdal fully decoded.
+ - hxtool: Improved SAN support.
+ - hxtool: Improved CSR support.
+ - Improved plugin interfaces.
+ - hcrypto: Add X25519.
+ - hcrypto: Better RSA key generation.
+ - hcrypto: import libtommath v1.2.0.
+ - roken: Add secure_getenv() and issuid(), use them extensively.
+
 Release Notes - Heimdal - Version Heimdal 7.8
 
  Bug fixes
@@ -5,8 +103,18 @@ Release Notes - Heimdal - Version Heimdal 7.8
  - CVE-2022-42898 PAC parse integer overflows
 
  - CVE-2022-3437 Overflows and non-constant time leaks in DES{,3} and arcfour
+    - Pass correct length to _gssapi_verify_pad()
+    - Check for overflow in _gsskrb5_get_mech()
+    - Check buffer length against overflow for DES{,3} unwrap
+    - Check the result of _gsskrb5_get_mech()
+    - Avoid undefined behaviour in _gssapi_verify_pad()
+    - Don't pass NULL pointers to memcpy() in DES unwrap
+    - Use constant-time memcmp() in unwrap_des3()
+    - Use constant-time memcmp() for arcfour unwrap
 
- - CVE-2021-44758 Heimdal KDC: invalid free in ASN.1 codec
+ - CVE-2021-44758 NULL dereference DoS in SPNEGO acceptors
+
+ - CVE-2022-44640 Heimdal KDC: invalid free in ASN.1 codec
 
     This is a 10.0 on the Common Vulnerability Scoring System (CVSS) v3.
 
@@ -29,9 +137,6 @@ Release Notes - Heimdal - Version Heimdal 7.8
 
     While no zero-day exploit is known, such an exploit will likely be
     available soon after public disclosure.
-
- - Bugs found by UBSAN (including the incorrect encoding of unconstrained
-   INTEGER value -1).
 
  - Errors found by the LLVM scan-build static analyzer.
 
@@ -176,7 +281,7 @@ Release Notes - Heimdal - Version Heimdal 7.6
     attacker to become a man-in-the-middle.
 
  Bug fixes
-     
+
  - Happy eyeballs: Don't wait for responses from known-unreachable KDCs.
  - kdc: check return copy_Realm, copy_PrincipalName, copy_EncryptionKey
  - kinit:

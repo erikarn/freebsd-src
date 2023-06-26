@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997 - 2004 Kungliga Tekniska Högskolan
+ * Copyright (c) 1997 - 2017 Kungliga Tekniska Högskolan
  * (Royal Institute of Technology, Stockholm, Sweden).
  * All rights reserved.
  *
@@ -53,8 +53,10 @@ fd_fetch(krb5_storage * sp, void *data, size_t size)
 	if (count < 0) {
 	    if (errno == EINTR)
 		continue;
-	    else
+	    else if (rem == size)
 		return count;
+            else
+                return size - rem;
 	} else if (count == 0) {
 	    return count;
 	}
@@ -78,7 +80,7 @@ fd_store(krb5_storage * sp, const void *data, size_t size)
 	    if (errno == EINTR)
 		continue;
 	    else
-		return count;
+		return size - rem;
 	}
 	cbuf += count;
 	rem -= count;
@@ -95,8 +97,21 @@ fd_seek(krb5_storage * sp, off_t offset, int whence)
 static int
 fd_trunc(krb5_storage * sp, off_t offset)
 {
+    off_t tmpoff;
+
     if (ftruncate(FD(sp), offset) == -1)
 	return errno;
+
+    tmpoff = lseek(FD(sp), 0, SEEK_CUR);
+    if (tmpoff == -1)
+	return errno;
+
+    if (tmpoff > offset) {
+	tmpoff = lseek(FD(sp), offset, SEEK_SET);
+	if (tmpoff == -1)
+	    return errno;
+    }
+
     return 0;
 }
 
@@ -180,6 +195,6 @@ krb5_storage_from_fd(int fd_in)
     sp->trunc = fd_trunc;
     sp->fsync = fd_sync;
     sp->free = fd_free;
-    sp->max_alloc = UINT_MAX/8;
+    sp->max_alloc = UINT32_MAX/64;
     return sp;
 }

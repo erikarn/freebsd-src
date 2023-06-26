@@ -28,7 +28,7 @@
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **********************************************************************/
-
+#include <config.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -146,9 +146,9 @@ int teardown_test(void)
 
         (len = strlen(dirname)) > sizeof(TESTDIR)/sizeof(char) &&
 
-        !strcmp(dirname + len + 1 - sizeof(TESTDIR)/sizeof(char), TESTDIR)) {
+        strcmp(dirname + len + 1 - sizeof(TESTDIR)/sizeof(char), TESTDIR) == 0) {
 
-        /* fallthrough */
+        HEIM_FALLTHROUGH;
 
     } else {
         /* did we create the directory? */
@@ -162,7 +162,7 @@ int teardown_test(void)
                     fprintf(stderr, "Can't change to test directory. Aborting cleanup.\n");
                     return -1;
                 } else {
-                    /* fallthrough */
+                    HEIM_FALLTHROUGH;
                 }
             } else {
                 return -1;
@@ -215,12 +215,12 @@ int check_list(const char * filespec, const char ** list, int n, int expect_dot_
         n_found ++;
 
         if (expect_dot_and_dotdot &&
-            (!strcmp(e->d_name, ".") ||
-             !strcmp(e->d_name, "..")))
+            (strcmp(e->d_name, ".") == 0 ||
+             strcmp(e->d_name, "..") == 0))
             continue;
 
         for (i=0; i < n; i++) {
-            if (!strcmp(list[i], e->d_name))
+            if (strcmp(list[i], e->d_name) == 0)
                 break;
         }
 

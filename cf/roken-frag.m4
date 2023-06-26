@@ -50,6 +50,7 @@ AC_REQUIRE([AC_HEADER_STDC])
 AC_REQUIRE([AC_HEADER_TIME])
 
 AC_CHECK_HEADERS([\
+	auxv.h					\
 	arpa/inet.h				\
 	config.h				\
 	crypt.h					\
@@ -74,6 +75,7 @@ AC_CHECK_HEADERS([\
 	sys/auxv.h				\
 	sys/bswap.h				\
 	sys/errno.h				\
+	sys/exec_elf.h				\
 	sys/ioctl.h				\
 	sys/mman.h				\
 	sys/param.h				\
@@ -94,6 +96,14 @@ AC_CHECK_HEADERS([\
 	userconf.h				\
 	usersec.h				\
 	util.h					\
+])
+
+AC_HAVE_TYPE([auxv_t],[#ifdef HAVE_AUXV_H
+#include <auxv.h>
+#endif
+#ifdef HAVE_SYS_AUXV_H
+#include <sys/auxv.h>
+#endif
 ])
 
 AC_HAVE_TYPE([uintptr_t],[#ifdef HAVE_STDINT_H
@@ -160,10 +170,6 @@ AM_CONDITIONAL(have_vis_h, test "$ac_cv_header_vis_h" = yes)
 
 dnl Check for functions and libraries
 
-AC_FIND_FUNC(socket, socket)
-AC_FIND_FUNC(gethostbyname, nsl)
-AC_FIND_FUNC(syslog, syslog)
-
 AC_KRB_IPV6
 
 AC_FIND_FUNC(gethostbyname2, inet6 ip6)
@@ -173,27 +179,22 @@ rk_RESOLV
 AC_BROKEN_SNPRINTF
 AC_BROKEN_VSNPRINTF
 
-AC_BROKEN_GLOB
-if test "$ac_cv_func_glob_working" != yes; then
-	AC_LIBOBJ(glob)
-fi
-AM_CONDITIONAL(have_glob_h, test "$ac_cv_func_glob_working" = yes)
-
-
 AC_CHECK_FUNCS([				\
 	asnprintf				\
 	asprintf				\
 	atexit					\
-	cgetent					\
 	getauxval				\
 	getconfattr				\
 	getprogname				\
 	getrlimit				\
-	getspnam				\
 	issetugid				\
+	memmem					\
+	mkdtemp					\
+	mkostemp				\
 	on_exit					\
 	poll					\
 	random					\
+	secure_getenv				\
 	setprogname				\
 	strsvis					\
 	strsvisx				\
@@ -207,16 +208,12 @@ AC_CHECK_FUNCS([				\
 	tfind					\
 	twalk					\
 	uname					\
+	unlinkat				\
 	unvis					\
 	vasnprintf				\
 	vasprintf				\
 	vis					\
 ])
-
-if test "$ac_cv_func_cgetent" = no; then
-	AC_LIBOBJ(getcap)
-fi
-AM_CONDITIONAL(have_cgetent, test "$ac_cv_func_cgetent" = yes)
 
 AC_REQUIRE([AC_FUNC_GETLOGIN])
 
@@ -317,6 +314,8 @@ AC_FIND_IF_NOT_BROKEN(gai_strerror,,
 #include <ws2tcpip.h>
 #endif],[0])
 
+AC_CHECK_LIB(util, emalloc)
+
 case "$host_os" in
 	darwin*)
 		;;
@@ -353,11 +352,12 @@ AC_BROKEN([					\
 	getusershell				\
 	initgroups				\
 	innetgr					\
-	iruserok				\
 	localtime_r				\
 	lstat					\
 	memmove					\
 	memset_s				\
+	mergesort				\
+	mergesort_r				\
 	mkstemp					\
 	putenv					\
 	rcmd					\
@@ -398,6 +398,8 @@ AC_BROKEN([					\
 	writev					\
 ])
 
+rk_LIBOBJ(closefrom)
+
 AM_CONDITIONAL(have_fnmatch_h,
 	test "$ac_cv_header_fnmatch_h" = yes -a "$ac_cv_func_fnmatch" = yes)
 
@@ -435,6 +437,10 @@ AC_HAVE_STRUCT_FIELD(DIR, dd_fd, [#include <sys/types.h>
 #include <dirent.h>
 #endif])
 
+AC_HAVE_STRUCT_FIELD(DIR, d_fd, [#include <sys/types.h>
+#ifdef HAVE_DIRENT_H
+#include <dirent.h>
+#endif])
 
 AC_BROKEN2(inet_aton,
 [#ifdef HAVE_SYS_TYPES_H
@@ -502,26 +508,6 @@ AC_NEED_PROTO([#include <unistd.h>], gethostname)
 AC_NEED_PROTO([#include <unistd.h>], mkstemp)
 AC_NEED_PROTO([#include <unistd.h>], getusershell)
 AC_NEED_PROTO([#include <unistd.h>], daemon)
-AC_NEED_PROTO([
-#ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
-#endif
-#ifdef HAVE_SYS_SOCKET_H
-#include <sys/socket.h>
-#endif
-#ifdef HAVE_NETINET_IN_H
-#include <netinet/in.h>
-#endif
-#ifdef HAVE_ARPA_INET_H
-#include <arpa/inet.h>
-#endif
-#ifdef HAVE_NETDB_H
-#include <netdb.h>
-#endif
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif],
-iruserok)
 
 AC_NEED_PROTO([
 #ifdef HAVE_SYS_TYPES_H
@@ -541,8 +527,6 @@ inet_aton)
 AC_FIND_FUNC_NO_LIBS(crypt, crypt)dnl
 
 AC_REQUIRE([rk_BROKEN_REALLOC])dnl
-
-dnl AC_KRB_FUNC_GETCWD_BROKEN
 
 dnl strerror_r is great fun, on linux it exists before sus catched up,
 dnl so the return type is diffrent, lets check for both

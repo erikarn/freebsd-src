@@ -53,8 +53,6 @@ static char * handle_string(void);
 
 %}
 
-%option nounput
-
 %%
 [A-Za-z][-A-Za-z0-9_]*	{
 			  yylval.string = strdup ((const char *)yytext);
@@ -80,7 +78,7 @@ error_message (const char *format, ...)
 }
 
 void
-yyerror (char *s)
+yyerror (const char *s)
 {
     error_message("%s\n", s);
 }

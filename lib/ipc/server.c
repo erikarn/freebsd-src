@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Kungliga Tekniska Högskolan
+ * Copyright (c) 2009 Kungliga Tekniska HÃ¶gskolan
  * (Royal Institute of Technology, Stockholm, Sweden).
  * All rights reserved.
  *
@@ -122,26 +122,19 @@ mach_complete_sync(heim_sipc_call ctx, int returnvalue, heim_idata *reply)
 {
     struct mach_call_ctx *s = (struct mach_call_ctx *)ctx;
     heim_ipc_message_inband_t replyin;
-    mach_msg_type_number_t replyinCnt;
-    heim_ipc_message_outband_t replyout;
-    mach_msg_type_number_t replyoutCnt;
-    kern_return_t kr;
+    mach_msg_type_number_t replyinCnt = 0;
+    heim_ipc_message_outband_t replyout = 0;
+    mach_msg_type_number_t replyoutCnt = 0;
 
     if (returnvalue) {
 	/* on error, no reply */
-	replyinCnt = 0;
-	replyout = 0; replyoutCnt = 0;
-	kr = KERN_SUCCESS;
     } else if (reply->length < 2048) {
 	replyinCnt = reply->length;
 	memcpy(replyin, reply->data, replyinCnt);
-	replyout = 0; replyoutCnt = 0;
-	kr = KERN_SUCCESS;
     } else {
-	replyinCnt = 0;
-	kr = vm_read(mach_task_self(),
-		     (vm_address_t)reply->data, reply->length,
-		     (vm_address_t *)&replyout, &replyoutCnt);
+	vm_read(mach_task_self(),
+		(vm_address_t)reply->data, reply->length,
+		(vm_address_t *)&replyout, &replyoutCnt);
     }
 
     mheim_ripc_call_reply(s->reply_port, returnvalue,
@@ -159,31 +152,24 @@ mach_complete_async(heim_sipc_call ctx, int returnvalue, heim_idata *reply)
 {
     struct mach_call_ctx *s = (struct mach_call_ctx *)ctx;
     heim_ipc_message_inband_t replyin;
-    mach_msg_type_number_t replyinCnt;
-    heim_ipc_message_outband_t replyout;
-    mach_msg_type_number_t replyoutCnt;
-    kern_return_t kr;
+    mach_msg_type_number_t replyinCnt = 0;
+    heim_ipc_message_outband_t replyout = 0;
+    mach_msg_type_number_t replyoutCnt = 0;
 
     if (returnvalue) {
 	/* on error, no reply */
-	replyinCnt = 0;
-	replyout = 0; replyoutCnt = 0;
-	kr = KERN_SUCCESS;
     } else if (reply->length < 2048) {
 	replyinCnt = reply->length;
 	memcpy(replyin, reply->data, replyinCnt);
-	replyout = 0; replyoutCnt = 0;
-	kr = KERN_SUCCESS;
     } else {
-	replyinCnt = 0;
-	kr = vm_read(mach_task_self(),
-		     (vm_address_t)reply->data, reply->length,
-		     (vm_address_t *)&replyout, &replyoutCnt);
+	vm_read(mach_task_self(),
+		(vm_address_t)reply->data, reply->length,
+		(vm_address_t *)&replyout, &replyoutCnt);
     }
 
-    kr = mheim_aipc_acall_reply(s->reply_port, returnvalue,
-				replyin, replyinCnt,
-				replyout, replyoutCnt);
+    mheim_aipc_acall_reply(s->reply_port, returnvalue,
+			   replyin, replyinCnt,
+			   replyout, replyoutCnt);
     heim_ipc_free_cred(s->cred);
     free(s->req.data);
     free(s);
@@ -457,6 +443,7 @@ struct client {
 #define WAITING_CLOSE	8
 
 #define HTTP_REPLY	16
+#define DOOR_FD         32
 
 #define INHERIT_MASK	0xffff0000
 #define INCLUDE_ERROR_CODE (1 << 16)
@@ -501,9 +488,9 @@ update_client_creds(struct client *c)
 #ifdef HAVE_GETPEERUCRED
     /* Solaris 10 */
     {
-	ucred_t *peercred;
+	ucred_t *peercred = NULL;
 
-	if (getpeerucred(c->fd, &peercred) != 0) {
+	if (getpeerucred(c->fd, &peercred) == 0) {
 	    c->unixrights.uid = ucred_geteuid(peercred);
 	    c->unixrights.gid = ucred_getegid(peercred);
 	    c->unixrights.pid = 0;
@@ -612,7 +599,6 @@ update_client_creds(struct client *c)
     return 0;
 }
 
-
 static struct client *
 add_new_socket(int fd,
 	       int flags,
@@ -620,7 +606,6 @@ add_new_socket(int fd,
 	       void *userctx)
 {
     struct client *c;
-    int fileflags;
 
     c = calloc(1, sizeof(*c));
     if (c == NULL)
@@ -628,6 +613,8 @@ add_new_socket(int fd,
 
     if (flags & LISTEN_SOCKET) {
 	c->fd = fd;
+    } else if (flags & DOOR_FD) {
+        c->fd = -1; /* cannot poll a door descriptor */
     } else {
 	c->fd = accept(fd, NULL, NULL);
 	if(c->fd < 0) {
@@ -640,8 +627,7 @@ add_new_socket(int fd,
     c->callback = callback;
     c->userctx = userctx;
 
-    fileflags = fcntl(c->fd, F_GETFL, 0);
-    fcntl(c->fd, F_SETFL, fileflags | O_NONBLOCK);
+    socket_set_nonblocking(fd, 1);
 
 #ifdef HAVE_GCD
     init_globals();
@@ -698,6 +684,7 @@ maybe_close(struct client *c)
     dispatch_release(c->out);
 #endif
     close(c->fd); /* ref count fd close */
+    free(c->inmsg);
     free(c);
     return 1;
 }
@@ -870,6 +857,8 @@ handle_read(struct client *c)
     ssize_t len;
     uint32_t dlen;
 
+    assert((c->flags & DOOR_FD) == 0);
+
     if (c->flags & LISTEN_SOCKET) {
 	add_new_socket(c->fd,
 		       WAITING_READ | (c->flags & INHERIT_MASK),
@@ -930,6 +919,7 @@ handle_read(struct client *c)
 	    cs->in.data = emalloc(dlen);
 	    memcpy(cs->in.data, c->inmsg + sizeof(dlen), dlen);
 	    cs->in.length = dlen;
+	    cs->cred = NULL;
 
 	    c->ptr -= sizeof(dlen) + dlen;
 	    memmove(c->inmsg,
@@ -1009,15 +999,12 @@ process_loop(void)
 	for (n = 0 ; n < num_fds; n++) {
 	    if (clients[n] == NULL)
 		continue;
-	    if (fds[n].revents & POLLERR) {
-		clients[n]->flags |= WAITING_CLOSE;
-		continue;
-	    }
-
 	    if (fds[n].revents & POLLIN)
 		handle_read(clients[n]);
 	    if (fds[n].revents & POLLOUT)
 		handle_write(clients[n]);
+	    if (fds[n].revents & POLLERR)
+		clients[n]->flags |= WAITING_CLOSE;
 	}
 
 	n = 0;
@@ -1050,11 +1037,15 @@ heim_sipc_stream_listener(int fd, int type,
 			  heim_ipc_callback callback,
 			  void *user, heim_sipc *ctx)
 {
-    heim_sipc ct = calloc(1, sizeof(*ct));
+    heim_sipc ct;
     struct client *c;
 
     if ((type & HEIM_SIPC_TYPE_IPC) && (type & (HEIM_SIPC_TYPE_UINT32|HEIM_SIPC_TYPE_HTTP)))
 	return EINVAL;
+
+    ct = calloc(1, sizeof(*ct));
+    if (ct == NULL)
+	return ENOMEM;
 
     switch (type) {
     case HEIM_SIPC_TYPE_IPC:
@@ -1089,12 +1080,18 @@ heim_sipc_service_unix(const char *service,
 		       void *user, heim_sipc *ctx)
 {
     struct sockaddr_un un;
+    const char *d = secure_getenv("HEIM_IPC_DIR");
     int fd, ret;
+
+    if (strncasecmp(service, "UNIX:", sizeof("UNIX:") - 1) == 0)
+        service += sizeof("UNIX:") - 1;
 
     un.sun_family = AF_UNIX;
 
-    snprintf(un.sun_path, sizeof(un.sun_path),
-	     "/var/run/.heim_%s-socket", service);
+    if (snprintf(un.sun_path, sizeof(un.sun_path),
+                 "%s/.heim_%s-socket", d ? d : _PATH_VARRUN,
+                 service) > sizeof(un.sun_path) + sizeof("-s") - 1)
+        return ENAMETOOLONG;
     fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0)
 	return errno;
@@ -1103,7 +1100,7 @@ heim_sipc_service_unix(const char *service,
 #ifdef LOCAL_CREDS
     {
 	int one = 1;
-	setsockopt(fd, 0, LOCAL_CREDS, (void *)&one, sizeof(one));
+	(void) setsockopt(fd, 0, LOCAL_CREDS, (void *)&one, sizeof(one));
     }
 #endif
 
@@ -1119,7 +1116,7 @@ heim_sipc_service_unix(const char *service,
 	return errno;
     }
 
-    chmod(un.sun_path, 0666);
+    (void) chmod(un.sun_path, 0666);
 
     ret = heim_sipc_stream_listener(fd, HEIM_SIPC_TYPE_IPC,
 				    callback, user, ctx);
@@ -1130,6 +1127,190 @@ heim_sipc_service_unix(const char *service,
 
     return ret;
 }
+
+#ifdef HAVE_DOOR_CREATE
+#include <door.h>
+
+#ifdef HAVE_SYS_MMAN_H
+#include <sys/mman.h>
+#endif
+
+#include "heim_threads.h"
+
+static HEIMDAL_thread_key door_key;
+
+struct door_call {
+    heim_idata in;
+    door_desc_t *dp;
+    heim_icred cred;
+};
+
+struct door_reply {
+    int returnvalue;
+    size_t length;
+    unsigned char data[1];
+};
+
+static int
+door_release(heim_sipc ctx)
+{
+    struct client *c = ctx->mech;
+    return 0;
+}
+
+static void
+door_reply_destroy(void *data)
+{
+    free(data);
+}
+
+static void
+door_key_create(void *key)
+{
+    int ret;
+
+    HEIMDAL_key_create((HEIMDAL_thread_key *)key, door_reply_destroy, ret);
+}
+
+static void
+door_complete(heim_sipc_call ctx, int returnvalue, heim_idata *reply)
+{
+    static heim_base_once_t once = HEIM_BASE_ONCE_INIT;
+    struct door_call *cs = (struct door_call *)ctx;
+    size_t rlen;
+    struct door_reply *r = NULL;
+    union {
+        struct door_reply reply;
+        char buffer[offsetof(struct door_reply, data) + BUFSIZ];
+    } replyBuf;
+
+    heim_base_once_f(&once, &door_key, door_key_create);
+
+    /* door_return() doesn't return; don't leak cred */
+    heim_ipc_free_cred(cs->cred);
+
+error_reply:
+    rlen = offsetof(struct door_reply, data);
+    if (returnvalue == 0)
+        rlen += reply->length;
+
+    /* long replies (> BUFSIZ) are allocated from the heap */
+    if (rlen > BUFSIZ) {
+        int ret;
+
+        /* door_return() doesn't return, so stash reply buffer in TLS */
+        r = realloc(HEIMDAL_getspecific(door_key), rlen);
+        if (r == NULL) {
+            returnvalue = EAGAIN; /* don't leak ENOMEM to caller */
+            goto error_reply;
+        }
+
+        HEIMDAL_setspecific(door_key, r, ret);
+    } else {
+        r = &replyBuf.reply;
+    }
+
+    r->returnvalue = returnvalue;
+    if (r->returnvalue == 0) {
+        r->length = reply->length;
+        memcpy(r->data, reply->data, reply->length);
+    } else {
+        r->length = 0;
+    }
+
+    door_return((char *)r, rlen, NULL, 0);
+}
+
+static void
+door_callback(void *cookie,
+              char *argp,
+              size_t arg_size,
+              door_desc_t *dp,
+              uint_t n_desc)
+{
+    heim_sipc c = (heim_sipc)cookie;
+    struct door_call cs = { 0 };
+    ucred_t *peercred = NULL;
+
+    if (door_ucred(&peercred) < 0)
+        return;
+
+    _heim_ipc_create_cred(ucred_geteuid(peercred),
+                          ucred_getegid(peercred),
+                          ucred_getpid(peercred),
+                          -1,
+                          &cs.cred);
+    ucred_free(peercred);
+
+    cs.dp = dp;
+    cs.in.data = argp;
+    cs.in.length = arg_size;
+
+    c->callback(c->userctx, &cs.in, cs.cred, door_complete, (heim_sipc_call)&cs);
+}
+
+int
+heim_sipc_service_door(const char *service,
+		       heim_ipc_callback callback,
+		       void *user, heim_sipc *ctx)
+{
+    char path[PATH_MAX];
+    int fd = -1, dfd = -1, ret;
+    heim_sipc ct = NULL;
+    struct client *c = NULL;
+
+    ct = calloc(1, sizeof(*ct));
+    if (ct == NULL) {
+        ret = ENOMEM;
+        goto cleanup;
+    }
+    ct->release = door_release;
+    ct->userctx = user;
+    ct->callback = callback;
+
+    if (snprintf(path, sizeof(path), "/var/run/.heim_%s-door",
+                 service) >= sizeof(path) + sizeof("-d") - 1) {
+        ret = ENAMETOOLONG;
+        goto cleanup;
+    }
+    fd = door_create(door_callback, ct, DOOR_REFUSE_DESC | DOOR_NO_CANCEL);
+    if (fd < 0) {
+        ret = errno;
+        goto cleanup;
+    }
+
+    fdetach(path);
+    dfd = open(path, O_RDWR | O_CREAT, 0666);
+    if (dfd < 0) {
+        ret = errno;
+        goto cleanup;
+    }
+    (void) fchmod(dfd, 0666); /* XXX */
+
+    if (fattach(fd, path) < 0) {
+        ret = errno;
+        goto cleanup;
+    }
+
+    c = add_new_socket(fd, DOOR_FD, callback, user);
+    ct->mech = c;
+
+    *ctx = ct;
+    ret = 0;
+
+cleanup:
+    if (ret != 0) {
+        free(ct);
+        free(c);
+        if (fd != -1)
+            close(fd);
+    }
+    if (dfd != -1)
+        close(dfd);
+
+    return ret;
+}
+#endif /* HAVE_DOOR_CREATE */
 
 /**
  * Set the idle timeout value
@@ -1189,4 +1370,3 @@ heim_ipc_main(void)
     process_loop();
 #endif
 }
-

@@ -15,11 +15,13 @@ EXPORTS
         kadm5_delete_policy
 	kadm5_delete_principal
 	kadm5_destroy
+	kadm5_dup_context
 	kadm5_flush
 	kadm5_free_key_data
 	kadm5_free_name_list
         kadm5_free_policy_ent
 	kadm5_free_principal_ent
+        kadm5_get_instance
         kadm5_get_policies
         kadm5_get_policy
 	kadm5_get_principal
@@ -31,9 +33,11 @@ EXPORTS
 	kadm5_init_with_password_ctx
 	kadm5_init_with_skey
 	kadm5_init_with_skey_ctx
+	kadm5_iter_principals
         kadm5_lock
         kadm5_modify_policy
 	kadm5_modify_principal
+	kadm5_prune_principal
 	kadm5_randkey_principal
 	kadm5_randkey_principal_3
 	kadm5_rename_principal
@@ -58,7 +62,10 @@ EXPORTS
 	kadm5_s_init_with_creds_ctx
 	kadm5_s_init_with_creds
 	kadm5_s_chpass_principal_cond
+	kadm5_s_create_principal_with_key
+	kadm5_log_exclusivelock
 	kadm5_log_set_version
+	kadm5_log_sharedlock
 	kadm5_log_signal_master
 ;!	kadm5_log_signal_socket
 	kadm5_log_signal_socket_info    ;!

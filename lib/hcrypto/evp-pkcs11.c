@@ -33,21 +33,8 @@
 #include <config.h>
 #include <roken.h>
 #include <assert.h>
-#ifdef HAVE_DLFCN_H
-#include <dlfcn.h>
-#ifndef RTLD_LAZY
-#define RTLD_LAZY 0
-#endif
-#ifndef RTLD_LOCAL
-#define RTLD_LOCAL 0
-#endif
-#ifndef RTLD_GROUP
-#define RTLD_GROUP 0
-#endif
-#ifndef RTLD_NODELETE
-#define RTLD_NODELETE 0
-#endif
-#else
+
+#ifndef HAVE_DLFCN_H
 #error PKCS11 support requires dlfcn.h
 #endif
 
@@ -100,18 +87,16 @@ p11_module_load(CK_FUNCTION_LIST_PTR_PTR ppFunctionList)
 {
     CK_RV rv;
     CK_RV (*C_GetFunctionList_fn)(CK_FUNCTION_LIST_PTR_PTR);
-	
-	*ppFunctionList = NULL;
+    char *pkcs11ModulePath = secure_getenv("PKCS11_MODULE_PATH");
 
-    if (!issuid()) {
-        char *pkcs11ModulePath = getenv("PKCS11_MODULE_PATH");
-        if (pkcs11ModulePath != NULL) {
-	    pkcs11_module_handle =
-		dlopen(pkcs11ModulePath,
-		       RTLD_LAZY | RTLD_LOCAL | RTLD_GROUP | RTLD_NODELETE);
-	    if (pkcs11_module_handle == NULL)
-                fprintf(stderr, "p11_module_load(%s): %s\n", pkcs11ModulePath, dlerror());
-        }
+    *ppFunctionList = NULL;
+
+    if (pkcs11ModulePath != NULL) {
+        pkcs11_module_handle =
+            dlopen(pkcs11ModulePath,
+                   RTLD_LAZY | RTLD_LOCAL | RTLD_GROUP | RTLD_NODELETE);
+        if (pkcs11_module_handle == NULL)
+            fprintf(stderr, "p11_module_load(%s): %s\n", pkcs11ModulePath, dlerror());
     }
 #ifdef PKCS11_MODULE_PATH
     if (pkcs11_module_handle == NULL) {

@@ -23,6 +23,10 @@ libheim_ipcc_la_LIBADD = \
 	$(LIB_roken) \
 	$(PTHREAD_LIBADD)
 
+if SUNOS
+libheim_ipcc_la_LIBADD += -lsocket
+endif
+
 libheim_ipcs_la_LIBADD = $(libheim_ipcc_la_LIBADD)
 
 TESTS =	$(check_PROGRAMS)
@@ -37,6 +41,10 @@ tc_LDADD = libheim-ipcc.la $(LIB_roken)
 EXTRA_DIST = heim_ipc.defs heim_ipc_async.defs heim_ipc_reply.defs
 
 if have_gcd
+
+# We still use dispatch_get_current_queue(), which is deprecated, and that
+# stops building on recent OS X releases unless we disable this warning.
+WFLAGS += -Wno-deprecated-declarations
 
 heim_ipc.h heim_ipcUser.c heim_ipcServer.c heim_ipcServer.h: heim_ipc.defs
 	mig -header heim_ipc.h -user heim_ipcUser.c -sheader heim_ipcServer.h -server heim_ipcServer.c -I$(srcdir) $(srcdir)/heim_ipc.defs

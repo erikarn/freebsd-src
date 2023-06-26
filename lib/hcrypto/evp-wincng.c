@@ -33,11 +33,16 @@
 #include <config.h>
 #include <roken.h>
 #include <assert.h>
+#include <versionsupport.h>
 
 #include <evp.h>
 #include <evp-wincng.h>
 
 #include <bcrypt.h>
+
+#ifndef BCRYPT_HASH_REUSABLE_FLAG
+#define BCRYPT_HASH_REUSABLE_FLAG 0x00000020
+#endif
 
 /*
  * CNG cipher provider
@@ -96,8 +101,10 @@ wincng_cleanup(EVP_CIPHER_CTX *ctx)
 {
     struct wincng_key *cng = ctx->cipher_data;
 
-    if (cng->hKey)
+    if (cng->hKey) {
 	BCryptDestroyKey(cng->hKey);
+	cng->hKey = (BCRYPT_KEY_HANDLE)0;
+    }
     SecureZeroMemory(cng->rgbKeyObject, WINCNG_KEY_OBJECT_SIZE(ctx));
 
     return 1;
@@ -196,10 +203,7 @@ wincng_key_init(EVP_CIPHER_CTX *ctx,
     if (ctx->cipher->app_data == NULL)
 	return 0;
 
-    if (cng->hKey) {
-	BCryptDestroyKey(cng->hKey); /* allow reinitialization */
-	cng->hKey = (BCRYPT_KEY_HANDLE)0;
-    }
+    wincng_cleanup(ctx);
 
     /*
      * Note: ctx->key_len not EVP_CIPHER_CTX_key_length() for
@@ -568,17 +572,23 @@ wincng_md_algorithm_init(EVP_MD *md,
 }
 
 static int
+wincng_md_cleanup(EVP_MD_CTX *ctx);
+
+static int
 wincng_md_hash_init(BCRYPT_ALG_HANDLE hAlgorithm,
 		    EVP_MD_CTX *ctx)
 {
     struct wincng_md_ctx *cng = (struct wincng_md_ctx *)ctx;
     NTSTATUS status;
-    ULONG cbData;
+    ULONG cbData, dwFlags = 0;
 
-    if (cng->hHash) {
-	BCryptDestroyHash(cng->hHash); /* allow reinitialization */
-	cng->hHash = (BCRYPT_HASH_HANDLE)0;
-    }
+    if (IsWindows8OrGreaterCached()) {
+	if (cng->hHash)
+	    return 1;
+	else
+	    dwFlags |= BCRYPT_HASH_REUSABLE_FLAG;
+    } else
+	wincng_md_cleanup(ctx);
 
     status = BCryptGetProperty(hAlgorithm,
 			       BCRYPT_OBJECT_LENGTH,
@@ -595,7 +605,7 @@ wincng_md_hash_init(BCRYPT_ALG_HANDLE hAlgorithm,
 			      cng->cbHashObject,
 			      NULL,
 			      0,
-			      0);
+			      dwFlags);
 
     return BCRYPT_SUCCESS(status);
 }
@@ -643,8 +653,10 @@ wincng_md_cleanup(EVP_MD_CTX *ctx)
 {
     struct wincng_md_ctx *cng = (struct wincng_md_ctx *)ctx;
 
-    if (cng->hHash)
+    if (cng->hHash) {
 	BCryptDestroyHash(cng->hHash);
+	cng->hHash = (BCRYPT_HASH_HANDLE)0;
+    }
     SecureZeroMemory(cng->rgbHashObject, cng->cbHashObject);
 
     return 1;

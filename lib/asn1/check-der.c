@@ -158,12 +158,12 @@ test_integer_more (void)
 
     n2 = 0;
     for (i = 0; i < (sizeof(int) * 8); i++) {
-	n1 = 0x01LL << i;
+	n1 = 0x01 << i;
 	n2 = n2 | n1;
 	n3 = ~n1;
 	n4 = ~n2;
-	n5 = (-1LL) & ~(0x3fLL << i);
-	n6 = (-1LL) & ~(0x7fLL << i);
+	n5 = (-1) & ~(0x3f << i);
+	n6 = (-1) & ~(0x7f << i);
 
 	test_one_int(n1);
 	test_one_int(n2);
@@ -888,24 +888,26 @@ test_heim_oid_format_same(const char *str, const heim_oid *oid)
 	printf("fail to print oid: %s\n", str);
 	return 1;
     }
-    ret = strcmp(p, str);
-    if (ret) {
+
+    if (strcmp(p, str) != 0) {
 	printf("oid %s != formated oid %s\n", str, p);
 	free(p);
-	return ret;
+	return 1;
     }
 
     ret = der_parse_heim_oid(p, " ", &o2);
     if (ret) {
 	printf("failed to parse %s\n", p);
 	free(p);
-	return ret;
+	return 1;
     }
     free(p);
     ret = der_heim_oid_cmp(&o2, oid);
     der_free_oid(&o2);
 
-    return ret;
+    if (ret != 0)
+        return 1;
+    return 0;
 }
 
 static unsigned sha1_oid_tree[] = { 1, 3, 14, 3, 2, 26 };
@@ -1131,25 +1133,25 @@ check_random(void)
 	memset(input, 0, r->inputsize);
 
 	ret = r->decoder(input, r->inputsize, type, &size);
-	if (ret)
+	if (!ret)
 	    r->release(type);
 	
 	/* try all one first */
 	memset(input, 0xff, r->inputsize);
 	ret = r->decoder(input, r->inputsize, type, &size);
-	if (ret)
+	if (!ret)
 	    r->release(type);
 
 	/* try 0x41 too */
 	memset(input, 0x41, r->inputsize);
 	ret = r->decoder(input, r->inputsize, type, &size);
-	if (ret)
+	if (!ret)
 	    r->release(type);
 
 	/* random */
 	asn1rand(input, r->inputsize);
 	ret = r->decoder(input, r->inputsize, type, &size);
-	if (ret)
+	if (!ret)
 	    r->release(type);
 
 	/* let make buffer smaller */
@@ -1159,7 +1161,7 @@ check_random(void)
 	    asn1rand(input, insize);
 
 	    ret = r->decoder(input, insize, type, &size);
-	    if (ret == 0)
+	    if (!ret)
 		r->release(type);
 	} while(insize > 0);
 

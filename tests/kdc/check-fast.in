@@ -88,7 +88,7 @@ echo bar > ${objdir}/barpassword
 
 echo Starting kdc ; > messages.log
 env MallocStackLogging=1 MallocStackLoggingNoCompact=1 MallocErrorAbort=1 MallocLogFile=${objdir}/malloc-log \
-${kdc} --detach --testing || { echo "kdc failed to start"; exit 1; }
+${kdc} --detach --testing || { echo "kdc failed to start"; cat messages.log; exit 1; }
 kdcpid=`getpid kdc`
 
 trap "kill -9 ${kdcpid}; echo signal killing kdc; cat messages.log; exit 1;" EXIT
@@ -137,12 +137,41 @@ ${kgetcred} ${server}@${R} || { exit 1; }
 ${kdestroy}
 
 #
+# Test GSS-API pre-authentication using SAnon. It will only succeed where there
+# is FAST armor to authenticate the KDC, otherwise it will fail as SAnon does
+# not provide mutual authentication (GSS_C_MUTUAL_FLAG).
+#
+
+for mech in sanon-x25519 spnego ; do
+    echo "Trying ${mech} pre-authentication with FAST armor"; > messages.log
+    ${kinit} --fast-armor-cache=${acache} \
+	--anonymous --gss-mech=${mech} @$R 2>/dev/null || \
+	{ ec=1 ; eval "${testfailed}"; }
+
+    echo "Getting service ticket"
+    ${kgetcred} ${server}@${R} || { exit 1; }
+    ${kdestroy}
+
+    echo "Trying ${mech} pre-authentication with anonymous FAST armor"; > messages.log
+    ${kinit} --pk-anon-fast-armor \
+	--anonymous --gss-mech=${mech} @$R 2>/dev/null || \
+	{ ec=1 ; eval "${testfailed}"; }
+
+    echo "Getting service ticket"
+    ${kgetcred} ${server}@${R} || { exit 1; }
+    ${kdestroy}
+
+    echo "Trying ${mech} pre-authentication with no FAST armor"; > messages.log
+    ${kinit} \
+	--anonymous --gss-mech=${mech} @$R 2>/dev/null && \
+	{ ec=1 ; eval "${testfailed}"; }
+done
+
+#
 # Use MIT client tools
 #
 
-mit=/usr/local/mitkerberos/bin
-
-if [ -f ${mit}/kinit ] ; then
+if [ -n "$MITKRB5" -a -f "${MITKRB5}/kinit" ] ; then
    echo "Running MIT FAST tests"
 
     kinitpty=${objdir}/foopassword.rkpty
@@ -152,25 +181,25 @@ password foo\n
 EOF
 
    echo "Acquire host ticket"; > messages.log
-   ${rkpty} ${kinitpty} ${mit}/kinit -c ${acache} ${server}@${R} >/dev/null|| { exit 1; }
+   ${rkpty} ${kinitpty} "${MITKRB5}/kinit" -c ${acache} ${server}@${R} >/dev/null|| { exit 1; }
    (${aklist} | grep ${server} > /dev/null ) || { exit 1; }
 
    echo "Checking for FAST avail"; > messages.log
    ${aklist} --hidden | grep fast_avail > /dev/null || { exit 1; }
 
    echo "Using plain to get a initial ticket"; > messages.log
-   ${rkpty} ${kinitpty} ${mit}/kinit -c ${cache} foo@${R} >/dev/null|| { exit 1; }
+   ${rkpty} ${kinitpty} "${MITKRB5}/kinit" -c ${cache} foo@${R} >/dev/null|| { exit 1; }
    (${klist} | grep foo > /dev/null ) || { exit 1; }
 
    echo "Using FAST to get a initial ticket"; > messages.log
-   ${rkpty} ${kinitpty} ${mit}/kinit -c ${cache} -T ${acache} foo@${R} >/dev/null || { exit 1; }
+   ${rkpty} ${kinitpty} "${MITKRB5}/kinit" -c ${cache} -T ${acache} foo@${R} >/dev/null || { exit 1; }
    (${klist} | grep foo > /dev/null ) || { exit 1; }
 
    echo "Checking for FAST avail"; > messages.log
    ${klist} --hidden | grep fast_avail > /dev/null || { exit 1; }
 
    echo "Getting service ticket"; > messages.log
-   ${mit}/kvno -c ${cache} ${server}@${R} || { exit 1; }
+   "${MITKRB5}/kvno" -c ${cache} ${server}@${R} || { exit 1; }
 
 fi
 

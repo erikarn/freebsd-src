@@ -98,7 +98,7 @@ DH_new_method(ENGINE *engine)
     if (dh->engine) {
 	dh->meth = ENGINE_get_DH(dh->engine);
 	if (dh->meth == NULL) {
-	    ENGINE_finish(engine);
+	    ENGINE_finish(dh->engine);
 	    free(dh);
 	    return 0;
 	}
@@ -145,7 +145,7 @@ DH_free(DH *dh)
     free_if(dh->counter);
 #undef free_if
 
-    memset(dh, 0, sizeof(*dh));
+    memset_s(dh, sizeof(*dh), 0, sizeof(*dh));
     free(dh);
 }
 

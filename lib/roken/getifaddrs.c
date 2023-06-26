@@ -53,6 +53,11 @@ struct mbuf;
 
 #include <ifaddrs.h>
 
+#ifdef HAVE_IFADDRS_H
+ROKEN_LIB_FUNCTION void ROKEN_LIB_CALL
+rk_freeifaddrs(struct ifaddrs *ifp);
+#endif
+
 #ifdef __hpux
 #define lifconf if_laddrconf
 #define lifc_len iflc_len
@@ -759,7 +764,7 @@ rk_getifaddrs(struct ifaddrs **ifap)
 	  }
 	  if (ifamap.address_len != ifamap.local_len ||
 	      (ifamap.address != NULL &&
-	       memcmp(ifamap.address, ifamap.local, ifamap.address_len))) {
+	       memcmp(ifamap.address, ifamap.local, ifamap.address_len) != 0)) {
 	    /* p2p; address is peer and local is ours */
 	    ifamap.broadcast = ifamap.address;
 	    ifamap.broadcast_len = ifamap.address_len;
@@ -853,7 +858,7 @@ rk_getifaddrs(struct ifaddrs **ifap)
   return 0;
 }
 
-void ROKEN_LIB_FUNCTION
+ROKEN_LIB_FUNCTION void ROKEN_LIB_CALL
 rk_freeifaddrs(struct ifaddrs *ifp)
 {
     /* AF_NETLINK method uses a single allocation for all interfaces */

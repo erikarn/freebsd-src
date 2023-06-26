@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2006 - 2007 Kungliga Tekniska Högskolan
+ * Copyright (c) 2006 - 2007 Kungliga Tekniska HÃ¶gskolan
  * (Royal Institute of Technology, Stockholm, Sweden).
  * All rights reserved.
  *
@@ -42,9 +42,9 @@
 #include <getarg.h>
 
 typedef struct pk_client_params pk_client_params;
+typedef struct gss_client_params gss_client_params;
 struct DigestREQ;
 struct Kx509Request;
-typedef struct kdc_request_desc *kdc_request_t;
 
 #include <kdc-private.h>
 
@@ -60,14 +60,15 @@ ntlm_service(void *ctx, const heim_idata *req,
     unsigned char sessionkey[16];
     heim_idata rep = { 0, NULL };
     krb5_context context = ctx;
-    hdb_entry_ex *user = NULL;
+    hdb_entry *user = NULL;
+    HDB *db = NULL;
     Key *key = NULL;
     NTLMReply ntp;
     size_t size;
     int ret;
     const char *domain;
 
-    kdc_log(context, config, 1, "digest-request: uid=%d",
+    kdc_log(context, config, 4, "digest-request: uid=%d",
 	    (int)heim_ipc_cred_get_uid(cred));
 
     if (heim_ipc_cred_get_uid(cred) != 0) {
@@ -93,7 +94,7 @@ ntlm_service(void *ctx, const heim_idata *req,
 	goto failed;
     }
 
-    kdc_log(context, config, 1, "digest-request: user=%s/%s",
+    kdc_log(context, config, 4, "digest-request: user=%s/%s",
 	    ntq.loginUserName, domain);
 
     if (ntq.lmchallenge.length != 8)
@@ -113,12 +114,12 @@ ntlm_service(void *ctx, const heim_idata *req,
 	krb5_principal_set_type(context, client, KRB5_NT_NTLM);
 
 	ret = _kdc_db_fetch(context, config, client,
-			    HDB_F_GET_CLIENT, NULL, NULL, &user);
+			    HDB_F_GET_CLIENT, NULL, &db, &user);
 	krb5_free_principal(context, client);
 	if (ret)
 	    goto failed;
 
-	ret = hdb_enctype2key(context, &user->entry, NULL,
+	ret = hdb_enctype2key(context, user, NULL,
 			      ETYPE_ARCFOUR_HMAC_MD5, &key);
 	if (ret) {
 	    krb5_set_error_message(context, ret, "NTLM missing arcfour key");
@@ -126,8 +127,8 @@ ntlm_service(void *ctx, const heim_idata *req,
 	}
     }
 
-    kdc_log(context, config, 2,
-	    "digest-request: found user, processing ntlm request", ret);
+    kdc_log(context, config, 5,
+	    "digest-request: found user, processing ntlm request");
 
     if (ntq.ntChallengeResponce.length != 24) {
 	struct ntlm_buf infotarget, answer;
@@ -178,7 +179,7 @@ ntlm_service(void *ctx, const heim_idata *req,
 	    goto failed;
 
 	if (ntq.ntChallengeResponce.length != answer.length ||
-	    memcmp(ntq.ntChallengeResponce.data, answer.data, answer.length) != 0) {
+	    ct_memcmp(ntq.ntChallengeResponce.data, answer.data, answer.length) != 0) {
 	    free(answer.data);
 	    ret = EINVAL;
 	    goto failed;
@@ -205,7 +206,7 @@ ntlm_service(void *ctx, const heim_idata *req,
 	abort();
 
   failed:
-    kdc_log(context, config, 1, "digest-request: %d", ret);
+    kdc_log(context, config, 4, "digest-request: %d", ret);
 
     (*complete)(cctx, ret, &rep);
 
@@ -213,7 +214,7 @@ ntlm_service(void *ctx, const heim_idata *req,
 
     free_NTLMRequest2(&ntq);
     if (user)
-	_kdc_free_ent (context, user);
+	_kdc_free_ent (context, db, user);
 }
 
 static int help_flag;
@@ -272,6 +273,12 @@ main(int argc, char **argv)
 	heim_sipc_launchd_mach_init("org.h5l.ntlm-service",
 				    ntlm_service, context, &mach);
 	heim_sipc_timeout(60);
+    }
+#endif
+#ifdef HAVE_DOOR_CREATE
+    {
+	heim_sipc door;
+	heim_sipc_service_door("org.h5l.ntlm-service", ntlm_service, NULL, &door);
     }
 #endif
     {

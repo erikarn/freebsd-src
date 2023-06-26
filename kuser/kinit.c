@@ -34,8 +34,10 @@
  */
 
 #include "kuser_locl.h"
+#undef HC_DEPRECATED_CRYPTO
+#include <krb5_locl.h>
 
-#ifdef __APPLE__
+#ifdef HAVE_FRAMEWORK_SECURITY
 #include <Security/Security.h>
 #endif
 
@@ -61,9 +63,11 @@ int anonymous_flag	= 0;
 char *lifetime 		= NULL;
 char *renew_life	= NULL;
 char *server_str	= NULL;
+static krb5_principal tgs_service;
 char *cred_cache	= NULL;
 char *start_str		= NULL;
-static int switch_cache_flags = 1;
+static int default_for = 0;
+static int switch_cache_flags = -1;
 struct getarg_strings etype_str;
 int use_keytab		= 0;
 char *keytab_str	= NULL;
@@ -76,6 +80,10 @@ int pk_enterprise_flag = 0;
 struct hx509_certs_data *ent_user_id = NULL;
 char *pk_x509_anchors	= NULL;
 int pk_use_enckey	= 0;
+int pk_anon_fast_armor	= -1;
+char *gss_preauth_mech	= NULL;
+char *gss_preauth_name	= NULL;
+char *kdc_hostname	= NULL;
 static int canonicalize_flag = 0;
 static int enterprise_flag = 0;
 static int ok_as_delegate_flag = 0;
@@ -181,7 +189,20 @@ static struct getargs args[] = {
 
     { "pk-use-enckey",	0,  arg_flag, &pk_use_enckey,
       NP_("Use RSA encrypted reply (instead of DH)", ""), NULL },
+
+    { "pk-anon-fast-armor",	0,  arg_flag, &pk_anon_fast_armor,
+      NP_("use unauthenticated anonymous PKINIT as FAST armor", ""), NULL },
 #endif
+
+    { "gss-mech",   0,	arg_string, &gss_preauth_mech,
+      NP_("use GSS mechanism for pre-authentication", ""), NULL },
+
+    { "gss-name",   0,	arg_string, &gss_preauth_name,
+      NP_("use distinct GSS identity for pre-authentication", ""), NULL },
+
+    { "kdc-hostname",	0,  arg_string, &kdc_hostname,
+      NP_("KDC host name", ""), "hostname" },
+
 #ifndef NO_NTLM
     { "ntlm-domain",	0,  arg_string, &ntlm_domain,
       NP_("NTLM domain", ""), "domain" },
@@ -189,6 +210,9 @@ static struct getargs args[] = {
 
     { "change-default",  0,  arg_negative_flag, &switch_cache_flags,
       NP_("switch the default cache to the new credentials cache", ""), NULL },
+
+    { "default-for-principal",  0,  arg_flag, &default_for,
+      NP_("Use a default cache appropriate for the client principal", ""), NULL },
 
     { "ok-as-delegate",	0,  arg_flag, &ok_as_delegate_flag,
       NP_("honor ok-as-delegate on tickets", ""), NULL },
@@ -218,18 +242,124 @@ usage(int ret)
 }
 
 static krb5_error_code
+tgs_principal(krb5_context context,
+          krb5_ccache cache,
+          krb5_principal client,
+	  krb5_const_realm tgs_realm,
+	  krb5_principal *out_princ)
+{
+    krb5_error_code ret;
+    krb5_principal tgs_princ;
+    krb5_creds creds;
+    krb5_creds *tick;
+    krb5_flags options;
+
+    ret = krb5_make_principal(context, &tgs_princ, tgs_realm,
+			      KRB5_TGS_NAME, tgs_realm, NULL);
+    if (ret)
+	return ret;
+
+    /*
+     * Don't fail-over to a different realm just because a TGT expired
+     */
+    options = KRB5_GC_CACHED | KRB5_GC_EXPIRED_OK;
+
+    memset(&creds, 0, sizeof(creds));
+    creds.client = client;
+    creds.server = tgs_princ;
+    ret = krb5_get_credentials(context, options, cache, &creds, &tick);
+    if (ret == 0) {
+        krb5_free_creds(context, tick);
+	*out_princ = tgs_princ;
+    } else {
+	krb5_free_principal(context, tgs_princ);
+    }
+
+    return ret;
+}
+
+
+/*
+ * Try TGS specified with '-S',
+ * then TGS of client realm,
+ * then if fallback is FALSE: fail,
+ * otherwise try TGS of default realm,
+ * and finally first TGT in ccache.
+ */
+static krb5_error_code
 get_server(krb5_context context,
+	   krb5_ccache cache,
 	   krb5_principal client,
 	   const char *server,
+	   krb5_boolean fallback,
 	   krb5_principal *princ)
 {
+    krb5_error_code ret = 0;
     krb5_const_realm realm;
-    if (server)
-	return krb5_parse_name(context, server, princ);
+    krb5_realm def_realm;
+    krb5_cc_cursor cursor;
+    krb5_creds creds;
+    const char *pcomp;
 
+    if (tgs_service)
+	goto done;
+
+    if (server) {
+	ret = krb5_parse_name(context, server, &tgs_service);
+	goto done;
+    }
+
+    /* Try the client realm first */
     realm = krb5_principal_get_realm(context, client);
-    return krb5_make_principal(context, princ, realm,
-			       KRB5_TGS_NAME, realm, NULL);
+    ret = tgs_principal(context, cache, client, realm, &tgs_service);
+    if (ret == 0 || ret != KRB5_CC_NOTFOUND)
+	goto done;
+
+    if (!fallback)
+	return ret;
+
+    /* Next try the default realm */
+    ret = krb5_get_default_realm(context, &def_realm);
+    if (ret)
+	return ret;
+    ret = tgs_principal(context, cache, client, def_realm, &tgs_service);
+    free(def_realm);
+    if (ret == 0 || ret != KRB5_CC_NOTFOUND)
+	goto done;
+
+    /* Finally try the first TGT with instance == realm in the cache */
+    ret = krb5_cc_start_seq_get(context, cache, &cursor);
+    if (ret)
+	return ret;
+
+    for (/**/; ret == 0; krb5_free_cred_contents (context, &creds)) {
+
+	ret = krb5_cc_next_cred(context, cache, &cursor, &creds);
+	if (ret)
+	    break;
+        if (creds.server->name.name_string.len != 2)
+	    continue;
+	pcomp = krb5_principal_get_comp_string(context, creds.server, 0);
+	if (strcmp(pcomp, KRB5_TGS_NAME) != 0)
+	    continue;
+	realm = krb5_principal_get_realm(context, creds.server);
+        pcomp = krb5_principal_get_comp_string(context, creds.server, 1);
+	if (strcmp(realm, pcomp) != 0)
+	    continue;
+	ret = krb5_copy_principal(context, creds.server, &tgs_service);
+	break;
+    }
+    if (ret == KRB5_CC_END) {
+	ret = KRB5_CC_NOTFOUND;
+	krb5_set_error_message(context, ret,
+			       N_("Credential cache contains no TGTs", ""));
+    }
+    krb5_cc_end_seq_get(context, cache, &cursor);
+
+done:
+    if (!ret)
+	ret = krb5_copy_principal(context, tgs_service, princ);
+    return ret;
 }
 
 static krb5_error_code
@@ -311,21 +441,49 @@ static krb5_error_code
 renew_validate(krb5_context context,
 	       int renew,
 	       int validate,
-	       krb5_ccache cache,
+	       krb5_ccache *cachep,
+               krb5_const_principal principal,
+               krb5_boolean cache_is_default_for,
 	       const char *server,
 	       krb5_deltat life)
 {
     krb5_error_code ret;
     krb5_ccache tempccache = NULL;
+    krb5_ccache cache = *cachep;
     krb5_creds in, *out = NULL;
     krb5_kdc_flags flags;
 
     memset(&in, 0, sizeof(in));
 
     ret = krb5_cc_get_principal(context, cache, &in.client);
+    if (ret && cache_is_default_for && principal) {
+        krb5_error_code ret2;
+        krb5_ccache def_ccache = NULL;
+
+        ret2 = krb5_cc_default(context, &def_ccache);
+        if (ret2 == 0)
+            ret2 = krb5_cc_get_principal(context, def_ccache, &in.client);
+        if (ret2 == 0 &&
+            krb5_principal_compare(context, principal, in.client)) {
+            krb5_cc_close(context, *cachep);
+            cache = *cachep = def_ccache;
+            def_ccache = NULL;
+            ret = 0;
+        }
+        krb5_cc_close(context, def_ccache);
+    }
     if (ret) {
 	krb5_warn(context, ret, "krb5_cc_get_principal");
 	return ret;
+    }
+
+    if (principal && !krb5_principal_compare(context, principal, in.client)) {
+        char *ccname = NULL;
+
+        (void) krb5_cc_get_full_name(context, cache, &ccname);
+        krb5_errx(context, 1, "Credentials in cache %s do not match requested "
+                  "principal", ccname ? ccname : "requested");
+        free(ccname);
     }
 
     if (server == NULL &&
@@ -333,7 +491,7 @@ renew_validate(krb5_context context,
 				    KRB5_ANON_MATCH_UNAUTHENTICATED))
 	ret = get_anon_pkinit_tgs_name(context, cache, &in.server);
     else
-	ret = get_server(context, in.client, server, &in.server);
+	ret = get_server(context, cache, in.client, server, TRUE, &in.server);
     if (ret) {
 	krb5_warn(context, ret, "get_server");
 	goto out;
@@ -344,7 +502,7 @@ renew_validate(krb5_context context,
 	 * no need to check the error here, it's only to be
 	 * friendly to the user
 	 */
-	krb5_get_credentials(context, KRB5_GC_CACHED, cache, &in, &out);
+	(void) krb5_get_credentials(context, KRB5_GC_CACHED, cache, &in, &out);
     }
 
     flags.i = 0;
@@ -427,6 +585,106 @@ out:
     return ret;
 }
 
+static krb5_error_code
+make_wellknown_name(krb5_context context,
+		    krb5_const_realm realm,
+		    const char *instance,
+		    krb5_principal *principal)
+{
+    krb5_error_code ret;
+
+    ret = krb5_make_principal(context, principal, realm,
+			      KRB5_WELLKNOWN_NAME, instance, NULL);
+    if (ret == 0)
+	krb5_principal_set_type(context, *principal, KRB5_NT_WELLKNOWN);
+
+    return ret;
+}
+
+static krb5_error_code
+acquire_gss_cred(krb5_context context,
+		 krb5_const_principal client,
+		 krb5_deltat life,
+		 const char *passwd,
+		 gss_cred_id_t *cred,
+		 gss_OID *mech)
+{
+    krb5_error_code ret;
+    OM_uint32 major, minor;
+    gss_name_t name = GSS_C_NO_NAME;
+    gss_key_value_element_desc cred_element;
+    gss_key_value_set_desc cred_store;
+    gss_OID_set_desc mechs;
+
+    *cred = GSS_C_NO_CREDENTIAL;
+    *mech = GSS_C_NO_OID;
+
+    if (gss_preauth_mech) {
+	*mech = gss_name_to_oid(gss_preauth_mech);
+	if (*mech == GSS_C_NO_OID)
+	    return EINVAL;
+    }
+
+    if (gss_preauth_name) {
+	gss_buffer_desc buf;
+
+	buf.value = gss_preauth_name;
+	buf.length = strlen(gss_preauth_name);
+
+	major = gss_import_name(&minor, &buf, GSS_C_NT_USER_NAME, &name);
+	ret = _krb5_gss_map_error(major, minor);
+    } else if (!krb5_principal_is_federated(context, client)) {
+	ret = _krb5_gss_pa_unparse_name(context, client, &name);
+    } else {
+	/*
+	 * WELLKNOWN/FEDERATED is used a placeholder where the user
+	 * did not specify either a Kerberos credential or a GSS-API
+	 * initiator name. It avoids the expense of acquiring a default
+	 * credential purely to interrogate the credential name.
+	 */
+	name = GSS_C_NO_NAME;
+	ret = 0;
+    }
+    if (ret)
+	goto out;
+
+    cred_store.count = 1;
+    cred_store.elements = &cred_element;
+
+    if (passwd && passwd[0]) {
+	cred_element.key = "password";
+	cred_element.value = passwd;
+    } else if (keytab_str) {
+	cred_element.key = "client_keytab",
+	cred_element.value = keytab_str;
+    } else {
+	cred_store.count = 0;
+    }
+
+    if (*mech) {
+	mechs.count = 1;
+	mechs.elements = (gss_OID)*mech;
+    }
+
+    major = gss_acquire_cred_from(&minor,
+				  name,
+				  life ? life : GSS_C_INDEFINITE,
+				  *mech ? &mechs : GSS_C_NO_OID_SET,
+				  GSS_C_INITIATE,
+				  &cred_store,
+				  cred,
+				  NULL,
+				  NULL);
+    if (major != GSS_S_COMPLETE) {
+	ret = _krb5_gss_map_error(major, minor);
+	goto out;
+    }
+
+out:
+    gss_release_name(&minor, &name);
+    return ret;
+}
+
 #ifndef NO_NTLM
 
 static krb5_error_code
@@ -481,6 +739,10 @@ get_new_tickets(krb5_context context,
     krb5_init_creds_context ctx = NULL;
     krb5_get_init_creds_opt *opt = NULL;
     krb5_prompter_fct prompter = krb5_prompter_posix;
+    gss_cred_id_t gss_cred = GSS_C_NO_CREDENTIAL;
+    gss_OID gss_mech = GSS_C_NO_OID;
+    krb5_principal federated_name = NULL;
+
 #ifndef NO_NTLM
     struct ntlm_buf ntlmkey;
     memset(&ntlmkey, 0, sizeof(ntlmkey));
@@ -498,7 +760,7 @@ get_new_tickets(krb5_context context,
 	else
 	    f = fopen(password_file, "r");
 	if (f == NULL) {
-	    krb5_warnx(context, "Failed to open the password file %s",
+	    krb5_warnx(context, N_("Failed to open the password file %s", ""),
 		       password_file);
 	    return errno;
 	}
@@ -506,7 +768,8 @@ get_new_tickets(krb5_context context,
 	if (fgets(passwd, sizeof(passwd), f) == NULL) {
 	    krb5_warnx(context, N_("Failed to read password from file %s", ""),
 		       password_file);
-	    fclose(f);
+	    if (f != stdin)
+		fclose(f);
 	    return EINVAL; /* XXX Need a better error */
 	}
 	if (f != stdin)
@@ -514,31 +777,83 @@ get_new_tickets(krb5_context context,
 	passwd[strcspn(passwd, "\n")] = '\0';
     }
 
-#ifdef __APPLE__
+#ifdef HAVE_FRAMEWORK_SECURITY
     if (passwd[0] == '\0') {
+	enum querykey {
+	    qk_class, qk_matchlimit, qk_service, qk_account, qk_secreturndata,
+	};
+	const void *querykeys[] = {
+	    [qk_class] = kSecClass,
+	    [qk_matchlimit] = kSecMatchLimit,
+	    [qk_service] = kSecAttrService,
+	    [qk_account] = kSecAttrAccount,
+	    [qk_secreturndata] = kSecReturnData,
+	};
+	const void *queryargs[] = {
+	    [qk_class] = kSecClassGenericPassword,
+	    [qk_matchlimit] = kSecMatchLimitOne,
+	    [qk_service] = NULL, /* filled in later */
+	    [qk_account] = NULL, /* filled in later */
+	    [qk_secreturndata] = kCFBooleanTrue,
+	};
+	CFStringRef service_ref = NULL;
+	CFStringRef account_ref = NULL;
+	CFDictionaryRef query_ref = NULL;
 	const char *realm;
 	OSStatus osret;
-	UInt32 length;
-	void *buffer;
-	char *name;
+	char *name = NULL;
+	CFTypeRef item_ref = NULL;
+	CFDataRef item;
+	CFIndex length;
 
 	realm = krb5_principal_get_realm(context, principal);
 
 	ret = krb5_unparse_name_flags(context, principal,
 				      KRB5_PRINCIPAL_UNPARSE_NO_REALM, &name);
 	if (ret)
-	    goto nopassword;
+	    goto fail;
 
-	osret = SecKeychainFindGenericPassword(NULL, strlen(realm), realm,
-					       strlen(name), name,
-					       &length, &buffer, NULL);
+	service_ref = CFStringCreateWithCString(kCFAllocatorDefault, realm,
+	    kCFStringEncodingUTF8);
+	if (service_ref == NULL)
+	    goto fail;
+
+	account_ref = CFStringCreateWithCString(kCFAllocatorDefault, name,
+	    kCFStringEncodingUTF8);
+	if (account_ref == NULL)
+	    goto fail;
+
+	queryargs[qk_service] = service_ref;
+	queryargs[qk_account] = account_ref;
+	query_ref = CFDictionaryCreate(kCFAllocatorDefault,
+	    querykeys, queryargs,
+	    /*numValues*/sizeof(querykeys)/sizeof(querykeys[0]),
+	    /*keyCallbacks*/NULL, /*valueCallbacks*/NULL);
+	if (query_ref == NULL)
+	    goto fail;
+
+	osret = SecItemCopyMatching(query_ref, &item_ref);
+	if (osret != noErr)
+	    goto fail;
+
+	item = item_ref;
+	length = CFDataGetLength(item);
+	if (length >= sizeof(passwd) - 1)
+	    goto fail;
+
+	CFDataGetBytes(item, CFRangeMake(0, length), (UInt8 *)passwd);
+	passwd[length] = '\0';
+
+    fail:
+	if (item_ref)
+	    CFRelease(item_ref);
+	if (query_ref)
+	    CFRelease(query_ref);
+	if (account_ref)
+	    CFRelease(account_ref);
+	if (service_ref)
+	    CFRelease(service_ref);
 	free(name);
-	if (osret == noErr && length < sizeof(passwd) - 1) {
-	    memcpy(passwd, buffer, length);
-	    passwd[length] = '\0';
-	}
-    nopassword:
-	do { } while(0);
     }
 #endif
 
@@ -567,6 +882,8 @@ get_new_tickets(krb5_context context,
     if (pk_enterprise_flag || enterprise_flag || canonicalize_flag || windows_flag)
 	krb5_get_init_creds_opt_set_win2k(context, opt, TRUE);
     if (pk_user_id || ent_user_id || anonymous_pkinit) {
+        if (pk_anon_fast_armor == -1)
+            pk_anon_fast_armor = 0;
 	ret = krb5_get_init_creds_opt_set_pkinit(context, opt,
 						 principal,
 						 pk_user_id,
@@ -630,6 +947,29 @@ get_new_tickets(krb5_context context,
 					       etype_str.num_strings);
     }
 
+    if (gss_preauth_mech || gss_preauth_name) {
+	ret = acquire_gss_cred(context, principal, ticket_life,
+			       passwd, &gss_cred, &gss_mech);
+	if (ret)
+	    goto out;
+
+	/*
+	 * The principal specified on the command line is used as the GSS-API
+	 * initiator name, unless the --gss-name option was present, in which
+	 * case the initiator name is specified independently.
+	 */
+	if (gss_preauth_name == NULL) {
+	    krb5_const_realm realm = krb5_principal_get_realm(context, principal);
+
+	    ret = make_wellknown_name(context, realm,
+				      KRB5_FEDERATED_NAME, &federated_name);
+	    if (ret)
+		goto out;
+
+	    principal = federated_name;
+	}
+    }
+
     ret = krb5_init_creds_init(context, principal, prompter, NULL, start_time, opt, &ctx);
     if (ret) {
 	krb5_warn(context, ret, "krb5_init_creds_init");
@@ -644,23 +984,63 @@ get_new_tickets(krb5_context context,
 	}
     }
 
+    if (kdc_hostname) {
+	ret = krb5_init_creds_set_kdc_hostname(context, ctx, kdc_hostname);
+	if (ret) {
+	    krb5_warn(context, ret, "krb5_init_creds_set_kdc_hostname");
+	    goto out;
+	}
+    }
+
+    if (anonymous_flag && pk_anon_fast_armor == -1)
+        pk_anon_fast_armor = 0;
+    if (!gss_preauth_mech && anonymous_flag && pk_anon_fast_armor) {
+        krb5_warnx(context, N_("Ignoring --pk-anon-fast-armor because "
+                               "--anonymous given", ""));
+        pk_anon_fast_armor = 0;
+    }
+
     if (fast_armor_cache_string) {
-	krb5_ccache fastid;
-	
+	krb5_ccache fastid = NULL;
+
+	if (pk_anon_fast_armor > 0)
+	    krb5_errx(context, 1,
+		N_("cannot specify FAST armor cache with FAST "
+		     "anonymous PKINIT option", ""));
+        pk_anon_fast_armor = 0;
+
 	ret = krb5_cc_resolve(context, fast_armor_cache_string, &fastid);
 	if (ret) {
 	    krb5_warn(context, ret, "krb5_cc_resolve(FAST cache)");
 	    goto out;
 	}
-	
+
 	ret = krb5_init_creds_set_fast_ccache(context, ctx, fastid);
 	if (ret) {
 	    krb5_warn(context, ret, "krb5_init_creds_set_fast_ccache");
 	    goto out;
 	}
+    } else if (pk_anon_fast_armor == -1) {
+	ret = _krb5_init_creds_set_fast_anon_pkinit_optimistic(context, ctx);
+	if (ret) {
+	    krb5_warn(context, ret, "_krb5_init_creds_set_fast_anon_pkinit_optimistic");
+	    goto out;
+	}
+    } else if (pk_anon_fast_armor) {
+	ret = krb5_init_creds_set_fast_anon_pkinit(context, ctx);
+	if (ret) {
+	    krb5_warn(context, ret, "krb5_init_creds_set_fast_anon_pkinit");
+	    goto out;
+	}
     }
 
-    if (use_keytab || keytab_str) {
+    if (gss_mech != GSS_C_NO_OID) {
+	ret = krb5_gss_set_init_creds(context, ctx, gss_cred, gss_mech);
+	if (ret) {
+	    krb5_warn(context, ret, "krb5_gss_set_init_creds");
+	    goto out;
+	}
+    } else if (use_keytab || keytab_str) {
 	ret = krb5_init_creds_set_keytab(context, ctx, kt);
 	if (ret) {
 	    krb5_warn(context, ret, "krb5_init_creds_set_keytab");
@@ -780,6 +1160,18 @@ get_new_tickets(krb5_context context,
 	goto out;
     }
 
+    ret = krb5_init_creds_store_config(context, ctx, tempccache);
+    if (ret) {
+	krb5_warn(context, ret, "krb5_init_creds_store_config");
+	goto out;
+    }
+
+    ret = krb5_init_creds_warn_user(context, ctx);
+    if (ret) {
+	krb5_warn(context, ret, "krb5_init_creds_warn_user");
+	goto out;
+    }
+
     krb5_init_creds_free(context, ctx);
     ctx = NULL;
 
@@ -823,12 +1215,16 @@ get_new_tickets(krb5_context context,
     }
 
 out:
+    {
+	OM_uint32 minor;
+	gss_release_cred(&minor, &gss_cred);
+    }
+    krb5_free_principal(context, federated_name);
     krb5_get_init_creds_opt_free(context, opt);
     if (ctx)
 	krb5_init_creds_free(context, ctx);
     if (tempccache)
 	krb5_cc_destroy(context, tempccache);
-
     if (enctype)
 	free(enctype);
 
@@ -854,7 +1250,10 @@ ticket_lifetime(krb5_context context, krb5_ccache cache, krb5_principal client,
 	krb5_warn(context, ret, "krb5_cc_get_principal");
 	return 0;
     }
-    ret = get_server(context, in_cred.client, server, &in_cred.server);
+
+    /* Determine TGS principal without fallback */
+    ret = get_server(context, cache, in_cred.client, server, FALSE,
+		     &in_cred.server);
     if (ret) {
 	krb5_free_principal(context, in_cred.client);
 	krb5_warn(context, ret, "get_server");
@@ -916,16 +1315,18 @@ update_siginfo_msg(time_t exp, const char *srv)
 
 #ifdef HAVE_SIGACTION
 static void
-handle_siginfo(int sig)
+handler(int sig)
 {
-    struct iovec iov[2];
+    if (sig == SIGINFO) {
+        struct iovec iov[2];
 
-    iov[0].iov_base = rk_UNCONST(siginfo_msg);
-    iov[0].iov_len = strlen(siginfo_msg);
-    iov[1].iov_base = "\n";
-    iov[1].iov_len = 1;
+        iov[0].iov_base = rk_UNCONST(siginfo_msg);
+        iov[0].iov_len = strlen(siginfo_msg);
+        iov[1].iov_base = "\n";
+        iov[1].iov_len = 1;
 
-    writev(STDERR_FILENO, iov, sizeof(iov)/sizeof(iov[0]));
+        writev(STDERR_FILENO, iov, sizeof(iov)/sizeof(iov[0]));
+    } /* else ignore interrupts; our progeny will not ignore them */
 }
 #endif
 
@@ -935,6 +1336,7 @@ struct renew_ctx {
     krb5_principal principal;
     krb5_deltat ticket_life;
     krb5_deltat timeout;
+    int anonymous_pkinit;
 };
 
 static time_t
@@ -967,19 +1369,21 @@ renew_func(void *ptr)
     if (use_keytab || keytab_str)
 	expire += ctx->timeout;
     if (renew_expire > expire) {
-	ret = renew_validate(ctx->context, 1, validate_flag, ctx->ccache,
-		       server_str, ctx->ticket_life);
+	ret = renew_validate(ctx->context, 1, validate_flag, &ctx->ccache,
+                             NULL, FALSE, server_str, ctx->ticket_life);
     } else {
 	ret = get_new_tickets(ctx->context, ctx->principal, ctx->ccache,
-			      ctx->ticket_life, 0, 0);
+			      ctx->ticket_life, 0, ctx->anonymous_pkinit);
     }
-    expire = ticket_lifetime(ctx->context, ctx->ccache, ctx->principal,
-			     server_str, &renew_expire);
+    if (ret == 0) {
+	expire = ticket_lifetime(ctx->context, ctx->ccache, ctx->principal,
+				 server_str, &renew_expire);
 
 #ifndef NO_AFS
-    if (ret == 0 && server_str == NULL && do_afslog && k_hasafs())
-	krb5_afslog(ctx->context, ctx->ccache, NULL, NULL);
+	if (server_str == NULL && do_afslog && k_hasafs())
+	    krb5_afslog(ctx->context, ctx->ccache, NULL, NULL);
 #endif
+    }
 
     update_siginfo_msg(expire, server_str);
 
@@ -1083,29 +1487,35 @@ get_user_realm(krb5_context context)
 }
 
 static void
-get_princ(krb5_context context, krb5_principal *principal, const char *name)
+get_princ(krb5_context context,
+          krb5_principal *principal,
+          const char *ccname,
+          const char *name)
 {
-    krb5_error_code ret;
+    krb5_error_code ret = 0;
     krb5_principal tmp;
     int parseflags = 0;
     char *user_realm;
 
     if (name == NULL) {
-	krb5_ccache ccache;
+	krb5_ccache ccache = NULL;
 
 	/* If credential cache provides a client principal, use that. */
-	if (krb5_cc_default(context, &ccache) == 0) {
+        if (ccname)
+            ret = krb5_cc_resolve(context, ccname, &ccache);
+        else
+            ret = krb5_cc_default(context, &ccache);
+	if (ret  == 0)
 	    ret = krb5_cc_get_principal(context, ccache, principal);
-	    krb5_cc_close(context, ccache);
-	    if (ret == 0)
-		return;
-	}
+        krb5_cc_close(context, ccache);
+        if (ret == 0)
+            return;
     }
 
     user_realm = get_user_realm(context);
 
     if (name) {
-	if (canonicalize_flag || enterprise_flag)
+	if (enterprise_flag)
 	    parseflags |= KRB5_PRINCIPAL_PARSE_ENTERPRISE;
 
 	parse_name_realm(context, name, parseflags, user_realm, &tmp);
@@ -1282,9 +1692,13 @@ main(int argc, char **argv)
 
     ret = krb5_init_context(&context);
     if (ret == KRB5_CONFIG_BADFORMAT)
-	errx(1, "krb5_init_context failed to parse configuration file");
+	krb5_err(context, 1, ret, "Failed to parse configuration file");
+    else if (ret == EISDIR)
+        /* We use EISDIR to mean "not a regular file" */
+	krb5_errx(context, 1,
+                  "Failed to read configuration file: not a regular file");
     else if (ret)
-	errx(1, "krb5_init_context failed: %d", ret);
+	krb5_err(context, 1, ret, "Failed to read configuration file");
 
     if (getarg(args, sizeof(args) / sizeof(args[0]), argc, argv, &optidx))
 	usage(1);
@@ -1324,17 +1738,29 @@ main(int argc, char **argv)
 	    krb5_err(context, 1, ret, "krb5_pk_enterprise_certs");
 
 	pk_user_id = NULL;
+        if (pk_anon_fast_armor > 0)
+            krb5_warnx(context, N_("Ignoring --pk-anon-fast-armor "
+                                   "because --pk-user given", ""));
+        pk_anon_fast_armor = 0;
+    } else if (argc && argv[0][0] == '@' &&
+	(gss_preauth_mech || anonymous_flag)) {
+	const char *instance;
 
-    } else if (anonymous_flag && argc && argv[0][0] == '@') {
-	/* If principal argument as @REALM, try anonymous PKINIT */
+	if (gss_preauth_mech) {
+	    instance = KRB5_FEDERATED_NAME;
+	} else if (anonymous_flag) {
+	    instance = KRB5_ANON_NAME;
+	    anonymous_pkinit = TRUE;
+	}
 
-	ret = krb5_make_principal(context, &principal, &argv[0][1],
-				  KRB5_WELLKNOWN_NAME, KRB5_ANON_NAME,
-				  NULL);
+	ret = make_wellknown_name(context, &argv[0][1], instance, &principal);
 	if (ret)
-	    krb5_err(context, 1, ret, "krb5_make_principal");
-	krb5_principal_set_type(context, principal, KRB5_NT_WELLKNOWN);
-	anonymous_pkinit = TRUE;
+	    krb5_err(context, 1, ret, "make_wellknown_name");
+        if (!gss_preauth_mech && pk_anon_fast_armor > 1) {
+            krb5_warnx(context, N_("Ignoring --pk-anon-fast-armor "
+                                   "because --anonymous given", ""));
+            pk_anon_fast_armor = 0;
+        }
     } else if (anonymous_flag && historical_anon_pkinit) {
         char *realm = argc == 0 ? get_default_realm(context) :
                       argv[0][0] == '@' ? &argv[0][1] : argv[0];
@@ -1347,8 +1773,17 @@ main(int argc, char **argv)
 	anonymous_pkinit = TRUE;
     } else if (use_keytab || keytab_str) {
 	get_princ_kt(context, &principal, argv[0]);
+    } else if (gss_preauth_mech && argc == 0 && gss_preauth_name == NULL) {
+	/*
+	 * Use the federated name as a placeholder if we have neither a Kerberos
+	 * nor a GSS-API client name, and we are performing GSS-API preauth.
+	 */
+	ret = make_wellknown_name(context, get_default_realm(context),
+				  KRB5_FEDERATED_NAME, &principal);
+	if (ret)
+	    krb5_err(context, 1, ret, "make_wellknown_name");
     } else {
-	get_princ(context, &principal, argv[0]);
+	get_princ(context, &principal, cred_cache, argv[0]);
     }
 
     if (fcache_version)
@@ -1364,43 +1799,73 @@ main(int argc, char **argv)
 				krb5_principal_get_realm(context, principal),
 				"afslog", TRUE, &do_afslog);
 
-    if (cred_cache)
+    /*
+     * Cases:
+     *
+     *  - use the given ccache
+     *  - use a new unique ccache for running a command with (in this case we
+     *    get to set KRB5CCNAME, so a new unique ccache makes sense)
+     *  - use the default ccache for the given principal as requested and do
+     *    not later switch the collection's default/primary to it
+     *  - use the default cache, possibly a new unique one that later gets
+     *    switched to it
+     *
+     * The important thing is that, except for the case where we're running a
+     * command, we _can't set KRB5CCNAME_, and we can't expect the user to read
+     * our output and figure out to set it (we could have an output-for-shell-
+     * eval mode, like ssh-agent and such, but we don't).  Therefore, in all
+     * cases where we can't set KRB5CCNAME we must do something that makes
+     * sense to the user, and that is to either initialize a given ccache, use
+     * the default, or use a subsidiary ccache named after the principal whose
+     * creds we're initializing.
+     */
+    if (cred_cache) {
+        /* Use the given ccache */
 	ret = krb5_cc_resolve(context, cred_cache, &ccache);
-    else {
-	if (argc > 1) {
-	    char s[1024];
-	    ret = krb5_cc_new_unique(context, NULL, NULL, &ccache);
-	    if (ret)
-		krb5_err(context, 1, ret, "creating cred cache");
-	    snprintf(s, sizeof(s), "%s:%s",
-		     krb5_cc_get_type(context, ccache),
-		     krb5_cc_get_name(context, ccache));
-	    setenv("KRB5CCNAME", s, 1);
-	    unique_ccache = TRUE;
-	} else {
-	    ret = krb5_cc_cache_match(context, principal, &ccache);
-	    if (ret) {
-		const char *type;
-		ret = krb5_cc_default(context, &ccache);
-		if (ret)
-		    krb5_err(context, 1, ret,
-			     N_("resolving credentials cache", ""));
+    } else if (argc > 1) {
+        char s[1024];
 
-		/*
-		 * Check if the type support switching, and we do,
-		 * then do that instead over overwriting the current
-		 * default credential
-		 */
-		type = krb5_cc_get_type(context, ccache);
-		if (krb5_cc_support_switch(context, type)) {
-		    krb5_cc_close(context, ccache);
-		    ret = get_switched_ccache(context, type, principal,
-					      &ccache);
-		    if (ret == 0)
-			unique_ccache = TRUE;
-		}
-	    }
-	}
+        /*
+         * A command was given, so use a new unique ccache (and destroy it
+         * later).
+         */
+        ret = krb5_cc_new_unique(context, NULL, NULL, &ccache);
+        if (ret)
+            krb5_err(context, 1, ret, "creating cred cache");
+        snprintf(s, sizeof(s), "%s:%s",
+                 krb5_cc_get_type(context, ccache),
+                 krb5_cc_get_name(context, ccache));
+        setenv("KRB5CCNAME", s, 1);
+        unique_ccache = TRUE;
+        switch_cache_flags = 0;
+    } else if (default_for) {
+        ret = krb5_cc_default_for(context, principal, &ccache);
+        if (switch_cache_flags == -1)
+            switch_cache_flags = 0;
+    } else {
+        ret = krb5_cc_cache_match(context, principal, &ccache);
+        if (ret) {
+            const char *type;
+            ret = krb5_cc_default(context, &ccache);
+            if (ret)
+                krb5_err(context, 1, ret,
+                         N_("resolving credentials cache", ""));
+
+            /*
+             * Check if the type support switching, and we do,
+             * then do that instead over overwriting the current
+             * default credential
+             */
+            type = krb5_cc_get_type(context, ccache);
+            if (krb5_cc_support_switch(context, type) &&
+                strcmp(type, "FILE")) {
+                krb5_cc_close(context, ccache);
+                ret = get_switched_ccache(context, type, principal,
+                                          &ccache);
+                if (ret == 0)
+                    unique_ccache = TRUE;
+            }
+        }
     }
     if (ret)
 	krb5_err(context, 1, ret, N_("resolving credentials cache", ""));
@@ -1439,7 +1904,9 @@ main(int argc, char **argv)
 
     if (renew_flag || validate_flag) {
 	ret = renew_validate(context, renew_flag, validate_flag,
-			     ccache, server_str, ticket_life);
+                             &ccache, principal,
+                             default_for ? TRUE : FALSE, server_str,
+                             ticket_life);
 
 #ifndef NO_AFS
 	if (ret == 0 && server_str == NULL && do_afslog && k_hasafs())
@@ -1476,13 +1943,16 @@ main(int argc, char **argv)
 	ctx.principal = principal;
 	ctx.ticket_life = ticket_life;
 	ctx.timeout = timeout;
+	ctx.anonymous_pkinit = anonymous_pkinit;
 
 #ifdef HAVE_SIGACTION
 	memset(&sa, 0, sizeof(sa));
 	sigemptyset(&sa.sa_mask);
-	sa.sa_handler = handle_siginfo;
+	sa.sa_handler = handler;
 
 	sigaction(SIGINFO, &sa, NULL);
+	sigaction(SIGINT, &sa, NULL);
+	sigaction(SIGQUIT, &sa, NULL);
 #endif
 
 	ret = simple_execvp_timed(argv[1], argv+1,

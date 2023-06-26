@@ -114,7 +114,7 @@ RSA_new_method(ENGINE *engine)
     if (rsa->engine) {
 	rsa->meth = ENGINE_get_RSA(rsa->engine);
 	if (rsa->meth == NULL) {
-	    ENGINE_finish(engine);
+	    ENGINE_finish(rsa->engine);
 	    free(rsa);
 	    return 0;
 	}
@@ -160,7 +160,7 @@ RSA_free(RSA *rsa)
     free_if(rsa->iqmp);
 #undef free_if
 
-    memset(rsa, 0, sizeof(*rsa));
+    memset_s(rsa, sizeof(*rsa), 0, sizeof(*rsa));
     free(rsa);
 }
 
@@ -272,7 +272,10 @@ RSA_check_key(const RSA *key)
      * and then decrypt/verify.
      */
 
-    if ((rsa->d == NULL || rsa->n == NULL) &&
+    if (rsa->n == NULL)
+	return 0;
+
+    if (rsa->d == NULL &&
 	(rsa->p == NULL || rsa->q || rsa->dmp1 == NULL || rsa->dmq1 == NULL || rsa->iqmp == NULL))
 	return 0;
 
@@ -423,7 +426,7 @@ RSA_verify(int type, const unsigned char *from, unsigned int flen,
 	    return -4;
 	}
 
-	if (flen != di.digest.length || memcmp(di.digest.data, from, flen) != 0) {
+	if (flen != di.digest.length || ct_memcmp(di.digest.data, from, flen) != 0) {
 	    free_DigestInfo(&di);
 	    return -5;
 	}

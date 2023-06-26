@@ -67,10 +67,10 @@ plcallback(krb5_context context, const void *plug, void *plugctx, void *userctx)
 }
 
 static krb5_error_code plugin_reg_ret;
-static krb5plugin_kuserok_ftable kuserok_simple_plug;
-static krb5plugin_kuserok_ftable kuserok_sys_k5login_plug;
-static krb5plugin_kuserok_ftable kuserok_user_k5login_plug;
-static krb5plugin_kuserok_ftable kuserok_deny_plug;
+static const krb5plugin_kuserok_ftable kuserok_simple_plug;
+static const krb5plugin_kuserok_ftable kuserok_sys_k5login_plug;
+static const krb5plugin_kuserok_ftable kuserok_user_k5login_plug;
+static const krb5plugin_kuserok_ftable kuserok_deny_plug;
 
 static void
 reg_def_plugins_once(void *ctx)
@@ -144,7 +144,7 @@ check_owner_dir(krb5_context context,
 
     heim_assert(owner != NULL, "no directory owner ?");
 
-    if (rk_getpwnam_r(owner, &pw, pwbuf, sizeof(pwbuf), &pwd) != 0) {
+    if (getpwnam_r(owner, &pw, pwbuf, sizeof(pwbuf), &pwd) != 0) {
 	krb5_set_error_message(context, errno,
 			       "User unknown %s (getpwnam_r())", owner);
 	return EACCES;
@@ -219,7 +219,7 @@ check_owner_file(krb5_context context,
     if (owner == NULL)
 	return 0;
 
-    if (rk_getpwnam_r(owner, &pw, pwbuf, sizeof(pwbuf), &pwd) != 0) {
+    if (getpwnam_r(owner, &pw, pwbuf, sizeof(pwbuf), &pwd) != 0) {
 	krb5_set_error_message(context, errno,
 			       "User unknown %s (getpwnam_r())", owner);
 	return EACCES;
@@ -455,6 +455,17 @@ krb5_kuserok(krb5_context context,
 }
 
 
+static const char *const kuserok_plugin_deps[] = { "krb5", NULL };
+
+static const struct heim_plugin_data
+kuserok_plugin_data = {
+    "krb5",
+    KRB5_PLUGIN_KUSEROK,
+    KRB5_PLUGIN_KUSEROK_VERSION_0,
+    kuserok_plugin_deps,
+    krb5_get_instance
+};
+
 KRB5_LIB_FUNCTION krb5_boolean KRB5_LIB_CALL
 _krb5_kuserok(krb5_context context,
 	      krb5_principal principal,
@@ -515,9 +526,8 @@ _krb5_kuserok(krb5_context context,
 	for (n = 0; rules[n]; n++) {
 	    ctx.rule = rules[n];
 
-	    ret = _krb5_plugin_run_f(context, "krb5", KRB5_PLUGIN_KUSEROK,
-				     KRB5_PLUGIN_KUSEROK_VERSION_0, 0,
-				     &ctx, plcallback);
+	    ret = _krb5_plugin_run_f(context, &kuserok_plugin_data,
+				     0, &ctx, plcallback);
 	    if (ret != KRB5_PLUGIN_NO_HANDLE) 
 		goto out;
 	}
@@ -713,28 +723,28 @@ kuser_ok_null_plugin_fini(void *ctx)
     return;
 }
 
-static krb5plugin_kuserok_ftable kuserok_simple_plug = {
+static const krb5plugin_kuserok_ftable kuserok_simple_plug = {
     KRB5_PLUGIN_KUSEROK_VERSION_0,
     kuser_ok_null_plugin_init,
     kuser_ok_null_plugin_fini,
     kuserok_simple_plug_f,
 };
 
-static krb5plugin_kuserok_ftable kuserok_sys_k5login_plug = {
+static const krb5plugin_kuserok_ftable kuserok_sys_k5login_plug = {
     KRB5_PLUGIN_KUSEROK_VERSION_0,
     kuser_ok_null_plugin_init,
     kuser_ok_null_plugin_fini,
     kuserok_sys_k5login_plug_f,
 };
 
-static krb5plugin_kuserok_ftable kuserok_user_k5login_plug = {
+static const krb5plugin_kuserok_ftable kuserok_user_k5login_plug = {
     KRB5_PLUGIN_KUSEROK_VERSION_0,
     kuser_ok_null_plugin_init,
     kuser_ok_null_plugin_fini,
     kuserok_user_k5login_plug_f,
 };
 
-static krb5plugin_kuserok_ftable kuserok_deny_plug = {
+static const krb5plugin_kuserok_ftable kuserok_deny_plug = {
     KRB5_PLUGIN_KUSEROK_VERSION_0,
     kuser_ok_null_plugin_init,
     kuser_ok_null_plugin_fini,

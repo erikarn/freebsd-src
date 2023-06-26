@@ -45,14 +45,16 @@ kadm5_s_init_with_context(krb5_context context,
 			  void **server_handle)
 {
     kadm5_ret_t ret;
-    kadm5_server_context *ctx;
+    kadm5_server_context *ctx = NULL;
     char *dbname;
     char *stash_file;
 
     *server_handle = NULL;
     ret = _kadm5_s_init_context(&ctx, realm_params, context);
-    if (ret)
+    if (ret) {
+        kadm5_s_destroy(ctx);
 	return ret;
+    }
 
     if (realm_params->mask & KADM5_CONFIG_DBNAME)
 	dbname = realm_params->dbname;
@@ -103,6 +105,21 @@ kadm5_s_init_with_context(krb5_context context,
         kadm5_s_destroy(ctx);
     else
         *server_handle = ctx;
+    return ret;
+}
+
+kadm5_ret_t
+kadm5_s_dup_context(void *vin, void **out)
+{
+    kadm5_server_context *in = vin;
+    kadm5_ret_t ret;
+    char *p = NULL;
+
+    ret = krb5_unparse_name(in->context, in->caller, &p);
+    if (ret == 0)
+        ret = kadm5_s_init_with_context(in->context, p, NULL,
+                                        &in->config, 0, 0, out);
+    free(p);
     return ret;
 }
 

@@ -48,7 +48,7 @@ cc_plugin_register_to_context(krb5_context context, const void *plug, void *plug
     krb5_cc_ops *ccops = (krb5_cc_ops *)plugctx;
     krb5_error_code ret;
 
-    if (ccops == NULL || ccops->version < KRB5_CC_OPS_VERSION)
+    if (ccops == NULL)
        return KRB5_PLUGIN_NO_HANDLE;
 
     ret = krb5_cc_register(context, ccops, TRUE);
@@ -58,13 +58,24 @@ cc_plugin_register_to_context(krb5_context context, const void *plug, void *plug
     return KRB5_PLUGIN_NO_HANDLE;
 }
 
+static const char *const ccache_plugin_deps[] = { "krb5", NULL };
+
+static const struct heim_plugin_data
+ccache_plugin_data = {
+    "krb5",
+    KRB5_PLUGIN_CCACHE,
+    0,
+    ccache_plugin_deps,
+    krb5_get_instance
+};
+
 KRB5_LIB_FUNCTION krb5_error_code KRB5_LIB_CALL
 _krb5_load_ccache_plugins(krb5_context context)
 {
     krb5_error_code userctx = 0;
 
-    (void)_krb5_plugin_run_f(context, "krb5", KRB5_PLUGIN_CCACHE,
-			     0, 0, &userctx, cc_plugin_register_to_context);
+    (void)_krb5_plugin_run_f(context, &ccache_plugin_data, 0,
+			     &userctx, cc_plugin_register_to_context);
 
     return userctx;
 }

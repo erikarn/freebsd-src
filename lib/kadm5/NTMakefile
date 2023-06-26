@@ -51,11 +51,13 @@ dist_libkadm5clnt_la_SOURCES =	\
 	modify_c.c		\
 	private.h		\
 	privs_c.c		\
+	prune_c.c		\
 	randkey_c.c		\
 	rename_c.c		\
 	send_recv.c		\
 	kadm5-pwcheck.h		\
-	admin.h
+	admin.h			\
+	kadm5-hook.h
 
 dist_libkadm5srv_la_SOURCES =	\
 	acl.c			\
@@ -82,14 +84,17 @@ dist_libkadm5srv_la_SOURCES =	\
 	password_quality.c	\
 	private.h		\
 	privs_s.c		\
+	prune_s.c		\
 	randkey_s.c		\
 	rename_s.c		\
 	server_glue.c		\
+	server_hooks.c		\
 	set_keys.c		\
 	setkey3_s.c		\
 	set_modifier.c		\
 	kadm5-pwcheck.h		\
-	admin.h
+	admin.h			\
+	kadm5-hook.h
 
 LIBKADM5CLNT_OBJS=		    \
 	$(OBJ)\ad.obj		    \
@@ -107,6 +112,7 @@ LIBKADM5CLNT_OBJS=		    \
 	$(OBJ)\marshall.obj	    \
 	$(OBJ)\modify_c.obj	    \
 	$(OBJ)\privs_c.obj	    \
+	$(OBJ)\prune_c.obj	    \
 	$(OBJ)\randkey_c.obj	    \
 	$(OBJ)\rename_c.obj	    \
 	$(OBJ)\send_recv.obj	    \
@@ -134,9 +140,11 @@ LIBKADM5SRV_OBJS=		    \
 	$(OBJ)\modify_s.obj	    \
 	$(OBJ)\password_quality.obj \
 	$(OBJ)\privs_s.obj	    \
+	$(OBJ)\prune_s.obj	    \
 	$(OBJ)\randkey_s.obj	    \
 	$(OBJ)\rename_s.obj	    \
 	$(OBJ)\server_glue.obj	    \
+	$(OBJ)\server_hooks.obj	    \
 	$(OBJ)\set_keys.obj	    \
 	$(OBJ)\setkey3_s.obj	    \
 	$(OBJ)\set_modifier.obj	    \
@@ -178,6 +186,7 @@ INCFILES=\
 	$(KADM5INCDIR)\kadm5_err.h	\
 	$(KADM5INCDIR)\admin.h	\
 	$(KADM5INCDIR)\private.h	\
+	$(KADM5INCDIR)\kadm5-hook.h	\
 	$(KADM5INCDIR)\kadm5-protos.h	\
 	$(KADM5INCDIR)\kadm5-private.h	\
 	$(OBJ)\iprop-commands.h
@@ -239,7 +248,8 @@ test:: test-binaries test-run
 test-binaries:	\
 	$(OBJ)\default_keys.exe	\
 	$(OBJ)\test_pw_quality.exe \
-	$(OBJ)\sample_passwd_check.dll
+	$(OBJ)\sample_passwd_check.dll \
+	$(OBJ)\sample_hook.dll
 
 $(OBJ)\default_keys.exe: $(OBJ)\default_keys.obj $(LIBHEIMDAL) $(LIBROKEN) $(LIBHDB)
 	$(EXECONLINK)
@@ -255,6 +265,13 @@ $(OBJ)\sample_passwd_check.dll: $(OBJ)\sample_passwd_check.obj $(LIBHEIMDAL)
 EXPORTS
 	version DATA
 	check_length
+<<
+	$(DLLPREP_NODIST)
+
+$(OBJ)\sample_hook.dll: $(OBJ)\sample_hook.obj $(LIBKADM5SRV) $(LIBHEIMDAL)
+	$(DLLGUILINK) /DEF:<<
+EXPORTS
+	kadm5_hook_plugin_load
 <<
 	$(DLLPREP_NODIST)
 

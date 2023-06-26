@@ -2,56 +2,16 @@ include $(top_srcdir)/Makefile.am.common
 
 AM_CPPFLAGS += $(INCLUDE_openssl_crypto)
 
-lib_LTLIBRARIES = libhx509.la
+lib_LTLIBRARIES = libhx509.la libhx509template.la
 libhx509_la_LDFLAGS = -version-info 5:0:0
+libhx509template_la_LDFLAGS = -version-info 5:0:0
 
 BUILT_SOURCES =				\
 	sel-gram.h			\
-	$(gen_files_ocsp:.x=.c)		\
-	$(gen_files_pkcs10:.x=.c)	\
 	hx509_err.c			\
 	hx509_err.h
 
-gen_files_ocsp = 			\
-	asn1_OCSPBasicOCSPResponse.x	\
-	asn1_OCSPCertID.x		\
-	asn1_OCSPCertStatus.x		\
-	asn1_OCSPInnerRequest.x		\
-	asn1_OCSPKeyHash.x		\
-	asn1_OCSPRequest.x		\
-	asn1_OCSPResponderID.x		\
-	asn1_OCSPResponse.x		\
-	asn1_OCSPResponseBytes.x	\
-	asn1_OCSPResponseData.x		\
-	asn1_OCSPResponseStatus.x	\
-	asn1_OCSPSignature.x		\
-	asn1_OCSPSingleResponse.x	\
-	asn1_OCSPTBSRequest.x		\
-	asn1_OCSPVersion.x		\
-	asn1_id_pkix_ocsp.x		\
-	asn1_id_pkix_ocsp_basic.x	\
-	asn1_id_pkix_ocsp_nonce.x
-
-gen_files_pkcs10 = 			\
-	asn1_CertificationRequestInfo.x	\
-	asn1_CertificationRequest.x
-
-gen_files_crmf = 			\
-	asn1_CRMFRDNSequence.x		\
-	asn1_CertReqMessages.x		\
-	asn1_CertReqMsg.x		\
-	asn1_CertRequest.x		\
-	asn1_CertTemplate.x		\
-	asn1_Controls.x			\
-	asn1_PBMParameter.x		\
-	asn1_PKMACValue.x		\
-	asn1_POPOPrivKey.x		\
-	asn1_POPOSigningKey.x		\
-	asn1_POPOSigningKeyInput.x	\
-	asn1_ProofOfPossession.x	\
-	asn1_SubsequentMessage.x	
-
-AM_YFLAGS = -d
+AM_YFLAGS = -d -o sel-gram.c
 
 dist_libhx509_la_SOURCES = \
 	ca.c \
@@ -88,9 +48,13 @@ dist_libhx509_la_SOURCES = \
 	req.c \
 	revoke.c
 
+dist_libhx509template_la_SOURCES = $(dist_libhx509_la_SOURCES)
+
+sel-gram.h: sel-gram.c
 sel-lex.c: sel-gram.h
 
 libhx509_la_DEPENDENCIES = version-script.map
+libhx509template_la_DEPENDENCIES = version-script.map
 
 libhx509_la_LIBADD = \
 	$(LIB_com_err) \
@@ -102,43 +66,36 @@ libhx509_la_LIBADD = \
 	$(LIBADD_roken) \
 	$(LIB_dlopen)
 
+libhx509template_la_LIBADD = \
+	$(LIB_com_err) \
+	$(LIB_hcrypto) \
+	$(LIB_openssl_crypto) \
+	$(top_builddir)/lib/asn1/libasn1template.la \
+	$(top_builddir)/lib/wind/libwind.la \
+	$(top_builddir)/lib/base/libheimbase.la \
+	$(LIBADD_roken) \
+	$(LIB_dlopen)
+
 if FRAMEWORK_SECURITY
 libhx509_la_LDFLAGS += -framework Security -framework CoreFoundation
+libhx509template_la_LDFLAGS += -framework Security -framework CoreFoundation
 endif
 
 if versionscript
 libhx509_la_LDFLAGS += $(LDFLAGS_VERSION_SCRIPT)$(srcdir)/version-script.map
+libhx509template_la_LDFLAGS += $(LDFLAGS_VERSION_SCRIPT)$(srcdir)/version-script.map
 endif
 $(libhx509_la_OBJECTS): $(srcdir)/version-script.map $(nodist_include_HEADERS) $(priv_headers)
+$(libhx509template_la_OBJECTS): $(srcdir)/version-script.map $(nodist_include_HEADERS) $(priv_headers)
 
 nodist_libhx509_la_SOURCES = $(BUILT_SOURCES)
-
-$(gen_files_ocsp) ocsp_asn1.hx ocsp_asn1-priv.hx: ocsp_asn1_files
-$(gen_files_pkcs10) pkcs10_asn1.hx pkcs10_asn1-priv.hx: pkcs10_asn1_files
-$(gen_files_crmf) crmf_asn1.hx crmf_asn1-priv.hx: crmf_asn1_files
+nodist_libhx509template_la_SOURCES = $(BUILT_SOURCES)
 
 dist_include_HEADERS = hx509.h $(srcdir)/hx509-protos.h
 
 noinst_HEADERS = $(srcdir)/hx509-private.h
 
 nodist_include_HEADERS = hx509_err.h
-nodist_include_HEADERS += ocsp_asn1.h
-nodist_include_HEADERS += pkcs10_asn1.h
-nodist_include_HEADERS += crmf_asn1.h
-
-priv_headers  = ocsp_asn1-priv.h
-priv_headers += pkcs10_asn1-priv.h
-priv_headers += crmf_asn1-priv.h
-
-
-ocsp_asn1_files: $(ASN1_COMPILE_DEP) $(srcdir)/ocsp.asn1 $(srcdir)/ocsp.opt
-	$(heim_verbose)$(ASN1_COMPILE) --option-file=$(srcdir)/ocsp.opt $(srcdir)/ocsp.asn1 ocsp_asn1 || (rm -f ocsp_asn1_files ; exit 1)
-
-pkcs10_asn1_files: $(ASN1_COMPILE_DEP) $(srcdir)/pkcs10.asn1 $(srcdir)/pkcs10.opt
-	$(heim_verbose)$(ASN1_COMPILE) --option-file=$(srcdir)/pkcs10.opt $(srcdir)/pkcs10.asn1 pkcs10_asn1 || (rm -f pkcs10_asn1_files ; exit 1)
-
-crmf_asn1_files: $(ASN1_COMPILE_DEP) $(srcdir)/crmf.asn1
-	$(heim_verbose)$(ASN1_COMPILE) $(srcdir)/crmf.asn1 crmf_asn1 || (rm -f crmf_asn1_files ; exit 1)
 
 ALL_OBJECTS  = $(libhx509_la_OBJECTS)
 ALL_OBJECTS += $(hxtool_OBJECTS)
@@ -148,7 +105,7 @@ HX509_PROTOS = $(srcdir)/hx509-protos.h $(srcdir)/hx509-private.h
 $(ALL_OBJECTS): $(HX509_PROTOS)
 
 $(libhx509_la_OBJECTS): $(srcdir)/hx_locl.h
-$(libhx509_la_OBJECTS): ocsp_asn1.h pkcs10_asn1.h
+$(libhx509template_la_OBJECTS): $(srcdir)/hx_locl.h
 
 $(srcdir)/hx509-protos.h: $(dist_libhx509_la_SOURCES)
 	$(heim_verbose)cd $(srcdir) && perl ../../cf/make-proto.pl -R '^(_|^C)' -E HX509_LIB -q -P comment -o hx509-protos.h $(dist_libhx509_la_SOURCES) || rm -f hx509-protos.h
@@ -167,19 +124,13 @@ nodist_hxtool_SOURCES = hxtool-commands.c hxtool-commands.h
 $(hxtool_OBJECTS): hxtool-commands.h $(nodist_include_HEADERS)
 
 hxtool_LDADD = \
-	libhx509.la \
+	libhx509template.la \
 	$(top_builddir)/lib/asn1/libasn1.la \
 	$(LIB_hcrypto) \
 	$(LIB_roken) \
 	$(top_builddir)/lib/sl/libsl.la
 
 CLEANFILES = $(BUILT_SOURCES) sel-gram.c sel-lex.c \
-	$(gen_files_ocsp) ocsp_asn1_files ocsp_asn1{,-priv}.h* \
-	ocsp_asn1-template.[chx]* \
-	$(gen_files_pkcs10) pkcs10_asn1_files pkcs10_asn1{,-priv}.h* \
-	pkcs10_asn1-template.[chx]* \
-	$(gen_files_crmf) crmf_asn1_files crmf_asn1{,-priv}.h* \
-	crmf_asn1-template.[chx]* \
 	$(TESTS) \
 	hxtool-commands.c hxtool-commands.h *.tmp \
 	request.out \
@@ -314,14 +265,9 @@ EXTRA_DIST = \
 	hxtool-version.rc \
 	libhx509-exports.def \
 	version-script.map \
-	crmf.asn1 \
 	hx509_err.et \
 	hxtool-commands.in \
 	quote.py \
-	ocsp.asn1 \
-	ocsp.opt \
-	pkcs10.asn1 \
-	pkcs10.opt \
 	test_ca.in \
 	test_chain.in \
 	test_cert.in \

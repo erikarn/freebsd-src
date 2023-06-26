@@ -39,6 +39,12 @@ RCSID("$Id$");
 #define __CALLABLE(F) (((kadm5_common_context*)server_handle)->funcs.F != 0)
 
 kadm5_ret_t
+kadm5_dup_context(void *server_handle, void **dup_server_handle)
+{
+    return __CALL(dup_context, (server_handle, dup_server_handle));
+}
+
+kadm5_ret_t
 kadm5_chpass_principal(void *server_handle,
 		       krb5_principal princ,
 		       const char *password)
@@ -152,6 +158,7 @@ kadm5_decrypt_key(void *server_handle,
                   krb5_keysalt *keysalt, int *kvnop)
 {
     size_t i;
+    kadm5_server_context *context = server_handle;
 
     if (kvno < 1 || stype != -1)
 	return KADM5_DECRYPT_USAGE_NOSUPP;
@@ -164,7 +171,7 @@ kadm5_decrypt_key(void *server_handle,
 	keyblock->keyvalue.length = entry->key_data[i].key_data_length[0];
 	keyblock->keyvalue.data = malloc(keyblock->keyvalue.length);
 	if (keyblock->keyvalue.data == NULL)
-	    return ENOMEM;
+	    return krb5_enomem(context->context);
 	memcpy(keyblock->keyvalue.data,
 	       entry->key_data[i].key_data_contents[0],
 	       keyblock->keyvalue.length);
@@ -222,6 +229,15 @@ kadm5_get_principals(void *server_handle,
 }
 
 kadm5_ret_t
+kadm5_iter_principals(void *server_handle,
+		      const char *expression,
+                      int (*cb)(void *, const char *),
+                      void *cbdata)
+{
+    return __CALL(iter_principals, (server_handle, expression, cb, cbdata));
+}
+
+kadm5_ret_t
 kadm5_get_privs(void *server_handle,
 		uint32_t *privs)
 {
@@ -260,6 +276,7 @@ kadm5_setkey_principal_3(void *server_handle,
     kadm5_ret_t ret;
     krb5_key_data *new_key_data = NULL;
     size_t i;
+    kadm5_server_context *context = server_handle;
 
     if (n_keys < 1)
 	return EINVAL;
@@ -286,7 +303,7 @@ kadm5_setkey_principal_3(void *server_handle,
         new_key_data = calloc((n_keys + princ_ent.n_key_data),
                               sizeof(*new_key_data));
 	if (new_key_data == NULL) {
-	    ret = ENOMEM;
+	    ret = krb5_enomem(context->context);
 	    goto out;
 	}
 
@@ -295,7 +312,7 @@ kadm5_setkey_principal_3(void *server_handle,
     } else {
 	new_key_data = calloc(n_keys, sizeof(*new_key_data));
 	if (new_key_data == NULL) {
-	    ret = ENOMEM;
+	    ret = krb5_enomem(context->context);
 	    goto out;
 	}
     }
@@ -311,7 +328,7 @@ kadm5_setkey_principal_3(void *server_handle,
 	new_key_data[i].key_data_contents[0] =
 	    malloc(keyblocks[i].keyvalue.length);
 	if (new_key_data[i].key_data_contents[0] == NULL) {
-	    ret = ENOMEM;
+	    ret = krb5_enomem(context->context);
 	    goto out;
 	}
 	memcpy(new_key_data[i].key_data_contents[0],
@@ -426,3 +443,10 @@ kadm5_free_policy_ent(kadm5_policy_ent_t ent)
     return 0;
 }
 
+kadm5_ret_t
+kadm5_prune_principal(void *server_handle,
+                      krb5_principal princ,
+                      int kvno)
+{
+    return __CALL(prune_principal, (server_handle, princ, kvno));
+}

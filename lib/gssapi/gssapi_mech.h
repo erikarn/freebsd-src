@@ -1,6 +1,10 @@
 /*-
  * Copyright (c) 2005 Doug Rabson
+ * Copyright (c) 2018 Kungliga Tekniska Högskolan
+ * (Royal Institute of Technology, Stockholm, Sweden).
  * All rights reserved.
+ *
+ * Portions Copyright (c) 2009 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -222,6 +226,12 @@ typedef OM_uint32 GSSAPI_CALLCONV _gss_add_cred_t (
 	       OM_uint32 *             /* acceptor_time_rec */
 	      );
 
+typedef OM_uint32 GSSAPI_CALLCONV _gss_duplicate_cred_t (
+	       OM_uint32 *,            /* minor_status */
+	       gss_const_cred_id_t,    /* input_cred_handle */
+	       gss_cred_id_t *         /* output_cred_handle */
+	      );
+
 typedef OM_uint32 GSSAPI_CALLCONV _gss_inquire_cred_by_mech_t (
 	       OM_uint32 *,            /* minor_status */
 	       gss_const_cred_id_t,    /* cred_handle */
@@ -269,28 +279,28 @@ typedef OM_uint32 GSSAPI_CALLCONV _gss_duplicate_name_t (
 	       gss_name_t *            /* dest_name */
 	      );
 
-typedef OM_uint32 GSSAPI_CALLCONV _gss_inquire_sec_context_by_oid (
+typedef OM_uint32 GSSAPI_CALLCONV _gss_inquire_sec_context_by_oid_t (
 	       OM_uint32 *minor_status,
 	       gss_const_ctx_id_t context_handle,
 	       const gss_OID desired_object,
 	       gss_buffer_set_t *data_set
 	      );
 
-typedef OM_uint32 GSSAPI_CALLCONV _gss_inquire_cred_by_oid (
+typedef OM_uint32 GSSAPI_CALLCONV _gss_inquire_cred_by_oid_t (
 	       OM_uint32 *minor_status,
 	       gss_const_cred_id_t cred,
 	       const gss_OID desired_object,
 	       gss_buffer_set_t *data_set
 	      );
 
-typedef OM_uint32 GSSAPI_CALLCONV _gss_set_sec_context_option (
+typedef OM_uint32 GSSAPI_CALLCONV _gss_set_sec_context_option_t (
 	       OM_uint32 *minor_status,
 	       gss_ctx_id_t *cred_handle,
 	       const gss_OID desired_object,
 	       const gss_buffer_t value
  	      );
 
-typedef OM_uint32 GSSAPI_CALLCONV _gss_set_cred_option (
+typedef OM_uint32 GSSAPI_CALLCONV _gss_set_cred_option_t (
 	       OM_uint32 *minor_status,
 	       gss_cred_id_t *cred_handle,
 	       const gss_OID desired_object,
@@ -298,7 +308,7 @@ typedef OM_uint32 GSSAPI_CALLCONV _gss_set_cred_option (
  	      );
 
 
-typedef OM_uint32 GSSAPI_CALLCONV _gss_pseudo_random(
+typedef OM_uint32 GSSAPI_CALLCONV _gss_pseudo_random_t (
     	       OM_uint32 *minor_status,
 	       gss_ctx_id_t context,
 	       int prf_key,
@@ -352,18 +362,7 @@ typedef OM_uint32 GSSAPI_CALLCONV
 _gss_import_cred_t(OM_uint32 * minor_status,
 		   gss_buffer_t cred_token,
 		   gss_cred_id_t * cred_handle);
-
-
-typedef OM_uint32 GSSAPI_CALLCONV
-_gss_acquire_cred_ext_t(OM_uint32 * /*minor_status */,
-		        gss_const_name_t /* desired_name */,
-		        gss_const_OID /* credential_type */,
-		        const void * /* credential_data */,
-		        OM_uint32 /* time_req */,
-		        gss_const_OID /* desired_mech */,
-		        gss_cred_usage_t /* cred_usage */,
-		        gss_cred_id_t * /* output_cred_handle */);
-
+ 
 typedef void GSSAPI_CALLCONV
 _gss_iter_creds_t(OM_uint32 /* flags */,
 		  void * /* userctx */,
@@ -439,6 +438,87 @@ typedef OM_uint32 GSSAPI_CALLCONV _gss_export_name_composite_t (
 	       gss_buffer_t           /* exp_composite_name */
 	    );
 
+typedef OM_uint32 GSSAPI_CALLCONV
+_gss_acquire_cred_from_t(OM_uint32 *minor_status,
+			 gss_const_name_t desired_name,
+		         OM_uint32 time_req,
+		         gss_OID_set desired_mechs,
+		         gss_cred_usage_t cred_usage,
+		         gss_const_key_value_set_t cred_store,
+		         gss_cred_id_t *output_cred_handle,
+			 gss_OID_set *actual_mechs,
+			 OM_uint32 *time_rec);
+
+typedef OM_uint32 GSSAPI_CALLCONV
+_gss_acquire_cred_impersonate_name_t(OM_uint32 *minor_status,
+				     gss_const_cred_id_t icred,
+				     gss_const_name_t desired_name,
+				     OM_uint32 time_req,
+				     gss_OID_set desired_mechs,
+				     gss_cred_usage_t cred_usage,
+				     gss_cred_id_t *output_cred_handle,
+				     gss_OID_set *actual_mechs,
+				     OM_uint32 *time_rec);
+
+typedef OM_uint32 GSSAPI_CALLCONV
+_gss_add_cred_from_t(OM_uint32 *minor_status,
+		     gss_cred_id_t input_cred_handle,
+		     gss_const_name_t desired_name,
+		     const gss_OID desired_mech,
+		     gss_cred_usage_t cred_usage,
+		     OM_uint32 initiator_time_req,
+		     OM_uint32 acceptor_time_req,
+		     gss_const_key_value_set_t cred_store,
+		     gss_cred_id_t *output_cred_handle,
+		     gss_OID_set *actual_mechs,
+		     OM_uint32 *initiator_time_rec,
+		     OM_uint32 *acceptor_time_rec);
+
+typedef OM_uint32 GSSAPI_CALLCONV
+_gss_store_cred_into_t(OM_uint32 *minor_status,
+		       gss_const_cred_id_t input_cred_handle,
+		       gss_cred_usage_t input_usage,
+		       gss_OID desired_mech,
+		       OM_uint32 overwrite_cred,
+		       OM_uint32 default_cred,
+		       gss_const_key_value_set_t cred_store,
+		       gss_OID_set *elements_stored,
+		       gss_cred_usage_t *cred_usage_stored);
+
+typedef OM_uint32 GSSAPI_CALLCONV
+_gss_store_cred_into2_t(OM_uint32 *minor_status,
+		        gss_const_cred_id_t input_cred_handle,
+		        gss_cred_usage_t input_usage,
+		        gss_OID desired_mech,
+		        OM_uint32 store_cred_flags,
+		        gss_const_key_value_set_t cred_store,
+		        gss_OID_set *elements_stored,
+		        gss_cred_usage_t *cred_usage_stored,
+                        gss_buffer_set_t *env);
+
+typedef OM_uint32 GSSAPI_CALLCONV
+_gss_query_mechanism_info_t(OM_uint32 *minor_status,
+			    gss_const_OID mech_oid,
+			    unsigned char auth_scheme[16]);
+
+typedef OM_uint32 GSSAPI_CALLCONV
+_gss_query_meta_data_t(OM_uint32 *minor_status,
+		       gss_const_OID mech_oid,
+		       gss_cred_id_t cred_handle,
+		       gss_ctx_id_t *ctx_handle,
+		       gss_const_name_t targ_name,
+		       OM_uint32 req_flags,
+		       gss_buffer_t meta_data);
+
+typedef OM_uint32 GSSAPI_CALLCONV
+_gss_exchange_meta_data_t(OM_uint32 *minor_status,
+			  gss_const_OID mech_oid,
+			  gss_cred_id_t cred_handle,
+			  gss_ctx_id_t *ctx_handle,
+			  gss_const_name_t targ_name,
+			  OM_uint32 req_flags,
+			  gss_const_buffer_t meta_data);
+
 /*
  *
  */
@@ -474,13 +554,17 @@ typedef OM_uint32 GSSAPI_CALLCONV _gss_authorize_localname_t (
 	       gss_const_OID		/* user_name_type */
 	      );
 
+struct _gss_name;
+struct _gss_cred;
+
 /* mechglue internal */
 struct gss_mech_compat_desc_struct;
 
-#define GMI_VERSION 5
+#define GMI_VERSION 6
 
 /* gm_flags */
 #define GM_USE_MG_CRED      	1	/* uses mech glue credentials */
+#define GM_USE_MG_NAME      	2	/* uses mech glue names       */
 
 typedef struct gssapi_mech_interface_desc {
 	unsigned			gm_version;
@@ -516,18 +600,19 @@ typedef struct gssapi_mech_interface_desc {
 	_gss_inquire_mechs_for_name_t	*gm_inquire_mechs_for_name;
 	_gss_canonicalize_name_t	*gm_canonicalize_name;
 	_gss_duplicate_name_t		*gm_duplicate_name;
-	_gss_inquire_sec_context_by_oid	*gm_inquire_sec_context_by_oid;
-	_gss_inquire_cred_by_oid	*gm_inquire_cred_by_oid;
-	_gss_set_sec_context_option	*gm_set_sec_context_option;
-	_gss_set_cred_option		*gm_set_cred_option;
-	_gss_pseudo_random		*gm_pseudo_random;
+	_gss_inquire_sec_context_by_oid_t	*gm_inquire_sec_context_by_oid;
+	_gss_inquire_cred_by_oid_t	*gm_inquire_cred_by_oid;
+	_gss_set_sec_context_option_t	*gm_set_sec_context_option;
+	_gss_set_cred_option_t		*gm_set_cred_option;
+	_gss_pseudo_random_t		*gm_pseudo_random;
 	_gss_wrap_iov_t			*gm_wrap_iov;
 	_gss_unwrap_iov_t		*gm_unwrap_iov;
 	_gss_wrap_iov_length_t		*gm_wrap_iov_length;
 	_gss_store_cred_t		*gm_store_cred;
 	_gss_export_cred_t		*gm_export_cred;
 	_gss_import_cred_t		*gm_import_cred;
-	_gss_acquire_cred_ext_t		*gm_acquire_cred_ext;
+	_gss_acquire_cred_from_t	*gm_acquire_cred_from; /* was acquire_cred_ext */
+	_gss_acquire_cred_impersonate_name_t	*gm_acquire_cred_impersonate_name;
 	_gss_iter_creds_t		*gm_iter_creds;
 	_gss_destroy_cred_t		*gm_destroy_cred;
 	_gss_cred_hold_t		*gm_cred_hold;
@@ -544,21 +629,38 @@ typedef struct gssapi_mech_interface_desc {
         _gss_set_name_attribute_t       *gm_set_name_attribute;
         _gss_delete_name_attribute_t    *gm_delete_name_attribute;
         _gss_export_name_composite_t    *gm_export_name_composite;
+        _gss_duplicate_cred_t           *gm_duplicate_cred;
+	_gss_add_cred_from_t		*gm_add_cred_from;
+	_gss_store_cred_into_t		*gm_store_cred_into;
+	_gss_query_mechanism_info_t	*gm_query_mechanism_info;
+	_gss_query_meta_data_t		*gm_query_meta_data;
+	_gss_exchange_meta_data_t	*gm_exchange_meta_data;
+	_gss_store_cred_into2_t		*gm_store_cred_into2;
         struct gss_mech_compat_desc_struct  *gm_compat;
 } gssapi_mech_interface_desc, *gssapi_mech_interface;
 
 gssapi_mech_interface
 __gss_get_mechanism(gss_const_OID /* oid */);
 
+gss_OID
+_gss_mg_support_mechanism(gss_const_OID mech);
+
 gssapi_mech_interface __gss_spnego_initialize(void);
 gssapi_mech_interface __gss_krb5_initialize(void);
 gssapi_mech_interface __gss_ntlm_initialize(void);
+gssapi_mech_interface __gss_sanon_initialize(void);
 
 void		gss_mg_collect_error(gss_OID, OM_uint32, OM_uint32);
 
 int _gss_mo_get_option_1(gss_const_OID, gss_mo_desc *, gss_buffer_t);
 int _gss_mo_get_option_0(gss_const_OID, gss_mo_desc *, gss_buffer_t);
 int _gss_mo_get_ctx_as_string(gss_const_OID, gss_mo_desc *, gss_buffer_t);
+
+struct _gss_name_type {
+    gss_OID    gnt_name_type;
+    OM_uint32  (*gnt_parse)(OM_uint32 *, gss_const_OID, const gss_buffer_t,
+			    gss_const_OID, gss_name_t *);
+};
 
 struct _gss_oid_name_table {
     gss_OID oid;
@@ -570,25 +672,54 @@ struct _gss_oid_name_table {
 extern struct _gss_oid_name_table _gss_ont_mech[];
 extern struct _gss_oid_name_table _gss_ont_ma[];
 
+int
+_gss_mg_log_level(int level);
+
+void
+_gss_mg_log(int level, const char *fmt, ...)
+    HEIMDAL_PRINTF_ATTRIBUTE((printf, 2, 3));
+
+void
+_gss_mg_log_name(int level,
+		 struct _gss_name *name,
+		 gss_OID mech_type,
+		 const char *fmt, ...);
+
+void
+_gss_mg_log_cred(int level,
+		 struct _gss_cred *cred,
+		 const char *fmt, ...);
+
+
+void
+_gss_load_plugins(void);
+
+gss_iov_buffer_desc *
+_gss_mg_find_buffer(gss_iov_buffer_desc *iov,
+		    int iov_count,
+		    OM_uint32 type);
+
+OM_uint32
+_gss_mg_allocate_buffer(OM_uint32 *minor_status,
+			gss_iov_buffer_desc *buffer,
+			size_t size);
+
+OM_uint32
+gss_mg_set_error_string(gss_OID mech,
+                       OM_uint32 maj, OM_uint32 min,
+                       const char *fmt, ...);
+
+gss_cred_id_t
+_gss_mg_find_mech_cred(gss_const_cred_id_t cred_handle,
+		       gss_const_OID mech_type);
+
+#include <krb5.h>
+
 /*
- * Extended credentials acqusition API, not to be exported until
- * it or something equivalent has been standardised.
+ * Mechglue krb5 context for use by NegoEx. This is not shared with the
+ * krb5 GSS mechanism so we don't clobber its error state.
  */
-extern gss_OID_desc GSSAPI_LIB_VARIABLE __gss_c_cred_password_oid_desc;
-#define GSS_C_CRED_PASSWORD (&__gss_c_cred_password_oid_desc)
-
-extern gss_OID_desc GSSAPI_LIB_VARIABLE __gss_c_cred_certificate_oid_desc;
-#define GSS_C_CRED_CERTIFICATE (&__gss_c_cred_certificate_oid_desc)
-
-OM_uint32 _gss_acquire_cred_ext
-           (OM_uint32 * /*minor_status*/,
-            gss_const_name_t /*desired_name*/,
-            gss_const_OID /*credential_type*/,
-            const void * /*credential_data*/,
-            OM_uint32 /*time_req*/,
-            gss_const_OID /*desired_mech*/,
-            gss_cred_usage_t /*cred_usage*/,
-            gss_cred_id_t * /*output_cred_handle*/
-           );
+krb5_context
+_gss_mg_krb5_context(void);
 
 #endif /* GSSAPI_MECH_H */

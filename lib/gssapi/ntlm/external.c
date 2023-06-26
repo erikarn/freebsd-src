@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2006 Kungliga Tekniska Högskolan
+ * Copyright (c) 2006-2018 Kungliga Tekniska Högskolan
  * (Royal Institute of Technology, Stockholm, Sweden).
  * All rights reserved.
  *
@@ -65,7 +65,7 @@ static gssapi_mech_interface_desc ntlm_mech = {
     "ntlm",
     {10, rk_UNCONST("\x2b\x06\x01\x04\x01\x82\x37\x02\x02\x0a") },
     0,
-    _gss_ntlm_acquire_cred,
+    NULL,
     _gss_ntlm_release_cred,
     _gss_ntlm_init_sec_context,
     _gss_ntlm_accept_sec_context,
@@ -96,6 +96,7 @@ static gssapi_mech_interface_desc ntlm_mech = {
     _gss_ntlm_duplicate_name,
     _gss_ntlm_inquire_sec_context_by_oid,
     NULL,
+    _gss_ntlm_set_sec_context_option,
     NULL,
     NULL,
     NULL,
@@ -104,8 +105,8 @@ static gssapi_mech_interface_desc ntlm_mech = {
     NULL,
     NULL,
     NULL,
-    NULL,
-    NULL,
+    _gss_ntlm_acquire_cred_from,
+    NULL, /* gm_acquire_cred_impersonate_name */
     _gss_ntlm_iter_creds_f,
     _gss_ntlm_destroy_cred,
     NULL,
@@ -114,15 +115,22 @@ static gssapi_mech_interface_desc ntlm_mech = {
     NULL,
     ntlm_mo,
     sizeof(ntlm_mo) / sizeof(ntlm_mo[0]),
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
+    NULL, /* gm_localname */
+    NULL, /* gm_authorize_localname */
+    NULL, /* gm_display_name_ext */
+    NULL, /* gm_inquire_name */
+    NULL, /* gm_get_name_attribute */
+    NULL, /* gm_set_name_attribute */
+    NULL, /* gm_delete_name_attribute */
+    NULL, /* gm_export_name_composite */
+    NULL, /* gm_duplicate_cred */
+    NULL, /* gm_add_cred_from */
+    NULL, /* gm_store_cred_into */
+    NULL, /* gm_query_mechanism_info */
+    NULL, /* gm_query_meta_data */
+    NULL, /* gm_exchange_meta_data */
+    NULL, /* gm_store_cred_into2 */
+    NULL, /* gm_compat */
 };
 
 gssapi_mech_interface

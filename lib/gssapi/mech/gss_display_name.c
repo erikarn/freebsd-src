@@ -62,12 +62,12 @@ gss_display_name(OM_uint32 *minor_status,
 		memcpy(output_name_buffer->value, name->gn_value.value,
 		    output_name_buffer->length);
 		if (output_name_type)
-			*output_name_type = &name->gn_type;
+			*output_name_type = name->gn_type;
 
 		*minor_status = 0;
 		return (GSS_S_COMPLETE);
 	} else {
-		HEIM_SLIST_FOREACH(mn, &name->gn_mn, gmn_link) {
+		HEIM_TAILQ_FOREACH(mn, &name->gn_mn, gmn_link) {
 			major_status = mn->gmn_mech->gm_display_name(
 				minor_status, mn->gmn_name,
 				output_name_buffer,

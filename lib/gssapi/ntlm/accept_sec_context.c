@@ -50,14 +50,22 @@ _gss_ntlm_allocate_ctx(OM_uint32 *minor_status, ntlm_ctx *ctx)
 	return GSS_S_FAILURE;
 
     *ctx = calloc(1, sizeof(**ctx));
+    if (*ctx == NULL) {
+	*minor_status = ENOMEM;
+	return GSS_S_FAILURE;
+    }
 
     (*ctx)->server = ns_interface;
 
     maj_stat = (*(*ctx)->server->nsi_init)(minor_status, &(*ctx)->ictx);
-    if (maj_stat != GSS_S_COMPLETE)
-	return maj_stat;
+    if (maj_stat == GSS_S_COMPLETE)
+    	return GSS_S_COMPLETE;
 
-    return GSS_S_COMPLETE;
+    if (*ctx) 
+	free(*ctx);
+    (*ctx) = NULL;
+
+    return maj_stat;
 }
 
 /*
@@ -131,7 +139,7 @@ _gss_ntlm_accept_sec_context
 	if (ret) {
 	    _gss_ntlm_delete_sec_context(minor_status, context_handle, NULL);
 	    *minor_status = ret;
-	    return GSS_S_FAILURE;
+	    return GSS_S_DEFECTIVE_TOKEN;
 	}
 
 	if ((type1.flags & NTLM_NEG_UNICODE) == 0) {
@@ -163,12 +171,14 @@ _gss_ntlm_accept_sec_context
 	output_token->value = malloc(out.length);
 	if (output_token->value == NULL && out.length != 0) {
 	    OM_uint32 gunk;
+	    heim_ntlm_free_buf(&out);
 	    _gss_ntlm_delete_sec_context(&gunk, context_handle, NULL);
 	    *minor_status = ENOMEM;
 	    return GSS_S_FAILURE;
 	}
 	memcpy(output_token->value, out.data, out.length);
 	output_token->length = out.length;
+	heim_ntlm_free_buf(&out);
 
 	ctx->flags = retflags;
 
@@ -187,7 +197,7 @@ _gss_ntlm_accept_sec_context
 	if (ret) {
 	    _gss_ntlm_delete_sec_context(minor_status, context_handle, NULL);
 	    *minor_status = ret;
-	    return GSS_S_FAILURE;
+	    return GSS_S_DEFECTIVE_TOKEN;
 	}
 
 	maj_stat = (*ctx->server->nsi_type3)(minor_status,
@@ -229,28 +239,7 @@ _gss_ntlm_accept_sec_context
 	    return GSS_S_FAILURE;
 	}
 
-	if (session.length != 0) {
-
-	    ctx->status |= STATUS_SESSIONKEY;
-
-	    if (ctx->flags & NTLM_NEG_NTLM2_SESSION) {
-		_gss_ntlm_set_key(&ctx->u.v2.send, 1,
-				  (ctx->flags & NTLM_NEG_KEYEX),
-				  ctx->sessionkey.data,
-				  ctx->sessionkey.length);
-		_gss_ntlm_set_key(&ctx->u.v2.recv, 0,
-				  (ctx->flags & NTLM_NEG_KEYEX),
-				  ctx->sessionkey.data,
-				  ctx->sessionkey.length);
-	    } else {
-		RC4_set_key(&ctx->u.v1.crypto_send.key,
-			    ctx->sessionkey.length,
-			    ctx->sessionkey.data);
-		RC4_set_key(&ctx->u.v1.crypto_recv.key,
-			    ctx->sessionkey.length,
-			    ctx->sessionkey.data);
-	    }
-	}
+	_gss_ntlm_set_keys(ctx);
 
 	if (mech_type)
 	    *mech_type = GSS_NTLM_MECHANISM;

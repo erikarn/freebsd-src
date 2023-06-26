@@ -61,17 +61,20 @@ from_file(const char *fn, const char *target_domain,
 	if (d && target_domain != NULL && strcasecmp(target_domain, d) != 0)
 	    continue;
         *domainp = strdup(d);
-        if (*domainp == NULL)
+        if (*domainp == NULL) {
+	    fclose(f);
             return ENOMEM;
+	}
 	u = strtok_r(NULL, ":", &str);
 	p = strtok_r(NULL, ":", &str);
 	if (u == NULL || p == NULL)
 	    continue;
 
 	*usernamep = strdup(u);
-        if (*usernamep == NULL)
+        if (*usernamep == NULL) {
+	    fclose(f);
             return ENOMEM;
-
+	}
 	heim_ntlm_nt_key(p, key);
 
 	memset_s(buf, sizeof(buf), 0, sizeof(buf));
@@ -92,12 +95,9 @@ get_user_file(const ntlm_name target_name,
 
     *domainp = NULL;
 
-    if (issuid())
-	return ENOENT;
-
     domain = target_name != NULL ? target_name->domain : NULL;
 
-    fn = getenv("NTLM_USER_FILE");
+    fn = secure_getenv("NTLM_USER_FILE");
     if (fn == NULL)
 	return ENOENT;
     if (from_file(fn, domain, domainp, usernamep, key) == 0)
@@ -211,7 +211,8 @@ _gss_ntlm_get_user_cred(const ntlm_name target_name,
 	ret = get_user_ccache(target_name,
                               &cred->domain, &cred->username, &cred->key);
     if (ret) {
-	free(cred);
+	OM_uint32 tmp;
+	_gss_ntlm_release_cred(&tmp, (gss_cred_id_t *)&cred);
 	return ret;
     }
 
@@ -220,12 +221,13 @@ _gss_ntlm_get_user_cred(const ntlm_name target_name,
     return ret;
 }
 
-static int
-_gss_copy_cred(ntlm_cred from, ntlm_cred *to)
+int
+_gss_ntlm_copy_cred(ntlm_cred from, ntlm_cred *to)
 {
     *to = calloc(1, sizeof(**to));
     if (*to == NULL)
 	return ENOMEM;
+    (*to)->usage = from->usage;
     (*to)->username = strdup(from->username);
     if ((*to)->username == NULL) {
 	free(*to);
@@ -290,11 +292,12 @@ _gss_ntlm_init_sec_context
 	    *minor_status = EINVAL;
 	    return GSS_S_FAILURE;
 	}
+	ctx->status = STATUS_CLIENT;
 	*context_handle = (gss_ctx_id_t)ctx;
 
 	if (initiator_cred_handle != GSS_C_NO_CREDENTIAL) {
 	    ntlm_cred cred = (ntlm_cred)initiator_cred_handle;
-	    ret = _gss_copy_cred(cred, &ctx->client);
+	    ret = _gss_ntlm_copy_cred(cred, &ctx->client);
 	} else
 	    ret = _gss_ntlm_get_user_cred(name, &ctx->client);
 
@@ -350,7 +353,7 @@ _gss_ntlm_init_sec_context
 	if (ret) {
 	    _gss_ntlm_delete_sec_context(minor_status, context_handle, NULL);
 	    *minor_status = ret;
-	    return GSS_S_FAILURE;
+	    return GSS_S_DEFECTIVE_TOKEN;
 	}
 
 	ctx->flags = type2.flags;
@@ -378,6 +381,7 @@ _gss_ntlm_init_sec_context
 		if (RAND_bytes(nonce, sizeof(nonce)) != 1) {
 		    _gss_ntlm_delete_sec_context(minor_status,
 						 context_handle, NULL);
+		    heim_ntlm_free_type2(&type2);
 		    *minor_status = EINVAL;
 		    return GSS_S_FAILURE;
 		}
@@ -396,6 +400,7 @@ _gss_ntlm_init_sec_context
 	    }
 	    if (ret) {
 		_gss_ntlm_delete_sec_context(minor_status,context_handle,NULL);
+		heim_ntlm_free_type2(&type2);
 		*minor_status = ret;
 		return GSS_S_FAILURE;
 	    }
@@ -410,6 +415,7 @@ _gss_ntlm_init_sec_context
 		if (type3.ntlm.data)
 		    free(type3.ntlm.data);
 		_gss_ntlm_delete_sec_context(minor_status,context_handle,NULL);
+		heim_ntlm_free_type2(&type2);
 		*minor_status = ret;
 		return GSS_S_FAILURE;
 	    }
@@ -423,6 +429,7 @@ _gss_ntlm_init_sec_context
 		if (type3.ntlm.data)
 		    free(type3.ntlm.data);
 		_gss_ntlm_delete_sec_context(minor_status,context_handle,NULL);
+		heim_ntlm_free_type2(&type2);
 		*minor_status = ret;
 		return GSS_S_FAILURE;
 	    }
@@ -439,13 +446,15 @@ _gss_ntlm_init_sec_context
 	    if(ret) {
 		_gss_ntlm_delete_sec_context(minor_status,
 					     context_handle, NULL);
+		heim_ntlm_free_type2(&type2);
 		*minor_status = ret;
-		return GSS_S_FAILURE;
+		return GSS_S_DEFECTIVE_TOKEN;
 	    }
 
 	    if (ti.domainname && strcmp(ti.domainname, name->domain) != 0) {
 		_gss_ntlm_delete_sec_context(minor_status,
 					     context_handle, NULL);
+		heim_ntlm_free_type2(&type2);
 		*minor_status = EINVAL;
 		return GSS_S_FAILURE;
 	    }
@@ -461,6 +470,7 @@ _gss_ntlm_init_sec_context
 	    if (ret) {
 		_gss_ntlm_delete_sec_context(minor_status,
 					     context_handle, NULL);
+		heim_ntlm_free_type2(&type2);
 		*minor_status = ret;
 		return GSS_S_FAILURE;
 	    }
@@ -472,6 +482,7 @@ _gss_ntlm_init_sec_context
 	    if (ret) {
 		_gss_ntlm_delete_sec_context(minor_status,
 					     context_handle, NULL);
+		heim_ntlm_free_type2(&type2);
 		*minor_status = ret;
 		return GSS_S_FAILURE;
 	    }
@@ -484,29 +495,14 @@ _gss_ntlm_init_sec_context
 	    if (ret) {
 		_gss_ntlm_delete_sec_context(minor_status,
 					     context_handle, NULL);
+		heim_ntlm_free_type2(&type2);
 		*minor_status = ret;
 		return GSS_S_FAILURE;
 	    }
 	}
 
-	if (ctx->flags & NTLM_NEG_NTLM2_SESSION) {
-	    ctx->status |= STATUS_SESSIONKEY;
-	    _gss_ntlm_set_key(&ctx->u.v2.send, 0, (ctx->flags & NTLM_NEG_KEYEX),
-			      ctx->sessionkey.data,
-			      ctx->sessionkey.length);
-	    _gss_ntlm_set_key(&ctx->u.v2.recv, 1, (ctx->flags & NTLM_NEG_KEYEX),
-			      ctx->sessionkey.data,
-			      ctx->sessionkey.length);
-	} else {
-	    ctx->status |= STATUS_SESSIONKEY;
-	    RC4_set_key(&ctx->u.v1.crypto_recv.key,
-			ctx->sessionkey.length,
-			ctx->sessionkey.data);
-	    RC4_set_key(&ctx->u.v1.crypto_send.key,
-			ctx->sessionkey.length,
-			ctx->sessionkey.data);
-	}
 
+	_gss_ntlm_set_keys(ctx);
 
 
 	ret = heim_ntlm_encode_type3(&type3, &data, NULL);
@@ -517,6 +513,7 @@ _gss_ntlm_init_sec_context
 	    free(type3.ntlm.data);
 	if (ret) {
 	    _gss_ntlm_delete_sec_context(minor_status, context_handle, NULL);
+	    heim_ntlm_free_type2(&type2);
 	    *minor_status = ret;
 	    return GSS_S_FAILURE;
 	}
@@ -533,6 +530,7 @@ _gss_ntlm_init_sec_context
 
 	ctx->status |= STATUS_OPEN;
 
+	heim_ntlm_free_type2(&type2);
 	return GSS_S_COMPLETE;
     }
 }

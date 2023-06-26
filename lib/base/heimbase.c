@@ -34,13 +34,14 @@
  */
 
 #include "baselocl.h"
+#include "heimbase-atomics.h"
 #include <syslog.h>
 
-static heim_base_atomic_type tidglobal = HEIM_TID_USER;
+static heim_base_atomic(uint32_t) tidglobal = HEIM_TID_USER;
 
 struct heim_base {
-    heim_type_t isa;
-    heim_base_atomic_type ref_cnt;
+    heim_const_type_t isa;
+    heim_base_atomic(uint32_t) ref_cnt;
     HEIM_TAILQ_ENTRY(heim_base) autorel;
     heim_auto_release_t autorelpool;
     uintptr_t isaextra[3];
@@ -48,21 +49,24 @@ struct heim_base {
 
 /* specialized version of base */
 struct heim_base_mem {
-    heim_type_t isa;
-    heim_base_atomic_type ref_cnt;
+    heim_const_type_t isa;
+    heim_base_atomic(uint32_t) ref_cnt;
     HEIM_TAILQ_ENTRY(heim_base) autorel;
     heim_auto_release_t autorelpool;
     const char *name;
-    void (*dealloc)(void *);
+    void (HEIM_CALLCONV *dealloc)(void *);
     uintptr_t isaextra[1];
 };
 
 #define PTR2BASE(ptr) (((struct heim_base *)ptr) - 1)
 #define BASE2PTR(ptr) ((void *)(((struct heim_base *)ptr) + 1))
 
-#ifdef HEIM_BASE_NEED_ATOMIC_MUTEX
-HEIMDAL_MUTEX _heim_base_mutex = HEIMDAL_MUTEX_INITIALIZER;
-#endif
+HEIMDAL_MUTEX * HEIM_CALLCONV
+heim_base_mutex(void)
+{
+    static HEIMDAL_MUTEX _heim_base_mutex = HEIMDAL_MUTEX_INITIALIZER;
+    return &_heim_base_mutex;
+}
 
 /*
  * Auto release structure
@@ -83,8 +87,8 @@ struct heim_auto_release {
  * @return the same object as passed in
  */
 
-void *
-heim_retain(void *ptr)
+heim_object_t
+heim_retain(heim_object_t ptr)
 {
     struct heim_base *p;
 
@@ -92,10 +96,11 @@ heim_retain(void *ptr)
 	return ptr;
 
     p = PTR2BASE(ptr);
-    if (p->ref_cnt == heim_base_atomic_max)
+
+    if (heim_base_atomic_load(&p->ref_cnt) == UINT32_MAX)
 	return ptr;
 
-    if ((heim_base_atomic_inc(&p->ref_cnt) - 1) == 0)
+    if ((heim_base_atomic_inc_32(&p->ref_cnt) - 1) == 0)
 	heim_abort("resurection");
     return ptr;
 }
@@ -109,17 +114,18 @@ heim_retain(void *ptr)
 void
 heim_release(void *ptr)
 {
-    heim_base_atomic_type old;
+    heim_base_atomic(uint32_t) old;
     struct heim_base *p;
 
     if (ptr == NULL || heim_base_is_tagged(ptr))
 	return;
 
     p = PTR2BASE(ptr);
-    if (p->ref_cnt == heim_base_atomic_max)
+
+    if (heim_base_atomic_load(&p->ref_cnt) == UINT32_MAX)
 	return;
 
-    old = heim_base_atomic_dec(&p->ref_cnt) + 1;
+    old = heim_base_atomic_dec_32(&p->ref_cnt) + 1;
 
     if (old > 1)
 	return;
@@ -158,7 +164,7 @@ void
 _heim_make_permanent(heim_object_t ptr)
 {
     struct heim_base *p = PTR2BASE(ptr);
-    p->ref_cnt = heim_base_atomic_max;
+    heim_base_atomic_store(&p->ref_cnt, UINT32_MAX);
 }
 
 
@@ -176,7 +182,7 @@ static heim_type_t tagged_isa[9] = {
     NULL
 };
 
-heim_type_t
+heim_const_type_t
 _heim_get_isa(heim_object_t ptr)
 {
     struct heim_base *p;
@@ -200,7 +206,7 @@ _heim_get_isa(heim_object_t ptr)
 heim_tid_t
 heim_get_tid(heim_object_t ptr)
 {
-    heim_type_t isa = _heim_get_isa(ptr);
+    heim_const_type_t isa = _heim_get_isa(ptr);
     return isa->tid;
 }
 
@@ -212,13 +218,13 @@ heim_get_tid(heim_object_t ptr)
  * @return a hash value
  */
 
-unsigned long
+uintptr_t
 heim_get_hash(heim_object_t ptr)
 {
-    heim_type_t isa = _heim_get_isa(ptr);
+    heim_const_type_t isa = _heim_get_isa(ptr);
     if (isa->hash)
 	return isa->hash(ptr);
-    return (unsigned long)ptr;
+    return (uintptr_t)ptr;
 }
 
 /**
@@ -235,7 +241,7 @@ int
 heim_cmp(heim_object_t a, heim_object_t b)
 {
     heim_tid_t ta, tb;
-    heim_type_t isa;
+    heim_const_type_t isa;
 
     ta = heim_get_tid(a);
     tb = heim_get_tid(b);
@@ -255,7 +261,7 @@ heim_cmp(heim_object_t a, heim_object_t b)
  * Private - allocates an memory object
  */
 
-static void
+static void HEIM_CALLCONV
 memory_dealloc(void *ptr)
 {
     if (ptr) {
@@ -266,7 +272,7 @@ memory_dealloc(void *ptr)
     }
 }
 
-struct heim_type_data memory_object = {
+static const struct heim_type_data memory_object = {
     HEIM_TID_MEMORY,
     "memory-object",
     NULL,
@@ -319,7 +325,7 @@ _heim_create_type(const char *name,
     if (type == NULL)
 	return NULL;
 
-    type->tid = heim_base_atomic_inc(&tidglobal);
+    type->tid = heim_base_atomic_inc_32(&tidglobal);
     type->name = name;
     type->init = init;
     type->dealloc = dealloc;
@@ -332,7 +338,7 @@ _heim_create_type(const char *name,
 }
 
 heim_object_t
-_heim_alloc_object(heim_type_t type, size_t size)
+_heim_alloc_object(heim_const_type_t type, size_t size)
 {
     /* XXX should use posix_memalign */
     struct heim_base *p = calloc(1, size + sizeof(*p));
@@ -347,9 +353,10 @@ _heim_alloc_object(heim_type_t type, size_t size)
 void *
 _heim_get_isaextra(heim_object_t ptr, size_t idx)
 {
-    struct heim_base *p = (struct heim_base *)PTR2BASE(ptr);
+    struct heim_base *p;
 
     heim_assert(ptr != NULL, "internal error");
+    p = (struct heim_base *)PTR2BASE(ptr);
     if (p->isa == &memory_object)
 	return NULL;
     heim_assert(idx < 3, "invalid private heim_base extra data index");
@@ -500,6 +507,8 @@ heim_base_once_f(heim_base_once_t *once, void *ctx, void (*func)(void *))
 
 void
 heim_abort(const char *fmt, ...)
+    HEIMDAL_NORETURN_ATTRIBUTE
+    HEIMDAL_PRINTF_ATTRIBUTE((__printf__, 1, 2))
 {
     va_list ap;
     va_start(ap, fmt);
@@ -513,6 +522,8 @@ heim_abort(const char *fmt, ...)
 
 void
 heim_abortv(const char *fmt, va_list ap)
+    HEIMDAL_NORETURN_ATTRIBUTE
+    HEIMDAL_PRINTF_ATTRIBUTE((__printf__, 1, 0))
 {
     static char str[1024];
 
@@ -585,7 +596,7 @@ autorel_tls(void)
 
 }
 
-static void
+static void HEIM_CALLCONV
 autorel_dealloc(void *ptr)
 {
     heim_auto_release_t ar = ptr;
@@ -614,10 +625,10 @@ autorel_cmp(void *a, void *b)
     return (a == b);
 }
 
-static unsigned long
+static uintptr_t
 autorel_hash(void *ptr)
 {
-    return (unsigned long)ptr;
+    return (uintptr_t)ptr;
 }
 
 
@@ -764,9 +775,10 @@ heim_path_vget2(heim_object_t ptr, heim_object_t *parent, heim_object_t *key,
 	    next_node = heim_dict_get_value(node, path_element);
 	} else if (node_type == HEIM_TID_DB) {
 	    next_node = _heim_db_get_value(node, NULL, path_element, NULL);
-	} else if (node_type == HEIM_TID_ARRAY) {
+	} else {
 	    int idx = -1;
 
+            /* node_type == HEIM_TID_ARRAY */
 	    if (heim_get_tid(path_element) == HEIM_TID_NUMBER)
 		idx = heim_number_get_int(path_element);
 	    if (idx < 0) {
@@ -778,12 +790,6 @@ heim_path_vget2(heim_object_t ptr, heim_object_t *parent, heim_object_t *key,
 		return NULL;
 	    }
 	    next_node = heim_array_get_value(node, idx);
-	} else {
-	    if (error)
-		*error = heim_error_create(EINVAL,
-					   "heim_path_get() node in path "
-					   "not a container type");
-	    return NULL;
 	}
 	node = next_node;
     }
@@ -919,14 +925,14 @@ heim_path_vcreate(heim_object_t ptr, size_t size, heim_object_t leaf,
 	heim_abort("heim_path_vcreate() does not create root nodes");
 
     while (path_element != NULL) {
+	int idx = -1;
+
 	next_path_element = va_arg(ap, heim_object_t);
 	node_type = heim_get_tid(node);
 
 	if (node_type == HEIM_TID_DICT) {
 	    next_node = heim_dict_get_value(node, path_element);
 	} else if (node_type == HEIM_TID_ARRAY) {
-	    int idx = -1;
-
 	    if (heim_get_tid(path_element) == HEIM_TID_NUMBER)
 		idx = heim_number_get_int(path_element);
 	    if (idx < 0) {
@@ -937,10 +943,16 @@ heim_path_vcreate(heim_object_t ptr, size_t size, heim_object_t leaf,
 					       "and positive");
 		return EINVAL;
 	    }
-	    if (idx < heim_array_get_length(node))
+	    if (idx < heim_array_get_length(node)) {
 		next_node = heim_array_get_value(node, idx);
-	    else
+	    } else if (idx == heim_array_get_length(node)) {
 		next_node = NULL;
+	    } else {
+		if (error)
+		    *error = heim_error_create(EINVAL,
+				 "Index for array in path is too large");
+		return EINVAL;
+	    }
 	} else if (node_type == HEIM_TID_DB && next_path_element != NULL) {
 	    if (error)
 		*error = heim_error_create(EINVAL, "Interior node is a DB");
@@ -952,26 +964,31 @@ heim_path_vcreate(heim_object_t ptr, size_t size, heim_object_t leaf,
 
 	/* Create missing interior node */
 	if (next_node == NULL) {
-	    next_node = heim_dict_create(size); /* no arrays or DBs, just dicts */
-	    if (next_node == NULL) {
+	    heim_dict_t new_node;
+
+	    new_node = heim_dict_create(size); /* no arrays or DBs, just dicts */
+	    if (new_node == NULL) {
 		ret = ENOMEM;
 		goto err;
 	    }
 
 	    if (node_type == HEIM_TID_DICT) {
-		ret = heim_dict_set_value(node, path_element, next_node);
+		ret = heim_dict_set_value(node, path_element, new_node);
+		next_node = heim_dict_get_value(node, path_element);
 	    } else if (node_type == HEIM_TID_ARRAY &&
 		heim_number_get_int(path_element) <= heim_array_get_length(node)) {
 		ret = heim_array_insert_value(node,
 					      heim_number_get_int(path_element),
-					      next_node);
+					      new_node);
+		next_node = heim_array_get_value(node, idx);
 	    } else {
 		ret = EINVAL;
 		if (error)
 		    *error = heim_error_create(ret, "Node in path not a "
 					       "container");
 	    }
-	    heim_release(next_node);
+
+	    heim_release(new_node);
 	    if (ret)
 		goto err;
 	}
