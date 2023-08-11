@@ -1,4 +1,4 @@
-#       $NetBSD: t_tcpip.sh,v 1.18 2016/08/13 11:22:11 christos Exp $
+#       $NetBSD: t_tcpip.sh,v 1.23 2023/08/05 13:13:37 riastradh Exp $
 #
 # Copyright (c) 2011 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -25,8 +25,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 
-rumpnetlibs="-lrumpnet -lrumpnet_net -lrumpnet_netinet6 -lrumpnet_netinet"
-rumpnetsrv="rump_server $rumpnetlibs -lrumpdev"
+rumpnetsrv="rump_server -lrumpnet -lrumpnet_net -lrumpnet_netinet"
 export RUMP_SERVER=unix://csock
 
 atf_test_case http cleanup
@@ -38,7 +37,7 @@ http_head()
 http_body()
 {
 
-	atf_check -s exit:0 ${rumpnetsrv} ${RUMP_SERVER}
+	atf_check -s exit:0 ${rumpnetsrv} -lrumpnet_netinet6 ${RUMP_SERVER}
 
 	# start bozo in daemon mode
 	atf_check -s exit:0 env LD_PRELOAD=/usr/lib/librumphijack.so \
@@ -92,12 +91,14 @@ start_sshd() {
 	atf_check -s eq:0 -o empty -e empty chmod 400 ssh_host_key
 	atf_check -s eq:0 -o empty -e empty chmod 444 ssh_host_key.pub
 
+# Start in debugging mode so we don't have parent<->child privsep stuff
         env LD_PRELOAD=/usr/lib/librumphijack.so \
-	    /usr/sbin/sshd -e -f ./sshd_config
-	while [ ! -f sshd.pid ]; do
-		sleep 0.01
-	done
-	echo "SSH server started (pid $(cat sshd.pid))"
+	    /usr/sbin/sshd -d -e -E out -f ./sshd_config &
+#	while [ ! -f sshd.pid ]; do
+#		sleep 0.01
+#	done
+#	echo "SSH server started (pid $(cat sshd.pid))"
+	sleep 1
 
 	echo "Setting up SSH client configuration"
 	atf_check -s eq:0 -o empty -e empty \
@@ -123,8 +124,6 @@ ssh_head()
 
 ssh_body()
 {
-	atf_expect_fail "PR lib/50174"
-
 	atf_check -s exit:0 ${rumpnetsrv} ${RUMP_SERVER}
 	# make sure clients die after we nuke the server
 	export RUMPHIJACK_RETRYCONNECT='die'
@@ -138,7 +137,8 @@ ssh_body()
 	jot 11 12 | xargs mkdir
 	cd ..
 
-	atf_check -s exit:0 -o save:ssh.out				\
+	# ignore stderr for now, prints environment in debug mode
+	atf_check -s exit:0 -o save:ssh.out -e ignore			\
 	    env LD_PRELOAD=/usr/lib/librumphijack.so			\
 	    ssh -T -F ssh_config 127.0.0.1 env BLOCKSIZE=512		\
 	    ls -li $(pwd)/testdir
@@ -182,7 +182,8 @@ test_nfs()
 
 	atf_check -s exit:0 rump.sysctl -q -w kern.module.autoload=1
 
-	atf_check -s exit:0 -e ignore mount_ffs /dk /rump/export
+	atf_check -s exit:0 -e ignore env RUMPHIJACK='path=/rump,blanket=/dk' \
+		mount_ffs /dk /rump/export
 	atf_check -s exit:0 -x "echo ${magicstr} > /rump/export/im_alive"
 
 	# start rpcbind.  we want /var/run/rpcbind.sock
@@ -206,7 +207,7 @@ test_nfs()
 	unset LD_PRELOAD
 
 	# at least the kernel server is easier
-	atf_check -s exit:0 rump_server -lrumpvfs -lrumpnet -lrumpdev	\
+	atf_check -s exit:0 rump_server -lrumpvfs -lrumpnet		\
 	    -lrumpnet_net -lrumpnet_netinet -lrumpnet_shmif -lrumpfs_nfs\
 	    ${RUMP_SERVER}
 
@@ -228,12 +229,17 @@ atf_test_case nfs cleanup
 nfs_head()
 {
         atf_set "descr" "Test hijacked nfsd and mount_nfs"
+
+	# XXX Can probably make this work as nonroot, but need to
+	# convince rpcbind running in the rump kernel server that it
+	# has uid 0.
+	atf_set "require.user" "root"
 }
 
 nfs_body()
 {
 	test_nfs -lrumpvfs -lrumpdev -lrumpnet -lrumpnet_net		\
-	    -lrumpnet_netinet -lrumpnet_local -lrumpnet_shmif -lrumpdev	\
+	    -lrumpnet_netinet -lrumpnet_local -lrumpnet_shmif		\
 	    -lrumpdev_disk -lrumpfs_ffs -lrumpfs_nfs -lrumpfs_nfsserver	\
 	    -d key=/dk,hostpath=ffs.img,size=host
 }
@@ -249,13 +255,19 @@ atf_test_case nfs_autoload cleanup
 nfs_autoload_head()
 {
         atf_set "descr" "Test hijacked nfsd with autoload from /stand"
+
+	# XXX Can probably make this work as nonroot, but need to
+	# convince rpcbind running in the rump kernel server that it
+	# has uid 0.
+	atf_set "require.user" "root"
 }
 
 nfs_autoload_body()
 {
 	[ `uname -m` = "i386" ] || atf_skip "test currently valid only on i386"
+	atf_expect_fail "PR lib/54184"
 	test_nfs -lrumpvfs -lrumpdev -lrumpnet -lrumpnet_net		\
-	    -lrumpnet_netinet -lrumpnet_local -lrumpnet_shmif -lrumpdev	\
+	    -lrumpnet_netinet -lrumpnet_local -lrumpnet_shmif		\
 	    -lrumpdev_disk -d key=/dk,hostpath=ffs.img,size=host
 }
 

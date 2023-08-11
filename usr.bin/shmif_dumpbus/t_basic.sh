@@ -1,4 +1,4 @@
-#	$NetBSD: t_basic.sh,v 1.8 2013/04/07 19:14:03 christos Exp $
+#	$NetBSD: t_basic.sh,v 1.10 2020/04/02 00:00:16 christos Exp $
 #
 # Copyright (c) 2011 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -24,6 +24,8 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 #
+
+export PATH=/bin:/usr/bin:/sbin:/usr/sbin
 
 unpack_file()
 {
@@ -74,7 +76,7 @@ pcap()
 #
 #	Used to fail for "PR bin/44721"
 	atf_check -s exit:0 -o file:d_pcap.out -e ignore \
-	    tcpdump -tt -r pcap
+	    tcpdump -tt -n -r pcap
 }
 
 atf_init_test_cases()

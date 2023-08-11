@@ -1,4 +1,4 @@
-#	$NetBSD: t_change.sh,v 1.9 2016/11/07 05:25:37 ozaki-r Exp $
+#	$NetBSD: t_change.sh,v 1.14 2019/05/13 17:55:09 bad Exp $
 #
 # Copyright (c) 2011 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -26,11 +26,18 @@
 #
 
 netserver=\
-"rump_server -lrumpdev -lrumpnet -lrumpnet_net \
-	-lrumpnet_netinet -lrumpnet_shmif"
+"rump_server -lrumpnet -lrumpnet_net -lrumpnet_netinet -lrumpnet_shmif"
 export RUMP_SERVER=unix://commsock
 
 DEBUG=${DEBUG:-false}
+
+route_cleanup_common()
+{
+
+	$DEBUG && dump_kernel_stats unix://commsock
+	$DEBUG && extract_rump_server_core
+	env RUMP_SERVER=unix://commsock rump.halt
+}
 
 atf_test_case route_change_reject2blackhole cleanup
 route_change_reject2blackhole_head()
@@ -58,7 +65,7 @@ route_change_reject2blackhole_body()
 route_change_reject2blackhole_cleanup()
 {
 
-	env RUMP_SERVER=unix://commsock rump.halt
+	route_cleanup_common
 }
 
 atf_test_case route_change_gateway cleanup
@@ -91,7 +98,7 @@ route_change_gateway_body()
 route_change_gateway_cleanup()
 {
 
-	env RUMP_SERVER=unix://commsock rump.halt
+	route_cleanup_common
 }
 
 atf_test_case route_change_ifa cleanup
@@ -125,7 +132,7 @@ destination: 192.168.0.0
     gateway: 10.0.0.1
  local addr: 10.0.0.10
   interface: shmif0
-      flags: <UP,GATEWAY,DONE,STATIC>
+      flags: 0x843<UP,GATEWAY,DONE,STATIC>
  recvpipe  sendpipe  ssthresh  rtt,msec    rttvar  hopcount      mtu     expire
 	EOF
 	rump.route -n get 192.168.0.1 > ./output
@@ -144,7 +151,7 @@ destination: 192.168.0.0
     gateway: 10.0.0.1
  local addr: 10.0.0.11
   interface: shmif0
-      flags: <UP,GATEWAY,DONE,STATIC>
+      flags: 0x843<UP,GATEWAY,DONE,STATIC>
  recvpipe  sendpipe  ssthresh  rtt,msec    rttvar  hopcount      mtu     expire
 	EOF
 	rump.route -n get 192.168.0.1 > ./output
@@ -156,7 +163,7 @@ destination: 192.168.0.0
 route_change_ifa_cleanup()
 {
 
-	env RUMP_SERVER=unix://commsock rump.halt
+	route_cleanup_common
 }
 
 atf_test_case route_change_ifp cleanup
@@ -192,7 +199,7 @@ destination: 192.168.0.0
     gateway: 10.0.0.1
  local addr: 10.0.0.10
   interface: shmif0
-      flags: <UP,GATEWAY,DONE,STATIC>
+      flags: 0x843<UP,GATEWAY,DONE,STATIC>
  recvpipe  sendpipe  ssthresh  rtt,msec    rttvar  hopcount      mtu     expire
 	EOF
 	rump.route -n get 192.168.0.1 > ./output
@@ -211,7 +218,7 @@ destination: 192.168.0.0
     gateway: 10.0.0.1
  local addr: 10.0.0.11
   interface: shmif1
-      flags: <UP,GATEWAY,DONE,STATIC>
+      flags: 0x843<UP,GATEWAY,DONE,STATIC>
  recvpipe  sendpipe  ssthresh  rtt,msec    rttvar  hopcount      mtu     expire
 	EOF
 	rump.route -n get 192.168.0.1 > ./output
@@ -223,7 +230,7 @@ destination: 192.168.0.0
 route_change_ifp_cleanup()
 {
 
-	env RUMP_SERVER=unix://commsock rump.halt
+	route_cleanup_common
 }
 
 atf_test_case route_change_ifp_ifa cleanup
@@ -259,7 +266,7 @@ destination: 192.168.0.0
     gateway: 10.0.0.1
  local addr: 10.0.0.10
   interface: shmif0
-      flags: <UP,GATEWAY,DONE,STATIC>
+      flags: 0x843<UP,GATEWAY,DONE,STATIC>
  recvpipe  sendpipe  ssthresh  rtt,msec    rttvar  hopcount      mtu     expire
 	EOF
 	rump.route -n get 192.168.0.1 > ./output
@@ -278,7 +285,7 @@ destination: 192.168.0.0
     gateway: 10.0.0.1
  local addr: 10.0.0.11
   interface: shmif1
-      flags: <UP,GATEWAY,DONE,STATIC>
+      flags: 0x843<UP,GATEWAY,DONE,STATIC>
  recvpipe  sendpipe  ssthresh  rtt,msec    rttvar  hopcount      mtu     expire
 	EOF
 	rump.route -n get 192.168.0.1 > ./output
@@ -290,7 +297,78 @@ destination: 192.168.0.0
 route_change_ifp_ifa_cleanup()
 {
 
-	env RUMP_SERVER=unix://commsock rump.halt
+	route_cleanup_common
+}
+
+atf_test_case route_change_flags cleanup
+route_change_flags_head()
+{
+
+	atf_set "descr" "Change flags of a route"
+	atf_set "require.progs" "rump_server"
+}
+
+route_change_flags_body()
+{
+
+	atf_check -s exit:0 ${netserver} ${RUMP_SERVER}
+
+	atf_check -s exit:0 rump.ifconfig shmif0 create
+	atf_check -s exit:0 rump.ifconfig shmif0 linkstr bus
+	atf_check -s exit:0 rump.ifconfig shmif0 10.0.0.10/24 up
+
+	check_route 10.0.0/24 '' UC shmif0
+	# Set reject flag
+	atf_check -s exit:0 -o ignore \
+	    rump.route change -net 10.0.0.0/24 -reject
+	check_route 10.0.0/24 '' URCS shmif0
+	# Clear reject flag
+	atf_check -s exit:0 -o ignore \
+	    rump.route change -net 10.0.0.0/24 -noreject
+	check_route 10.0.0/24 '' UCS shmif0
+
+	# TODO other flags
+}
+
+route_change_flags_cleanup()
+{
+
+	route_cleanup_common
+}
+
+atf_test_case route_change_default_flags cleanup
+route_change_default_flags_head()
+{
+
+	atf_set "descr" "Change flags of the default route"
+	atf_set "require.progs" "rump_server"
+}
+
+route_change_default_flags_body()
+{
+
+	atf_check -s exit:0 ${netserver} ${RUMP_SERVER}
+
+	atf_check -s exit:0 rump.ifconfig shmif0 create
+	atf_check -s exit:0 rump.ifconfig shmif0 linkstr bus
+	atf_check -s exit:0 rump.ifconfig shmif0 10.0.0.10/24 up
+
+	atf_check -s exit:0 -o ignore rump.route add default 10.0.0.1
+	check_route default 10.0.0.1 UGS shmif0
+	# Set reject flag
+	atf_check -s exit:0 -o ignore rump.route change default -reject
+	check_route default 10.0.0.1 UGRS shmif0
+	# Clear reject flag
+	atf_check -s exit:0 -o ignore rump.route change default -noreject
+	check_route default 10.0.0.1 UGS shmif0
+
+	# TODO other flags
+}
+
+route_change_default_flags_cleanup()
+{
+
+	route_cleanup_common
 }
 
 atf_init_test_cases()
@@ -301,4 +379,6 @@ atf_init_test_cases()
 	atf_add_test_case route_change_ifa
 	atf_add_test_case route_change_ifp
 	atf_add_test_case route_change_ifp_ifa
+	atf_add_test_case route_change_flags
+	atf_add_test_case route_change_default_flags
 }

@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.12 2016/08/13 11:20:00 christos Exp $
+#	$NetBSD: Makefile,v 1.17 2023/06/03 09:09:15 lukem Exp $
 #
 
 NOMAN=	1
@@ -22,10 +22,10 @@ LDADD+=	-lrumpnet -lrumpnet_net -lrumpnet_local
 LDADD+= -lrumpnet_netinet6 -lrumpnet_netinet			# TCP/IP
 LDADD+=	-lrumpfs_nfsserver -lrumpfs_nfs				# NFS support
 LDADD+=	-lrumpdev_disk -lrumpdev				# disk devices
-LDADD+=	-lrumpfs_ffs -lrumpvfs					# FFS
+LDADD+=	-lrumpfs_ffs 						# FFS
 LDADD+=	-lrumpnet_shmif						# shmif
-LDADD+=	-lrumpnet -lrumpkern_sysproxy -lrump -lrumpuser		# base
-LDADD+=	-lpthread -lutil
+LDADD+=	-lrumpnet -lrumpkern_sysproxy ${LIBRUMPBASE}		# base
+LDADD+=	-lutil
 
 CPPFLAGS+=	-DDEBUG -DMOUNT_NOMAIN -D_REENTRANT
 CPPFLAGS+=	-DRUMP_SYS_NETWORKING -DMOUNTD_RUMP -DNFSD_RUMP
@@ -45,7 +45,15 @@ CPPFLAGS+=	-I${LIBRPCDIR} -DPORTMAP -DLIBWRAP -DRPCBIND_RUMP
 # CPPFLAGS+=	-DRPCBIND_DEBUG
 # CPPFLAGS+=	-DSVC_RUN_DEBUG
 
-LDADD+= -lwrap -lutil
-DPADD+= ${LIBWRAP} ${LIBUTIL}
+LDADD+= -lwrap -lblocklist -lutil
+DPADD+= ${LIBWRAP} ${LIBBLOCKLIST} ${LIBUTIL}
+
+SANITIZER_RENAME_SYMBOL+=	__getmntinfo13
+
+COPTS.pmap_svc.c+=	${CC_WNO_CAST_FUNCTION_TYPE}
+COPTS.rpcb_svc.c+=	${CC_WNO_CAST_FUNCTION_TYPE}
+COPTS.rpcb_svc_4.c+=	${CC_WNO_CAST_FUNCTION_TYPE}
+COPTS.rpcb_svc_com.c+=	${CC_WNO_CAST_FUNCTION_TYPE}
+COPTS.mountd.c+=	${CC_WNO_CAST_FUNCTION_TYPE}
 
 .include <bsd.test.mk>

@@ -1,4 +1,4 @@
-/*	$NetBSD: fstest_lfs.c,v 1.5 2015/08/30 18:27:26 dholland Exp $	*/
+/*	$NetBSD: fstest_lfs.c,v 1.8 2020/06/17 00:16:21 kamil Exp $	*/
 
 /*-
  * Copyright (c) 2010 The NetBSD Foundation, Inc.
@@ -43,6 +43,7 @@
 #include <ufs/ufs/ufsmount.h>
 
 #include <rump/rump.h>
+#include <rump/rump_syscallshotgun.h>
 #include <rump/rump_syscalls.h>
 
 #include "h_fsmacros.h"
@@ -125,8 +126,10 @@ cleaner(void *arg)
 {
 	char thepath[MAXPATHLEN];
 	struct lfstestargs *args = arg;
-	const char *the_argv[7];
+	const char *the_argv[9];
 	char buf[64];
+
+	rump_pub_lwproc_newlwp(rump_sys_getpid());
 
 	/* this inspired by the cleaner code.  fixme */
 	sprintf(thepath, "/dev/r%s", args->ta_devpath+5);
@@ -137,14 +140,18 @@ cleaner(void *arg)
 	the_argv[1] = "-D"; /* don't fork() & detach */
 	the_argv[2] = "-S";
 	the_argv[3] = buf;
-	the_argv[4] = args->ta_mntpath;
-	the_argv[5] = NULL;
+	the_argv[4] = "-J";
+	the_argv[5] = thepath;
+	the_argv[6] = args->ta_mntpath;
+	the_argv[7] = NULL;
 
 	/* xxxatf */
 	optind = 1;
 	opterr = 1;
 
-	lfs_cleaner_main(5, __UNCONST(the_argv));
+	lfs_cleaner_main(7, __UNCONST(the_argv));
+
+	rump_pub_lwproc_releaselwp();
 
 	return NULL;
 }

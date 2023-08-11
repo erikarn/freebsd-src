@@ -1,8 +1,8 @@
-# $NetBSD: t_rquotad.sh,v 1.5 2016/08/10 23:25:39 kre Exp $ 
+# $NetBSD: t_rquotad.sh,v 1.10 2023/05/28 08:17:00 hannken Exp $
 #
 #  Copyright (c) 2011 Manuel Bouyer
 #  All rights reserved.
-# 
+#
 #  Redistribution and use in source and binary forms, with or without
 #  modification, are permitted provided that the following conditions
 #  are met:
@@ -11,7 +11,7 @@
 #  2. Redistributions in binary form must reproduce the above copyright
 #     notice, this list of conditions and the following disclaimer in the
 #     documentation and/or other materials provided with the distribution.
-# 
+#
 #  THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS
 #  ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
 #  TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
@@ -24,10 +24,42 @@
 #  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 #  POSSIBILITY OF SUCH DAMAGE.
 #
+
+# Like test_case_root() in ../ffs/ffs_common.sh, plus cleanup of both
+# rump servers.
+
+test_case_rquotad()
+{
+	local name="${1}"; shift
+	local check_function="${1}"; shift
+	local descr="${1}"; shift
+
+	atf_test_case "${name}" cleanup
+
+	eval "${name}_head() { \
+		atf_set "descr" "${descr}"
+		atf_set "require.user" "root"
+		atf_set "timeout" "360"
+	}"
+	eval "${name}_body() { \
+		RUMP_SOCKETS_LIST=\${RUMP_SOCKET}; \
+		export RUMP_SERVER=unix://\${RUMP_SOCKET}; \
+		${check_function} " "${@}" "; \
+	}"
+	# Can't use RUMP_SOCKETS_LIST here because it is not set in
+        # the cleanup shell.
+	eval "${name}_cleanup() { \
+		for s in \${RUMP_SOCKET} clientsock; do \
+			RUMP_SERVER=unix://\${s} rump.halt 2>/dev/null || true; \
+		done; \
+	}"
+	tests="${tests} ${name}"
+}
+
 for e in le be; do
   for v in 1; do
     for q in "user" "group" "both"; do
-	test_case_root get_nfs_${e}_${v}_${q} get_nfs_quota \
+	test_case_rquotad get_nfs_${e}_${v}_${q} get_nfs_quota \
 		"get NFS quota with ${q} enabled" ${e} ${v} ${q}
     done
   done
@@ -54,7 +86,7 @@ get_nfs_quota()
 		;;
 	esac
 
-#start a a nfs server
+#start a nfs server
 
 	atf_check -s exit:0 rump_server -lrumpvfs -lrumpdev -lrumpnet   \
 	    -lrumpnet_net -lrumpnet_netinet -lrumpnet_netinet6          \
@@ -78,7 +110,8 @@ get_nfs_quota()
 	/bin/echo "/export -noresvport -noresvmnt 10.1.1.100" | \
 		dd of=/rump/etc/exports 2> /dev/null
 
-	atf_check -s exit:0 -e ignore mount_ffs /dk /rump/export
+	atf_check -s exit:0 -e ignore env RUMPHIJACK='path=/rump,blanket=/dk' \
+		mount_ffs /dk /rump/export
 
 #set a quota limit (and check that we can read it back)
 	for q in ${expect} ; do
@@ -114,7 +147,7 @@ get_nfs_quota()
 	unset RUMPHIJACK
 	unset LD_PRELOAD
 
-	atf_check -s exit:0 rump_server -lrumpvfs -lrumpnet -lrumpdev   \
+	atf_check -s exit:0 rump_server -lrumpvfs -lrumpnet		\
             -lrumpnet_net -lrumpnet_netinet -lrumpnet_shmif -lrumpfs_nfs\
             ${RUMP_SERVER}
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: t_modctl.c,v 1.12 2012/08/20 08:07:52 martin Exp $	*/
+/*	$NetBSD: t_modctl.c,v 1.16 2020/02/22 19:54:34 pgoyette Exp $	*/
 /*
  * Copyright (c) 2008 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -27,7 +27,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: t_modctl.c,v 1.12 2012/08/20 08:07:52 martin Exp $");
+__KERNEL_RCSID(0, "$NetBSD: t_modctl.c,v 1.16 2020/02/22 19:54:34 pgoyette Exp $");
 
 #include <sys/module.h>
 #include <sys/sysctl.h>
@@ -39,18 +39,20 @@ __KERNEL_RCSID(0, "$NetBSD: t_modctl.c,v 1.12 2012/08/20 08:07:52 martin Exp $")
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/evcnt.h>
 
 #include <prop/proplib.h>
 
 #include <atf-c.h>
 
-enum presence_check { both_checks, stat_check, sysctl_check };
+enum presence_check { all_checks, stat_check, sysctl_check, evcnt_check };
 
 static void	check_permission(void);
 static bool	get_modstat_info(const char *, modstat_t *);
 static bool	get_sysctl(const char *, void *buf, const size_t);
 static bool	k_helper_is_present_stat(void);
 static bool	k_helper_is_present_sysctl(void);
+static bool	k_helper_is_present_evcnt(void);
 static bool	k_helper_is_present(enum presence_check);
 static int	load(prop_dictionary_t, bool, const char *, ...);
 static int	unload(const char *, bool);
@@ -61,7 +63,7 @@ static void	unload_cleanup(const char *);
 /* --------------------------------------------------------------------- */
 
 /*
- * A function checking wether we are allowed to load modules currently
+ * A function checking whether we are allowed to load modules currently
  * (either the kernel is not modular, or securelevel may prevent it)
  */
 static void
@@ -84,11 +86,13 @@ get_modstat_info(const char *name, modstat_t *msdest)
 {
 	bool found;
 	size_t len;
+	int count;
 	struct iovec iov;
 	modstat_t *ms;
+	modstat_t m;
 
 	check_permission();
-	for (len = 4096; ;) {
+	for (len = 8192; ;) {
 		iov.iov_base = malloc(len);
 		iov.iov_len = len;
 
@@ -107,14 +111,18 @@ get_modstat_info(const char *name, modstat_t *msdest)
 	}
 
 	found = false;
-	len = iov.iov_len / sizeof(modstat_t);
-	for (ms = (modstat_t *)iov.iov_base; len != 0 && !found;
-	    ms++, len--) {
-		if (strcmp(ms->ms_name, name) == 0) {
+	count = *(int *)iov.iov_base;
+	ms = (modstat_t *)((char *)iov.iov_base + sizeof(int));
+	while ( count ) {
+		memcpy(&m, ms, sizeof(m));
+		if (strcmp(m.ms_name, name) == 0) {
 			if (msdest != NULL)
-				*msdest = *ms;
+				memcpy(msdest, &m, sizeof(*msdest));
 			found = true;
+			break;
 		}
+		ms++;
+		count--;
 	}
 
 	free(iov.iov_base);
@@ -167,6 +175,56 @@ k_helper_is_present_sysctl(void)
 
 /*
  * Returns a boolean indicating if the k_helper module was loaded
+ * successfully.  This implementation uses the module's evcnt
+ * to do the check.
+ */
+static bool
+k_helper_is_present_evcnt(void)
+{
+	const int mib[4] = {CTL_KERN, KERN_EVCNT, EVCNT_TYPE_ANY,
+	    KERN_EVCNT_COUNT_ANY };
+	int error;
+	size_t newlen, buflen = 0;
+	void *buf0, *buf = NULL;
+	const struct evcnt_sysctl *evs, *last_evs;
+
+	for (;;) {
+		if (buflen)
+			buf = malloc(buflen);
+		error = sysctl(mib, __arraycount(mib), buf, &newlen, NULL, 0);
+		if (error) {
+			if (buf)
+				free(buf);
+			return false;
+		}
+		if (newlen <= buflen) {
+			buflen = newlen;
+			break;
+		}
+		if (buf)
+			free(buf);
+		buflen = newlen;
+	}
+	evs = buf0 = buf;
+	last_evs = (void *)((char *)buf + buflen);
+	buflen /= sizeof(uint64_t);
+	while (evs < last_evs
+	    && buflen >= sizeof(*evs)/sizeof(uint64_t)
+	    && buflen >= evs->ev_len) {
+		if ( strncmp(evs->ev_strings, "k_helper", evs->ev_grouplen)
+		    == 0) {
+			free(buf);
+			return true;
+		}
+		buflen -= evs->ev_len;
+		evs = (const void *)((const uint64_t *)evs + evs->ev_len);
+	}
+	free(buf);
+	return false;
+}
+
+/*
+ * Returns a boolean indicating if the k_helper module was loaded
  * successfully.  The 'how' parameter specifies the implementation to
  * use to do the check.
  */
@@ -176,9 +234,10 @@ k_helper_is_present(enum presence_check how)
 	bool found;
 
 	switch (how) {
-	case both_checks:
+	case all_checks:
 		found = k_helper_is_present_stat();
 		ATF_CHECK(k_helper_is_present_sysctl() == found);
+		ATF_CHECK(k_helper_is_present_evcnt() == found);
 		break;
 
 	case stat_check:
@@ -187,6 +246,10 @@ k_helper_is_present(enum presence_check how)
 
 	case sysctl_check:
 		found = k_helper_is_present_sysctl();
+		break;
+
+	case evcnt_check:
+		found = k_helper_is_present_evcnt();
 		break;
 
 	default:
@@ -429,11 +492,11 @@ ATF_TC_HEAD(cmd_stat, tc)
 }
 ATF_TC_BODY(cmd_stat, tc)
 {
-	ATF_CHECK(!k_helper_is_present(both_checks));
+	ATF_CHECK(!k_helper_is_present(all_checks));
 
 	load(NULL, true, "%s/k_helper/k_helper.kmod",
 	    atf_tc_get_config_var(tc, "srcdir"));
-	ATF_CHECK(k_helper_is_present(both_checks));
+	ATF_CHECK(k_helper_is_present(all_checks));
 	{
 		modstat_t ms;
 		ATF_CHECK(get_modstat_info("k_helper", &ms));
@@ -444,7 +507,7 @@ ATF_TC_BODY(cmd_stat, tc)
 	}
 	unload("k_helper", true);
 
-	ATF_CHECK(!k_helper_is_present(both_checks));
+	ATF_CHECK(!k_helper_is_present(all_checks));
 }
 ATF_TC_CLEANUP(cmd_stat, tc)
 {

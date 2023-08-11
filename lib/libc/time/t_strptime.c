@@ -1,4 +1,4 @@
-/* $NetBSD: t_strptime.c,v 1.12 2015/10/31 02:25:11 christos Exp $ */
+/* $NetBSD: t_strptime.c,v 1.15 2018/06/03 08:48:37 maya Exp $ */
 
 /*-
  * Copyright (c) 1998, 2008 The NetBSD Foundation, Inc.
@@ -32,7 +32,7 @@
 #include <sys/cdefs.h>
 __COPYRIGHT("@(#) Copyright (c) 2008\
  The NetBSD Foundation, inc. All rights reserved.");
-__RCSID("$NetBSD: t_strptime.c,v 1.12 2015/10/31 02:25:11 christos Exp $");
+__RCSID("$NetBSD: t_strptime.c,v 1.15 2018/06/03 08:48:37 maya Exp $");
 
 #include <time.h>
 #include <stdlib.h>
@@ -51,12 +51,12 @@ h_pass(const char *buf, const char *fmt, int len,
 	exp = buf + len;
 	ret = strptime(buf, fmt, &tm);
 
-	ATF_REQUIRE_MSG(ret == exp,
+	ATF_CHECK_MSG(ret == exp,
 	    "strptime(\"%s\", \"%s\", tm): incorrect return code: "
 	    "expected: %p, got: %p", buf, fmt, exp, ret);
 
 #define H_REQUIRE_FIELD(field)						\
-		ATF_REQUIRE_MSG(tm.field == field,			\
+		ATF_CHECK_MSG(tm.field == field,			\
 		    "strptime(\"%s\", \"%s\", tm): incorrect %s: "	\
 		    "expected: %d, but got: %d", buf, fmt,		\
 		    ___STRING(field), field, tm.field)
@@ -78,7 +78,7 @@ h_fail(const char *buf, const char *fmt)
 {
 	struct tm tm = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, NULL };
 
-	ATF_REQUIRE_MSG(strptime(buf, fmt, &tm) == NULL, "strptime(\"%s\", "
+	ATF_CHECK_MSG(strptime(buf, fmt, &tm) == NULL, "strptime(\"%s\", "
 	    "\"%s\", &tm) should fail, but it didn't", buf, fmt);
 }
 
@@ -126,28 +126,28 @@ static struct {
 	{ "+1060",			-1 },
 	{ "-1060",			-1 },
 
-	{ "A",				-3600 },
-	{ "B",				-7200 },
-	{ "C",				-10800 },
-	{ "D",				-14400 },
-	{ "E",				-18000 },
-	{ "F",				-21600 },
-	{ "G",				-25200 },
-	{ "H",				-28800 },
-	{ "I",				-32400 },
-	{ "L",				-39600 },
-	{ "M",				-43200 },
-	{ "N",				3600 },
-	{ "O",				7200 },
-	{ "P",				10800 },
-	{ "Q",				14400 },
-	{ "R",				18000 },
-	{ "T",				25200 },
-	{ "U",				28800 },
-	{ "V",				32400 },
-	{ "W",				36000 },
-	{ "X",				39600 },
-	{ "Y",				43200 },
+	{ "A",				3600 },
+	{ "B",				7200 },
+	{ "C",				10800 },
+	{ "D",				14400 },
+	{ "E",				18000 },
+	{ "F",				21600 },
+	{ "G",				25200 },
+	{ "H",				28800 },
+	{ "I",				32400 },
+	{ "L",				39600 },
+	{ "M",				43200 },
+	{ "N",				-3600 },
+	{ "O",				-7200 },
+	{ "P",				-10800 },
+	{ "Q",				-14400 },
+	{ "R",				-18000 },
+	{ "T",				-25200 },
+	{ "U",				-28800 },
+	{ "V",				-32400 },
+	{ "W",				-36000 },
+	{ "X",				-39600 },
+	{ "Y",				-43200 },
 
 	{ "J",				-2 },
 
@@ -182,7 +182,7 @@ ztest1(const char *name, const char *fmt, long value)
 		break;
 	}
 
-	ATF_REQUIRE_MSG(tm.tm_gmtoff == value,
+	ATF_CHECK_MSG(tm.tm_gmtoff == value,
 	    "strptime(\"%s\", \"%s\", &tm): "
 	    "expected: tm.tm_gmtoff=%ld, got: tm.tm_gmtoff=%ld",
 	    name, fmt, value, tm.tm_gmtoff);
@@ -438,7 +438,7 @@ ATF_TC_HEAD(Zone, tc)
 
 ATF_TC_BODY(Zone, tc)
 {
-	ztest("%z");
+	ztest("%Z");
 }
 
 ATF_TP_ADD_TCS(tp)

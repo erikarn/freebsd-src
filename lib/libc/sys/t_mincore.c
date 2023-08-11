@@ -1,4 +1,4 @@
-/* $NetBSD: t_mincore.c,v 1.10 2017/01/14 20:51:13 christos Exp $ */
+/* $NetBSD: t_mincore.c,v 1.15 2020/02/24 12:20:30 rin Exp $ */
 
 /*-
  * Copyright (c) 2011 The NetBSD Foundation, Inc.
@@ -59,7 +59,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: t_mincore.c,v 1.10 2017/01/14 20:51:13 christos Exp $");
+__RCSID("$NetBSD: t_mincore.c,v 1.15 2020/02/24 12:20:30 rin Exp $");
 
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -69,6 +69,7 @@ __RCSID("$NetBSD: t_mincore.c,v 1.10 2017/01/14 20:51:13 christos Exp $");
 #include <errno.h>
 #include <fcntl.h>
 #include <kvm.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -78,6 +79,12 @@ __RCSID("$NetBSD: t_mincore.c,v 1.10 2017/01/14 20:51:13 christos Exp $");
 static long		page = 0;
 static const char	path[] = "mincore";
 static size_t		check_residency(void *, size_t);
+
+#define ATF_REQUIRE_STRERROR(a) ATF_REQUIRE_MSG(a, " (%s)", strerror(errno))
+
+#ifndef PROT_MPROTECT
+# define PROT_MPROTECT(flags)	(0)
+#endif
 
 static size_t
 check_residency(void *addr, size_t npgs)
@@ -96,7 +103,7 @@ check_residency(void *addr, size_t npgs)
 			resident++;
 
 #if 0
-		(void)fprintf(stderr, "page 0x%p is %sresident\n",
+		(void)fprintf(stderr, "page %p is %sresident\n",
 		    (char *)addr + (i * page), vec[i] ? "" : "not ");
 #endif
 	}
@@ -229,7 +236,8 @@ ATF_TC_BODY(mincore_resid, tc)
 		    resident, npgs);
 
 	addr2 = mmap(NULL, npgs * page, PROT_READ, MAP_ANON, -1, (off_t)0);
-	addr3 = mmap(NULL, npgs * page, PROT_NONE, MAP_ANON, -1, (off_t)0);
+	addr3 = mmap(NULL, npgs * page, PROT_MPROTECT(PROT_READ) | PROT_NONE,
+	    MAP_ANON, -1, (off_t)0);
 
 	if (addr2 == MAP_FAILED || addr3 == MAP_FAILED)
 		atf_tc_skip("could not mmap more anonymous test pages with "
@@ -238,18 +246,18 @@ ATF_TC_BODY(mincore_resid, tc)
 
 	ATF_REQUIRE(check_residency(addr2, npgs) == npgs);
 	ATF_REQUIRE(check_residency(addr3, npgs) == 0);
-	ATF_REQUIRE(mprotect(addr3, npgs * page, PROT_READ) == 0);
+	ATF_REQUIRE_STRERROR(mprotect(addr3, npgs * page, PROT_READ) == 0);
 	ATF_REQUIRE(check_residency(addr, npgs) == npgs);
 	ATF_REQUIRE(check_residency(addr2, npgs) == npgs);
 
 	(void)munlockall();
 
-	ATF_REQUIRE(madvise(addr2, npgs * page, MADV_FREE) == 0);
+	ATF_REQUIRE_STRERROR(madvise(addr2, npgs * page, MADV_FREE) == 0);
 	ATF_REQUIRE(check_residency(addr2, npgs) == 0);
 
 	(void)memset(addr, 0, npgs * page);
 
-	ATF_REQUIRE(madvise(addr, npgs * page, MADV_FREE) == 0);
+	ATF_REQUIRE_STRERROR(madvise(addr, npgs * page, MADV_FREE) == 0);
 	ATF_REQUIRE(check_residency(addr, npgs) == 0);
 
 	(void)munmap(addr, npgs * page);
@@ -264,6 +272,33 @@ ATF_TC_CLEANUP(mincore_resid, tc)
 	(void)unlink(path);
 }
 
+static volatile int sig_caught;
+
+static void
+sigsys_handler(int signum)
+{
+
+	sig_caught = signum;
+}
+
+static int
+no_kernel_sysvmsg(void)
+{
+	int id;
+	void (*osig)(int);
+
+	sig_caught = 0;
+	osig = signal(SIGSYS, sigsys_handler);
+	id = shmget(IPC_PRIVATE, page, IPC_CREAT | S_IRUSR | S_IWUSR);
+	if (sig_caught || id == -1)
+		return 1;
+
+	(void)shmctl(id, IPC_RMID, 0);
+	(void)signal(SIGSYS, osig);
+
+	return 0;
+}
+
 ATF_TC(mincore_shmseg);
 ATF_TC_HEAD(mincore_shmseg, tc)
 {
@@ -276,20 +311,23 @@ ATF_TC_BODY(mincore_shmseg, tc)
 	void *addr = NULL;
 	int shmid;
 
+	if (no_kernel_sysvmsg())
+		atf_tc_skip("No SYSVSHM in kernel");
+
 	shmid = shmget(IPC_PRIVATE, npgs * page,
 	    IPC_CREAT | S_IRUSR | S_IWUSR);
 
-	ATF_REQUIRE(shmid != -1);
+	ATF_REQUIRE_STRERROR(shmid != -1);
 
 	addr = shmat(shmid, NULL, 0);
 
-	ATF_REQUIRE(addr != NULL);
+	ATF_REQUIRE_STRERROR(addr != NULL);
 	ATF_REQUIRE(check_residency(addr, npgs) == 0);
 
 	(void)memset(addr, 0xff, npgs * page);
 
 	ATF_REQUIRE(check_residency(addr, npgs) == npgs);
-	ATF_REQUIRE(madvise(addr, npgs * page, MADV_FREE) == 0);
+	ATF_REQUIRE_STRERROR(madvise(addr, npgs * page, MADV_FREE) == 0);
 
 	/*
 	 * NOTE!  Even though we have MADV_FREE'd the range,
@@ -308,8 +346,8 @@ ATF_TC_BODY(mincore_shmseg, tc)
 
 	(void)fprintf(stderr, "%zu pages still resident\n", npgs);
 
-	ATF_REQUIRE(shmdt(addr) == 0);
-	ATF_REQUIRE(shmctl(shmid, IPC_RMID, NULL) == 0);
+	ATF_REQUIRE_STRERROR(shmdt(addr) == 0);
+	ATF_REQUIRE_STRERROR(shmctl(shmid, IPC_RMID, NULL) == 0);
 }
 
 ATF_TP_ADD_TCS(tp)

@@ -1,4 +1,4 @@
-/*	$NetBSD: t_fopen.c,v 1.3 2011/09/14 14:34:37 martin Exp $ */
+/*	$NetBSD: t_fopen.c,v 1.8 2020/02/21 22:14:59 kamil Exp $ */
 
 /*-
  * Copyright (c) 2011 The NetBSD Foundation, Inc.
@@ -29,14 +29,18 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: t_fopen.c,v 1.3 2011/09/14 14:34:37 martin Exp $");
+__RCSID("$NetBSD: t_fopen.c,v 1.8 2020/02/21 22:14:59 kamil Exp $");
 
+#include <sys/param.h>
+#include <sys/types.h>
+#include <sys/module.h>
 #include <atf-c.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <paths.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -58,7 +62,7 @@ ATF_TC_BODY(fdopen_close, tc)
 	 * used to fdopen(3) a stream is
 	 * closed once the stream is closed.
 	 */
-	fd = open(path, O_RDWR | O_CREAT);
+	fd = open(path, O_RDWR | O_CREAT, 0600);
 
 	ATF_REQUIRE(fd >= 0);
 
@@ -85,7 +89,7 @@ ATF_TC_BODY(fdopen_err, tc)
 {
 	int fd;
 
-	fd = open(path, O_RDONLY | O_CREAT);
+	fd = open(path, O_RDONLY | O_CREAT, 0600);
 	ATF_REQUIRE(fd >= 0);
 
 	errno = 0;
@@ -126,7 +130,7 @@ ATF_TC_BODY(fdopen_seek, tc)
 	 * with the stream corresponds with the offset
 	 * set earlier for the file descriptor.
 	 */
-	fd = open(path, O_RDWR | O_CREAT);
+	fd = open(path, O_RDWR | O_CREAT, 0600);
 
 	ATF_REQUIRE(fd >= 0);
 	ATF_REQUIRE(write(fd, "garbage", 7) == 7);
@@ -253,9 +257,10 @@ ATF_TC_BODY(fopen_mode, tc)
 
 	static const char *mode[] = {
 		"r", "r+", "w", "w+", "a", "a+",
-		"rb", "r+b", "wb", "w+b", "ab", "a+b"
-		"re", "r+e", "we", "w+e", "ae", "a+e"
-		"rf", "r+f", "wf", "w+f", "af", "a+f"
+		"rb", "r+b", "wb", "w+b", "ab", "a+b",
+		"re", "r+e", "we", "w+e", "ae", "a+e",
+		"rf", "r+f", "wf", "w+f", "af", "a+f",
+		"rl", "r+l", "wl", "w+l", "al", "a+l"
 	};
 
 	f = fopen(path, "w+");
@@ -284,6 +289,116 @@ ATF_TC_BODY(fopen_mode, tc)
 ATF_TC_CLEANUP(fopen_mode, tc)
 {
 	(void)unlink(path);
+}
+
+static void
+check_kernel_modular(void)
+{
+	int err;
+
+	err = modctl(MODCTL_EXISTS, 0);
+	if (err == 0) return;
+	if (errno == ENOSYS)
+		atf_tc_skip("Kernel does not have 'options MODULAR'.");
+	if (errno == EPERM)
+		return; /* Module loading can be administratively forbidden */
+	ATF_REQUIRE_EQ_MSG(errno, 0, "unexpected error %d from "
+	    "modctl(MODCTL_EXISTS, 0)", errno);
+}
+
+static bool
+is_module_present(const char *name)
+{
+	bool found;
+	size_t len;
+	int count;
+	struct iovec iov;
+	modstat_t *ms;
+	modstat_t m;
+
+	for (len = 8192; ;) {
+		iov.iov_base = malloc(len);
+		iov.iov_len = len;
+
+		errno = 0;
+
+		if (modctl(MODCTL_STAT, &iov) != 0) {
+			fprintf(stderr, "modctl(MODCTL_STAT) failed: %s\n",
+			    strerror(errno));
+			atf_tc_fail("Failed to query module status");
+		}
+		if (len >= iov.iov_len)
+			break;
+		free(iov.iov_base);
+		len = iov.iov_len;
+	}
+
+	found = false;
+	count = *(int *)iov.iov_base;
+	ms = (modstat_t *)((char *)iov.iov_base + sizeof(int));
+	while (count > 0) {
+		memcpy(&m, ms, sizeof(m));
+		if (strcmp(m.ms_name, name) == 0) {
+			found = true;
+			break;
+		}
+		ms++;
+		count--;
+	}
+
+	free(iov.iov_base);
+
+	return found;
+}
+
+#define COMPAT10_MODNAME "compat_10"
+
+ATF_TC(fopen_nullptr);
+ATF_TC_HEAD(fopen_nullptr, tc)
+{
+	atf_tc_set_md_var(tc, "descr", "Test fopen(3) with NULL path (without "
+	    COMPAT10_MODNAME ")");
+}
+
+ATF_TC_BODY(fopen_nullptr, tc)
+{
+	bool compat10;
+
+	check_kernel_modular();
+	compat10 = is_module_present(COMPAT10_MODNAME);
+
+	if (compat10)
+		atf_tc_skip("Kernel does have the " COMPAT10_MODNAME
+		    " module loaded into the kernel");
+
+	/* NULL shall trigger error */
+	ATF_REQUIRE_ERRNO(EFAULT, fopen(NULL, "r") == NULL);
+}
+
+ATF_TC(fopen_nullptr_compat10);
+ATF_TC_HEAD(fopen_nullptr_compat10, tc)
+{
+	atf_tc_set_md_var(tc, "descr", "Test fopen(3) with NULL path (with "
+	    COMPAT10_MODNAME ")");
+}
+
+ATF_TC_BODY(fopen_nullptr_compat10, tc)
+{
+	FILE *fp;
+	bool compat10;
+
+	check_kernel_modular();
+	compat10 = is_module_present(COMPAT10_MODNAME);
+
+	if (!compat10)
+		atf_tc_skip("Kernel does not have the " COMPAT10_MODNAME
+		    " module loaded into the kernel");
+
+	/* NULL is translated to "." and shall success */
+	fp = fopen(NULL, "r");
+
+	ATF_REQUIRE(fp != NULL);
+	ATF_REQUIRE(fclose(fp) == 0);
 }
 
 ATF_TC(fopen_perm);
@@ -327,13 +442,61 @@ ATF_TC_BODY(fopen_regular, tc)
 			if (f == NULL && errno == EFTYPE)
 				continue;
 
-			if (f != NULL)
+			if (f != NULL) {
 				(void)fclose(f);
 
-			atf_tc_fail_nonfatal("opened %s as %s",
-			    devs[i], mode[j]);
+				atf_tc_fail_nonfatal("opened %s as %s",
+				    devs[i], mode[j]);
+			} else {
+				atf_tc_fail_nonfatal(
+				    "err %d (%s) from open of %s as %s", errno,
+				    strerror(errno), devs[i], mode[j]);
+			}
 		}
 	}
+}
+
+static char linkpath[] = "symlink";
+
+ATF_TC_WITH_CLEANUP(fopen_symlink);
+ATF_TC_HEAD(fopen_symlink, tc)
+{
+	atf_tc_set_md_var(tc, "descr", "Test fopen(3) with 'l' mode");
+}
+
+ATF_TC_BODY(fopen_symlink, tc)
+{
+	static const char *mode[] = { "rl", "r+l", "wl", "w+l", "al", "a+l" };
+	size_t j;
+	FILE *f;
+
+	ATF_CHECK(symlink("/dev/null", linkpath) != -1);
+
+	for (j = 0; j < __arraycount(mode); j++) {
+
+		errno = 0;
+		f = fopen(linkpath, mode[j]);
+
+		if (f == NULL && errno == EFTYPE)
+			continue;
+
+		if (f != NULL) {
+			(void)fclose(f);
+
+			atf_tc_fail_nonfatal("opened %s as %s", linkpath,
+			    mode[j]);
+		} else {
+			atf_tc_fail_nonfatal(
+			    "err %d (%s) from open of %s as %s", errno,
+			    strerror(errno), linkpath, mode[j]);
+		}
+	}
+	ATF_REQUIRE(unlink(linkpath) == 0);
+}
+
+ATF_TC_CLEANUP(fopen_symlink, tc)
+{
+	(void)unlink(linkpath);
 }
 
 ATF_TC_WITH_CLEANUP(fopen_seek);
@@ -433,8 +596,11 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, fopen_append);
 	ATF_TP_ADD_TC(tp, fopen_err);
 	ATF_TP_ADD_TC(tp, fopen_mode);
+	ATF_TP_ADD_TC(tp, fopen_nullptr);
+	ATF_TP_ADD_TC(tp, fopen_nullptr_compat10);
 	ATF_TP_ADD_TC(tp, fopen_perm);
 	ATF_TP_ADD_TC(tp, fopen_regular);
+	ATF_TP_ADD_TC(tp, fopen_symlink);
 	ATF_TP_ADD_TC(tp, fopen_seek);
 	ATF_TP_ADD_TC(tp, freopen_std);
 

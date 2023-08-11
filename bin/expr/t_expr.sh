@@ -1,4 +1,4 @@
-# $NetBSD: t_expr.sh,v 1.3 2012/03/27 07:23:06 jruoho Exp $
+# $NetBSD: t_expr.sh,v 1.7 2023/05/02 00:11:27 gutteridge Exp $
 #
 # Copyright (c) 2007 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -37,7 +37,7 @@ test_expr() {
 }
 
 atf_test_case lang
-lang_ops_head() {
+lang_head() {
 	atf_set "descr" "Test that expr(1) works with non-C LANG (PR bin/2486)"
 }
 lang_body() {
@@ -76,6 +76,29 @@ overflow_body() {
 	          "expr: integer overflow or underflow occurred for operation '4611686018427387904 * 2'"
 	test_expr '4611686018427387904 \* 3' \
 	          "expr: integer overflow or underflow occurred for operation '4611686018427387904 * 3'"
+	test_expr '-9223372036854775808 % -1' \
+	          "expr: integer overflow or underflow occurred for operation '-9223372036854775808 % -1'"
+	test_expr '-9223372036854775808 / -1' \
+	          "expr: integer overflow or underflow occurred for operation '-9223372036854775808 / -1'"
+	test_expr '0 + -9223372036854775808' '-9223372036854775808'
+	test_expr '0 + -1' '-1'
+	test_expr '0 + 0' '0'
+	test_expr '0 + 1' '1'
+	test_expr '0 + 9223372036854775807' '9223372036854775807'
+	test_expr '-9223372036854775808 + 0' '-9223372036854775808'
+	test_expr '9223372036854775807 + 0' '9223372036854775807'
+	test_expr '4611686018427387904 \* -1' '-4611686018427387904'
+	test_expr '4611686018427387904 \* -2' '-9223372036854775808'
+	test_expr '4611686018427387904 \* -3' \
+	          "expr: integer overflow or underflow occurred for operation '4611686018427387904 * -3'"
+	test_expr '-4611686018427387904 \* -1' '4611686018427387904'
+	test_expr '-4611686018427387904 \* -2' \
+	          "expr: integer overflow or underflow occurred for operation '-4611686018427387904 * -2'"
+	test_expr '-4611686018427387904 \* -3' \
+	          "expr: integer overflow or underflow occurred for operation '-4611686018427387904 * -3'"
+	test_expr '0 \* -1' '0'
+	test_expr '0 \* 0' '0'
+	test_expr '0 \* 1' '0'
 }
 
 atf_test_case gtkmm

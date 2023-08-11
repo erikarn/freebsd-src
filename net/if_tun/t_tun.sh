@@ -1,4 +1,4 @@
-#	$NetBSD: t_tun.sh,v 1.4 2016/11/07 05:25:37 ozaki-r Exp $
+#	$NetBSD: t_tun.sh,v 1.6 2019/05/13 17:55:09 bad Exp $
 #
 # Copyright (c) 2016 Internet Initiative Japan Inc.
 # All rights reserved.
@@ -26,7 +26,7 @@
 #
 
 RUMP_FLAGS="-lrumpnet -lrumpnet_net -lrumpnet_netinet -lrumpnet_netinet6"
-RUMP_FLAGS="$RUMP_FLAGS -lrumpnet_shmif -lrumpnet_tun -lrumpdev"
+RUMP_FLAGS="$RUMP_FLAGS -lrumpnet_shmif -lrumpnet_tun"
 
 BUS=bus
 SOCK_LOCAL=unix://commsock1
@@ -49,12 +49,7 @@ tun_create_destroy_body()
 
 	atf_check -s exit:0 rump_server ${RUMP_FLAGS} ${SOCK_LOCAL}
 
-	export RUMP_SERVER=${SOCK_LOCAL}
-
-	atf_check -s exit:0 rump.ifconfig tun0 create
-	atf_check -s exit:0 rump.ifconfig tun0 up
-	atf_check -s exit:0 rump.ifconfig tun0 down
-	atf_check -s exit:0 rump.ifconfig tun0 destroy
+	test_create_destroy_common $SOCK_LOCAL tun0
 }
 
 tun_create_destroy_cleanup()

@@ -1,4 +1,4 @@
-#	$NetBSD: t_ipv6address.sh,v 1.12 2016/12/14 02:50:42 ozaki-r Exp $
+#	$NetBSD: t_ipv6address.sh,v 1.16 2019/08/26 07:41:50 ozaki-r Exp $
 #
 # Copyright (c) 2015 Internet Initiative Japan Inc.
 # All rights reserved.
@@ -25,7 +25,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 SERVER="rump_server -lrumpnet -lrumpnet_net -lrumpnet_netinet"
-SERVER="${SERVER} -lrumpnet_shmif -lrumpdev"
+SERVER="${SERVER} -lrumpnet_shmif"
 SERVER6="${SERVER} -lrumpnet_netinet6"
 
 SOCKSRC=unix://commsock1
@@ -41,7 +41,7 @@ BUS2=bus2
 BUSSRC=bus_src
 BUSDST=bus_dst
 
-DEBUG=${DEBUG:-true}
+DEBUG=${DEBUG:-false}
 TIMEOUT=3
 
 atf_test_case linklocal cleanup
@@ -247,6 +247,7 @@ linklocal_body()
 	local dst_if0_lladdr=`get_linklocal_addr ${SOCKDST} shmif0`
 	local fwd_if0_lladdr=`get_linklocal_addr ${SOCKFWD} shmif0`
 	local fwd_if1_lladdr=`get_linklocal_addr ${SOCKFWD} shmif1`
+	local lladdr=fe80::2
 
 	export RUMP_SERVER=${SOCKSRC}
 	$DEBUG && rump.ifconfig
@@ -325,6 +326,19 @@ linklocal_body()
 	atf_check -s ignore -o not-empty -e ignore \
 	    -x "shmif_dumpbus -p - ${BUS2} | tcpdump -r - -n -p icmp6"
 
+	# Setting a link-local address with a scope ID
+	# XXX need $HIJACKING for some reasons
+	cleanup_bus
+	export RUMP_SERVER=${SOCKFWD}
+	$DEBUG && rump.ifconfig shmif0
+	atf_check -s exit:0 $HIJACKING rump.ifconfig shmif0 inet6 $lladdr%shmif0/64
+	export RUMP_SERVER=${SOCKSRC}
+	atf_check -s exit:0 -o match:"0.0% packet loss" rump.ping6 -c 1 \
+	    -X $TIMEOUT -n $lladdr
+	export RUMP_SERVER=${SOCKDST}
+	atf_check -s not-exit:0 -o match:"100.0% packet loss" rump.ping6 -c 1 \
+	    -X $TIMEOUT -n $lladdr
+
 	unset RUMP_SERVER
 
 }
@@ -364,7 +378,7 @@ linklocal_ops_body()
 	    rump.route get -inet6 ${src_if0_lladdr}
 
 	# ndp
-	atf_check -s exit:0 -o match:"${src_if0_lladdr}" \
+	atf_check -s not-exit:0 -o ignore -e match:'no entry' \
 	    rump.ndp -n ${src_if0_lladdr}%shmif0
 
 	# ndp without an interface name (zone index)

@@ -1,4 +1,4 @@
-# $NetBSD: t_option.sh,v 1.3 2016/03/08 14:19:28 christos Exp $
+# $NetBSD: t_option.sh,v 1.9 2022/05/22 11:27:36 andvar Exp $
 #
 # Copyright (c) 2016 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -77,7 +77,7 @@ test_option_on_off()
 			# if we do not do this, -x tracing splatters stderr
 			# for some shells, -v does as well (is that correct?)
 			case "${opt}" in
-			(*[xv]*)	exec 2>/dev/null;;
+			(*[xXv]*)	exec 2>/dev/null;;
 			esac
 
 			o="$-"
@@ -258,7 +258,7 @@ set_f_body() {
 
 atf_test_case set_n
 set_n_head() {
-	atf_set "descr" "Tests that 'set -n' supresses command execution " \
+	atf_set "descr" "Tests that 'set -n' suppresses command execution " \
 	                "and that it behaves as defined by the standard"
 }
 set_n_body() {
@@ -356,6 +356,8 @@ set_u_head() {
 set_u_body() {
 	test_option_on_off u
 
+	unset ENV	# make sure there is nothing there to cause problems
+
 	# first make sure it is OK to unset an unset variable
 	atf_check -s exit:0 -o match:OK -e empty ${TEST_SH} -ce \
 		'unset _UNSET_VARIABLE_; echo OK'
@@ -452,7 +454,8 @@ set_v_body() {
 			-o not-match:for -o not-match:do -o not-match:done \
 			-e match:printf -e match:111 -e not-match:111222 \
 			-e match:for -e match:do -e match:done \
-				${TEST_SH}
+				${TEST_SH} ||
+		atf_fail '111 222 333 test failure'
 }
 
 atf_test_case set_x
@@ -494,6 +497,329 @@ set_x_body() {
 			-e not-match:for -e not-match:do -e not-match:done \
 		${TEST_SH} -ec \
 	   'set -x; for i in 111 222 333; do printf "%s" $i; done; echo; exit 0'
+}
+
+atf_test_case set_X
+set_X_head() {
+	atf_set "descr" "Tests that 'set -X' turns on command exec logging " \
+	                "and that it enables set -x and retains a single fd"
+}
+set_X_body() {
+
+	# First we need to verify that $TEST_SH supports -X
+	test_optional_on_off X					||
+		atf_skip "$TEST_SH does not support -X"
+
+	# and that the -X it implements is the -X we expect
+	$TEST_SH -c 'exec 2>/dev/null;
+		set +x; set -X;
+		case "$-" in (*x*) exit 0;; esac;
+		exit 1'						||
+			atf_skip "$TEST_SH supports -X but not 'the' -X"
+
+	# Above has already tested that set -X => set -x
+	# Now test that set +X => set +x
+	# and that set -x and set +x do not affect -X
+
+	atf_check -s exit:0 -o empty -e ignore ${TEST_SH} -c \
+		'set -x; set +X; case "$-" in (*x*) echo FAIL; exit 1;; esac'
+
+	atf_check -s exit:0 -o empty -e ignore ${TEST_SH} -c \
+		'set -X; set +x;
+		 case "$-" in (*x*) echo FAIL; exit 1;; esac
+		 case "$-" in (*X*) exit 0;; esac; echo ERROR; exit 2'
+
+	atf_check -s exit:0 -o empty -e ignore ${TEST_SH} -c \
+		'set -X; set +x; set -x;
+		 case "$-" in (*x*X*|*X*x*) exit 0;; esac; echo ERROR; exit 2'
+
+	atf_check -s exit:0 -o empty -e ignore ${TEST_SH} -c \
+		'set +X; set -x;
+		 case "$-" in (*X*) echo FAIL; exit 1;; esac
+		 case "$-" in (*x*) exit 0;; esac; echo ERROR; exit 2'
+
+	atf_check -s exit:0 -o empty -e ignore ${TEST_SH} -c \
+		'set +X; set -x; set +x;
+		 case "$-" in (*[xX]*) echo FAULT; exit 3;; esac'
+
+	# The following just verify regular tracing using -X instead of -x
+	# These are the same tests as the -x test (set_x) performs.
+
+	# check that cmd output appears after -X is enabled
+	atf_check -s exit:0 \
+			-o match:OKOK -o not-match:echo -o not-match:printf \
+			-e not-match:printf -e match:OK -e match:echo \
+		${TEST_SH} -ec 'printf "%s" OK; set -X; echo OK; exit 0'
+
+	# and that it stops again afer -X is disabled
+	atf_check -s exit:0 \
+			-o match:OKOK -o not-match:echo -o not-match:printf \
+			-e match:printf -e match:OK -e not-match:echo \
+	    ${TEST_SH} -ec 'set -X; printf "%s" OK; set +X; echo OK; exit 0'
+
+	# also check that PS4 is output correctly
+	atf_check -s exit:0 \
+			-o match:OK -o not-match:echo \
+			-e match:OK -e match:Run:echo \
+		${TEST_SH} -ec 'PS4=Run:; set -X; echo OK; exit 0'
+
+	# end copies of -x tests ...
+
+	# now check that we can move stderr around without affecting -X output
+
+	atf_check -s exit:0 \
+			-o match:OKOK -o not-match:echo -o not-match:printf \
+			-e match:printf -e match:OK -e match:echo \
+		${TEST_SH} -ecX 'printf "%s" OK; exec 2>/dev/null; echo OK'
+	atf_check -s exit:0 \
+			-o match:OKOK -o not-match:echo -o not-match:printf \
+			-e match:printf -e match:OK -e match:echo \
+		${TEST_SH} -ecX 'printf "%s" OK; exec 2>&1; echo OK'
+	atf_check -s exit:0 \
+			-o match:OKOK -o not-match:echo -o not-match:printf \
+			-e match:printf -e match:OK -e match:echo \
+		${TEST_SH} -ecX 'printf "%s" OK; exec 2>&-; echo OK'
+
+	# and that we can put tracing on an external file, leaving stderr alone
+
+	atf_require_prog grep
+
+	rm -f X-trace
+	atf_check -s exit:0 \
+			-o match:OKOK -o not-match:echo -o not-match:printf \
+			-e empty \
+		${TEST_SH} -ec 'PS4=; set -X 2>X-trace; printf "%s" OK; echo OK'
+	test -s X-trace || atf_fail "T1: Failed to create trace output file"
+	grep >/dev/null 2>&1 'printf.*%s.*OK' X-trace ||
+		atf_fail "T1: -X tracing missing printf"
+	grep >/dev/null 2>&1 'echo.*OK' X-trace ||
+		atf_fail "T1: -X tracing missing echo"
+
+	rm -f X-trace
+	atf_check -s exit:0 \
+			-o match:OKOK -o not-match:echo -o not-match:printf \
+			-e empty \
+		${TEST_SH} -ec \
+			'PS4=; set -X 2>X-trace;
+			printf "%s" OK;
+			exec 2>/dev/null;
+			echo OK'
+	test -s X-trace || atf_fail "T2: Failed to create trace output file"
+	grep >/dev/null 2>&1 'printf.*%s.*OK' X-trace ||
+		atf_fail "T2: -X tracing missing printf"
+	grep >/dev/null 2>&1 'exec' X-trace ||
+		atf_fail "T2: -X tracing missing exec"
+	grep >/dev/null 2>&1 'echo.*OK' X-trace ||
+		atf_fail "T2: -X tracing missing echo after stderr redirect"
+
+	rm -f X-trace
+	atf_check -s exit:0 \
+			-o match:OKOK -o not-match:echo -o not-match:printf \
+			-e empty \
+		${TEST_SH} -ec \
+			'PS4=; set -X 2>X-trace;
+			printf "%s" OK;
+			set -X 2>/dev/null;
+			echo OK'
+	test -s X-trace || atf_fail "T3: Failed to create trace output file"
+	grep >/dev/null 2>&1 'printf.*%s.*OK' X-trace ||
+		atf_fail "T3: -X tracing missing printf"
+	grep >/dev/null 2>&1 'set.*-X' X-trace ||
+		atf_fail "T3: -X tracing missing set -X"
+	grep >/dev/null 2>&1 'echo.*OK' X-trace &&
+		atf_fail "T3: -X tracing included echo after set -X redirect"
+
+	rm -f X-trace
+	atf_check -s exit:0 \
+			-o match:OKOK -o not-match:echo -o not-match:printf \
+			-e match:echo -e match:OK -e not-match:printf \
+		${TEST_SH} -ec \
+			'PS4=; set -X 2>X-trace;
+			printf "%s" OK;
+			set -X;
+			echo OK'
+	test -s X-trace || atf_fail "T4: Failed to create trace output file"
+	grep >/dev/null 2>&1 'printf.*%s.*OK' X-trace ||
+		atf_fail "T4: -X tracing missing printf"
+	grep >/dev/null 2>&1 'set.*-X' X-trace ||
+		atf_fail "T4: -X tracing missing set -X"
+	grep >/dev/null 2>&1 'echo.*OK' X-trace &&
+		atf_fail "T4: -X tracing included echo after set -X redirect"
+
+	# Now check that -X and the tracing files work properly wrt functions
+
+	# a shell that supports -X should support "local -" ... but verify
+
+	( ${TEST_SH} -c 'fn() { local - || exit 2; set -f; }; set +f; fn;
+		case "$-" in ("*f*") exit 1;; esac; exit 0' ) 2>/dev/null ||
+			atf_skip "-X function test: 'local -' unsupported"
+
+	rm -f X-trace X-trace-fn
+	atf_check -s exit:0 \
+			-o match:OKhelloGOOD		\
+			-e empty			\
+		${TEST_SH} -c '
+			say() {
+				printf "%s" "$*"
+			}
+			funct() {
+				local -
+
+				set -X 2>X-trace-fn
+				say hello
+			}
+
+			set -X 2>X-trace
+
+			printf OK
+			funct
+			echo GOOD
+		'
+	test -s X-trace || atf_fail "T5: Failed to create trace output file"
+	test -s X-trace-fn || atf_fail "T5: Failed to create fn trace output"
+	grep >/dev/null 2>&1 'printf.*OK' X-trace ||
+		atf_fail "T5: -X tracing missing printf"
+	grep >/dev/null 2>&1 funct X-trace ||
+		atf_fail "T5: -X tracing missing funct"
+	grep >/dev/null 2>&1 'set.*-X' X-trace ||
+		atf_fail "T5: -X tracing missing set -X from in funct"
+	grep >/dev/null 2>&1 'echo.*GOOD' X-trace ||
+		atf_fail "T5: -X tracing missing echo after funct redirect"
+	grep >/dev/null 2>&1 'say.*hello' X-trace &&
+		atf_fail "T5: -X tracing included 'say' after funct redirect"
+	grep >/dev/null 2>&1 'say.*hello' X-trace-fn ||
+		atf_fail "T5: -X funct tracing missed 'say'"
+
+	rm -f X-trace X-trace-fn
+
+	atf_check -s exit:0 \
+			-o match:OKhelloGOOD		\
+			-e empty			\
+		${TEST_SH} -c '
+			say() {
+				printf "%s" "$*"
+			}
+			funct() {
+				local -
+
+				set +X
+				say hello
+			}
+
+			set -X 2>X-trace
+
+			printf OK
+			funct
+			echo GOOD
+		'
+	test -s X-trace || atf_fail "T6: Failed to create trace output file"
+	grep >/dev/null 2>&1 'printf.*OK' X-trace ||
+		atf_fail "T6: -X tracing missing printf"
+	grep >/dev/null 2>&1 funct X-trace ||
+		atf_fail "T6: -X tracing missing funct"
+	grep >/dev/null 2>&1 'set.*+X' X-trace ||
+		atf_fail "T6: -X tracing missing set +X from in funct"
+	grep >/dev/null 2>&1 'echo.*GOOD' X-trace ||
+		atf_fail "T6: -X tracing missing echo after funct redirect"
+	grep >/dev/null 2>&1 'say.*hello' X-trace &&
+		atf_fail "T6: -X tracing included 'say' after funct redirect"
+
+	rm -f X-trace
+
+	atf_check -s exit:0 \
+			-o match:OKtracednotraceGOOD \
+			-e match:say -e match:traced -e not-match:notrace \
+		${TEST_SH} -c '
+			say() {
+				printf "%s" "$*"
+			}
+			funct() {
+				local -
+
+				set +X -x
+
+				say traced
+				exec 2>/dev/null
+				say notrace
+
+			}
+
+			set -X 2>X-trace
+
+			printf OK
+			funct
+			echo GOOD
+		'
+	test -s X-trace || atf_fail "T7: Failed to create trace output file"
+	grep >/dev/null 2>&1 'printf.*OK' X-trace ||
+		atf_fail "T7: -X tracing missing printf"
+	grep >/dev/null 2>&1 funct X-trace ||
+		atf_fail "T7: -X tracing missing funct"
+	grep >/dev/null 2>&1 'set.*+X.*-x' X-trace ||
+		atf_fail "T7: -X tracing missing set +X -x from in funct"
+	grep >/dev/null 2>&1 'echo.*GOOD' X-trace ||
+		atf_fail "T7: -X tracing missing echo after funct +X"
+	grep >/dev/null 2>&1 'say.*hello' X-trace &&
+		atf_fail "T7: -X tracing included 'say' after funct +X"
+
+	rm -f X-trace X-trace-fn
+	atf_check -s exit:0 \
+			-o "match:OKg'daybye-bye.*hello.*GOOD"		\
+			-e empty 					\
+		${TEST_SH} -c '
+			say() {
+				printf "%s" "$*"
+			}
+			fn1() {
+				local -
+
+				set -X 2>>X-trace-fn
+				say "g'\''day"
+				"$@"
+				say bye-bye
+			}
+			fn2() {
+				set +X
+				say hello
+				"$@"
+				say goodbye
+			}
+
+			set -X 2>X-trace
+
+			printf OK
+			fn1
+			fn1 fn2
+			fn1 fn1 fn2
+			fn1 fn2 fn1 fn2 fn1
+			fn1 fn1 fn2 fn2 fn1
+			echo GOOD
+		'
+
+	# That test generally succeeds if the earlier ones did 
+	# and if it did not dump core!
+
+	# But we can check a few things...
+
+	test -s X-trace || atf_fail "T8: Failed to create trace output file"
+	test -s X-trace-fn || atf_fail "T8: Failed to create trace output file"
+	grep >/dev/null 2>&1 'printf.*OK' X-trace ||
+		atf_fail "T8: -X tracing missing printf"
+	grep >/dev/null 2>&1 fn1 X-trace ||
+		atf_fail "T8: -X tracing missing fn1"
+	grep >/dev/null 2>&1 'set.*-X' X-trace ||
+		atf_fail "T8: -X tracing missing set -X from in fn1"
+	grep >/dev/null 2>&1 'echo.*GOOD' X-trace ||
+		atf_fail "T8: -X tracing missing echo after fn1 redirect"
+	grep >/dev/null 2>&1 'say.*hello' X-trace &&
+		atf_fail "T8: -X tracing included 'say' after fn2 +X"
+	grep >/dev/null 2>&1 'say.*hello' X-trace-fn &&
+		atf_fail "T8: -X fn tracing included 'say' after fn2 +X"
+
+
+	rm -f X-trace
+
+	return 0
 }
 
 opt_test_setup()
@@ -596,6 +922,56 @@ vi_emacs_VE_toggle_body() {
 	'
 }
 
+atf_test_case pipefail
+pipefail_head() {
+	atf_set "descr" "Basic tests of the pipefail option"
+}
+pipefail_body() {
+	${TEST_SH} -c 'set -o pipefail' 2>/dev/null ||
+		atf_skip "pipefail option not supported by ${TEST_SH}"
+
+	atf_check -s exit:0 -o match:'pipefail.*off' -e empty ${TEST_SH} -c \
+		'set -o | grep pipefail'
+	atf_check -s exit:0 -o match:'pipefail.*on' -e empty ${TEST_SH} -c \
+		'set -o pipefail; set -o | grep pipefail'
+
+	atf_check -s exit:0 -o empty -e empty ${TEST_SH} -c \
+		'(exit 1) | (exit 2) | (exit 0)'
+	atf_check -s exit:2 -o empty -e empty ${TEST_SH} -c \
+		'set -o pipefail; (exit 1) | (exit 2) | (exit 0)'
+	atf_check -s exit:1 -o empty -e empty ${TEST_SH} -c \
+		'set -o pipefail; (exit 1) | (exit 0) | (exit 0)'
+	atf_check -s exit:0 -o empty -e empty ${TEST_SH} -c \
+		'set -o pipefail; (exit 0) | (exit 0) | (exit 0)'
+
+	atf_check -s exit:1 -o empty -e empty ${TEST_SH} -c \
+		'! (exit 1) | (exit 2) | (exit 0)'
+	atf_check -s exit:0 -o empty -e empty ${TEST_SH} -c \
+		'set -o pipefail; ! (exit 1) | (exit 2) | (exit 0)'
+	atf_check -s exit:0 -o empty -e empty ${TEST_SH} -c \
+		'set -o pipefail; ! (exit 1) | (exit 0) | (exit 0)'
+	atf_check -s exit:1 -o empty -e empty ${TEST_SH} -c \
+		'set -o pipefail; ! (exit 0) | (exit 0) | (exit 0)'
+
+	atf_check -s exit:0 -o inline:'0\n' -e empty ${TEST_SH} -c \
+		'(exit 1) | (exit 2) | (exit 0); echo $?'
+	atf_check -s exit:0 -o inline:'2\n' -e empty ${TEST_SH} -c \
+		'set -o pipefail; (exit 1) | (exit 2) | (exit 0); echo $?'
+	atf_check -s exit:0 -o inline:'1\n' -e empty ${TEST_SH} -c \
+		'set -o pipefail; (exit 1) | (exit 0) | (exit 0); echo $?'
+	atf_check -s exit:0 -o inline:'0\n' -e empty ${TEST_SH} -c \
+		'set -o pipefail; (exit 0) | (exit 0) | (exit 0); echo $?'
+
+	atf_check -s exit:0 -o inline:'1\n' -e empty ${TEST_SH} -c \
+		'! (exit 1) | (exit 2) | (exit 0); echo $?'
+	atf_check -s exit:0 -o inline:'0\n' -e empty ${TEST_SH} -c \
+		'set -o pipefail; ! (exit 1) | (exit 2) | (exit 0); echo $?'
+	atf_check -s exit:0 -o inline:'0\n' -e empty ${TEST_SH} -c \
+		'set -o pipefail; ! (exit 1) | (exit 0) | (exit 0); echo $?'
+	atf_check -s exit:0 -o inline:'1\n' -e empty ${TEST_SH} -c \
+		'set -o pipefail; ! (exit 0) | (exit 0) | (exit 0); echo $?'
+}
+
 atf_test_case xx_bogus
 xx_bogus_head() {
 	atf_set "descr" "Tests that attempting to set a nonsense option fails."
@@ -631,10 +1007,10 @@ Option_switching_body() {
 
 	# and these are extensions that might not exist (non-fatal to test)
 	# -i and -s (and -c) are posix options, but are not required to
-	# be accessable via the "set" command, just the command line.
+	# be accessible via the "set" command, just the command line.
 	# We allow for -i to work with set, as that makes some sense,
 	# -c and -s do not.
-	test_optional_on_off E i I p q V || true
+	test_optional_on_off E i I p q V X || true
 
 	# Also test (some) option combinations ...
 	# only testing posix options here, because it is easier...
@@ -668,7 +1044,11 @@ atf_init_test_cases() {
 	atf_add_test_case set_u
 	atf_add_test_case set_v
 	atf_add_test_case set_x
+	atf_add_test_case set_X
 
 	atf_add_test_case vi_emacs_VE_toggle
+
+	atf_add_test_case pipefail
+
 	atf_add_test_case xx_bogus
 }

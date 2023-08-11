@@ -30,23 +30,52 @@
 #include <stdlib.h>
 #include <string.h>
 
-static int
+/*
+ * Not supported on hppa
+ */
+#if !defined(__hppa__)
+
+static long long
 ifunc1(void)
 {
-	return 0xdeadbeef;
+	return 0xdeadbeefll;
 }
 
-static int
+static long long
 ifunc2(void)
 {
-	return 0xbeefdead;
+	return 0xbeefdeadll;
 }
 
 static __attribute__((used))
-int (*resolve_ifunc(void))(void)
+long long (*resolve_ifunc(void))(void)
 {
 	const char *e = getenv("USE_IFUNC2");
 	return e && strcmp(e, "1") == 0 ? ifunc2 : ifunc1;
 }
 
+static __attribute__((used))
+long long (*resolve_ifunc2(void))(void)
+{
+	const char *e = getenv("USE_IFUNC2");
+	return e && strcmp(e, "1") == 0 ? ifunc1 : ifunc2;
+}
+
 __ifunc(ifunc, resolve_ifunc);
+__hidden_ifunc(ifunc_hidden, resolve_ifunc2);
+
+long long ifunc_hidden(void);
+long long ifunc_plt(void);
+
+long long ifunc_plt(void)
+{
+	return ifunc_hidden();
+}
+
+long long (*ifunc_indirect(void))(void);
+
+long long (*ifunc_indirect(void))(void)
+{
+	return ifunc_hidden;
+}
+#endif

@@ -1,4 +1,4 @@
-# $NetBSD: t_swsensor.sh,v 1.9 2015/04/23 23:23:28 pgoyette Exp $
+# $NetBSD: t_swsensor.sh,v 1.13 2021/12/05 08:16:10 msaitoh Exp $
 
 get_sensor_info() {
 	rump.envstat -x | \
@@ -24,7 +24,7 @@ get_rnd_bits_count() {
 	    RUMP_SERVER=unix://t_swsensor_socket	\
 	    LD_PRELOAD=/usr/lib/librumphijack.so	  rndctl -l | \
 	grep "swsensor-sensor" | \
-	awk '{print $2}'
+	awk '{print $3}'
 }
 
 check_powerd_event() {
@@ -134,7 +134,7 @@ common_body() {
 	# (use $(( ... )) since the timeout is displayed in hex!)
 	rump.envstat -c env0.conf
 	if [ $(( $( get_sensor_key refresh-timeout ) )) -ne 2 ] ; then
-		atf_fail "1: Could not set refresh-timout to 2s"
+		atf_fail "1: Could not set refresh-timeout to 2s"
 	fi
 
 	# Step 2 - verify that we can read sensor's value
@@ -296,19 +296,16 @@ common_body() {
 	sleep 5
 	new_rnd_bits=$( get_rnd_bits_count )
 	if [ $new_rnd_bits -le $rnd_bits ] ; then
-		atf_expect_fail "PR kern/47661"
 		atf_fail "14a: entropy bits did not increase after polling"
 	fi
 	rnd_bits=$new_rnd_bits
 	sleep 5
 	new_rnd_bits=$( get_rnd_bits_count )
 	if [ $new_rnd_bits -gt $rnd_bits ] ; then
-		atf_expect_fail "PR kern/47661"
 		atf_fail "14b: entropy bits increased after poll with no value change"
 	fi
 
 	# Step 15 - make sure entropy collected when device is interrogated
-	# 
 	rump.envstat -c env0.conf
 	rump.sysctl -w hw.swsensor.cur_value=$3
 	get_sensor_key cur-value
@@ -317,14 +314,12 @@ common_body() {
 	get_sensor_key cur-value
 	new_rnd_bits=$( get_rnd_bits_count )
 	if [ $new_rnd_bits -le $rnd_bits ] ; then
-		atf_expect_fail "PR kern/47661"
 		atf_fail "15a: entropy bits did not increase after interrogation"
 	fi
 	rnd_bits=$new_rnd_bits
 	get_sensor_key cur-value
 	new_rnd_bits=$( get_rnd_bits_count )
 	if [ $new_rnd_bits -gt $rnd_bits ] ; then
-		atf_expect_fail "PR kern/47661"
 		atf_fail "15b: entropy bits increased after interrogation with no value change"
 	fi
 }

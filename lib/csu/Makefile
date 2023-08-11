@@ -1,11 +1,11 @@
-# $NetBSD: Makefile,v 1.5 2016/04/04 09:52:02 joerg Exp $
+# $NetBSD: Makefile,v 1.7 2018/12/27 19:33:52 christos Exp $
 
 NOMAN=			# defined
 
 .include <bsd.own.mk>
 
 TESTSDIR=		${TESTSBASE}/lib/csu
-TESTS_SH=		t_crt0
+TESTS_SH=		t_crt0 t_ifunc_static
 TESTS_SUBDIRS=
 SUBDIR+=		dso
 
@@ -23,5 +23,10 @@ LDSTATIC.h_initfini2+=	-static
 SRCS.h_initfini3=	h_initfini3.cxx h_initfini_common.cxx \
 			${SRCS_CHECK_STACK}
 LDADD.h_initfini3+=	-Wl,-rpath,${TESTSDIR}
+
+PROGS+=			h_ifunc_static h_initfini_array
+SRCS.h_ifunc_static=	h_ifunc_static.c
+SRCS.h_initfini_array=	h_initfini_array.c
+LDSTATIC.h_ifunc_static=-static
 
 .include <bsd.test.mk>

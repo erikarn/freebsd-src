@@ -1,4 +1,4 @@
-/*	$NetBSD: fstest_nfs.c,v 1.9 2011/02/28 21:08:46 pooka Exp $	*/
+/*	$NetBSD: fstest_nfs.c,v 1.12 2020/06/17 00:16:21 kamil Exp $	*/
 
 /*
  * Copyright (c) 2010 The NetBSD Foundation, Inc.
@@ -46,6 +46,7 @@
 #include <stdlib.h>
 
 #include <rump/rump.h>
+#include <rump/rump_syscallshotgun.h>
 #include <rump/rump_syscalls.h>
 
 #include "h_fsmacros.h"
@@ -87,10 +88,12 @@ donewfs(const atf_tc_t *tc, void **argp,
 	 * First, we start the nfs service.
 	 */
 	srcdir = atf_tc_get_config_var(tc, "srcdir");
-	sprintf(nfsdpath, "%s/../nfs/nfsservice/rumpnfsd", srcdir);
-	sprintf(ethername, "/%s/%s.etherbus", getcwd(cwd, sizeof(cwd)), image);
-	sprintf(ethername_ro, "%s_ro", ethername);
-	sprintf(imagepath, "/%s/%s", cwd, image);
+	snprintf(nfsdpath, sizeof nfsdpath,
+	    "%s/../nfs/nfsservice/rumpnfsd", srcdir);
+	snprintf(ethername, sizeof ethername,
+	    "/%s/%s.etherbus", getcwd(cwd, sizeof(cwd)), image);
+	snprintf(ethername_ro, sizeof ethername_ro, "%s_ro", ethername);
+	snprintf(imagepath, sizeof imagepath, "/%s/%s", cwd, image);
 
 	nfsdargv[0] = nfsdpath;
 	nfsdargv[1] = ethername;
@@ -113,8 +116,8 @@ donewfs(const atf_tc_t *tc, void **argp,
 		close(pipes[0]);
 		if (dup2(pipes[1], 3) == -1)
 			err(1, "dup2");
-		if (execvp(nfsdargv[0], nfsdargv) == -1)
-			err(1, "execvp");
+		execvp(nfsdargv[0], nfsdargv);
+		err(1, "execvp");
 	case -1:
 		return errno;
 	default:

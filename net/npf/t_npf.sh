@@ -1,4 +1,4 @@
-# $NetBSD: t_npf.sh,v 1.2 2012/09/18 08:28:15 martin Exp $
+# $NetBSD: t_npf.sh,v 1.4 2020/06/01 11:08:57 martin Exp $
 #
 # Copyright (c) 2008, 2010 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -29,7 +29,7 @@ run_test()
 {
 	local name="${1}"
 
-	atf_check -o ignore -e ignore npfctl debug "$(atf_get_srcdir)/npftest.conf" ./npf.plist
+	atf_check -o ignore -e ignore npfctl debug -c "$(atf_get_srcdir)/npftest.conf" -o ./npf.plist
 	atf_check -o ignore npftest -c npf.plist -T "${name}"
 }
 
@@ -39,12 +39,12 @@ add_test()
 	local desc="${*}";
 
 	atf_test_case "npf_${name}"
-	eval "npf_${name}_head() { \
-			atf_set \"descr\" \"${desc}\"; \
-			atf_set \"require.progs\" \"npfctl npftest\"; \
-		}; \
-	    npf_${name}_body() { \
-			run_test \"${name}\"; \
+	eval "npf_${name}_head() {
+			atf_set descr \"${desc}\"
+			atf_set require.progs npfctl npftest
+		}
+	    npf_${name}_body() {
+			run_test ${name}
 		}"
 	atf_add_test_case "npf_${name}"
 }

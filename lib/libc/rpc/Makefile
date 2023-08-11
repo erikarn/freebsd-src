@@ -1,4 +1,4 @@
-# $NetBSD: Makefile,v 1.2 2013/02/26 17:06:55 christos Exp $
+# $NetBSD: Makefile,v 1.4 2023/06/03 09:09:15 lukem Exp $
 
 MKMAN=	no
 
@@ -17,6 +17,8 @@ CLEANFILES+=	${RPCSRCS:.x=.h} ${RPCSRCS:.x=_xdr.c}
 CPPFLAGS+=		-I.
 RPC_INCS=		${RPCSRCS:.x=.h}
 RPC_XDRFILES=	${RPCSRCS:.x=_xdr.c}
+
+COPTS.t_rpc.c+=	${CC_WNO_CAST_FUNCTION_TYPE}
 
 .include <bsd.rpc.mk>
 .include <bsd.test.mk>

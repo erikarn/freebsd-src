@@ -1,4 +1,4 @@
-# $NetBSD: Makefile,v 1.2 2013/04/11 17:00:12 christos Exp $
+# $NetBSD: Makefile,v 1.7 2023/06/03 09:09:15 lukem Exp $
 
 TESTSDIR=	${TESTSBASE}/lib/libevent
 
@@ -17,15 +17,16 @@ SRCS=		regress.c regress.gen.c regress_dns.c regress_http.c \
 		regress_rpc.c regress_main.c tinytest.c regress_testutils.c \
 		regress_minheap.c regress_util.c regress_thread.c \
 		regress_buffer.c regress_bufferevent.c regress_listener.c \
-		regress_zlib.c regress_et.c
+		regress_zlib.c regress_et.c regress_finalize.c
 
-.if ${MKCRYPTO} == "yes"
 SRCS+=		regress_ssl.c
 DPADD+=		${LIBEVENT_OPENSSL} ${LIBSSL} ${LIBCRYPTO}
 LDADD+=		-levent_openssl -lssl -lcrypto
 CPPFLAGS+=	-DLIBEVENT_CRYPTO
-.endif
 DPADD+=		${LIBEVENT} ${LIBEVENT_PTHREADS} ${LIBZ} ${LIBPTHREAD}
 LDADD+=		-levent_pthreads -levent -lz -lpthread
+
+COPTS.regress_rpc.c+=	${CC_WNO_CAST_FUNCTION_TYPE}
+COPTS.regress_dns.c+=	${CC_WNO_MAYBE_UNINITIALIZED}
 
 .include <bsd.test.mk>

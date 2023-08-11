@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.12 2014/03/04 21:06:47 joerg Exp $
+#	$NetBSD: Makefile,v 1.17 2023/06/03 09:09:15 lukem Exp $
 #
 
 .include <bsd.own.mk>
@@ -27,7 +27,7 @@ CPPFLAGS+=	-DDEBUG -DLIBWRAP -DRUMP_RPC
 CPPFLAGS+=	-I${LIBC}/include -I${LIBC}/rpc
 
 
-LIBISPRIVATE=	# yup
+LIBISPRIVATE=	yes
 
 # NFS client stuff
 .PATH:	${NETBSDSRCDIR}/sbin/mount_nfs ${NETBSDSRCDIR}/sbin/mount
@@ -40,5 +40,11 @@ CPPFLAGS+=	-DMOUNT_NOMAIN -DMOUNTNFS_RETRYRPC=1
 CPPFLAGS+=	-DUSE_RUMP -DLFS_CLEANER_AS_LIB
 
 CWARNFLAGS.clang+=	-Wno-error=absolute-value
+COPTS.fstest_nfs.c+=	${CC_WNO_FORMAT_TRUNCATION}
+COPTS.clnt_bcast.c+=	${CC_WNO_CAST_FUNCTION_TYPE}
+COPTS.clnt_generic.c+=	${CC_WNO_CAST_FUNCTION_TYPE}
+COPTS.clnt_vc.c+=	${CC_WNO_CAST_FUNCTION_TYPE}
+COPTS.rpcb_clnt.c+=	${CC_WNO_CAST_FUNCTION_TYPE}
+COPTS.rpc_generic.c+=	${CC_WNO_CAST_FUNCTION_TYPE}
 
 .include <bsd.lib.mk>

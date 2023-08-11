@@ -1,4 +1,4 @@
-/*	$NetBSD: t_fd.c,v 1.6 2017/01/13 21:30:41 christos Exp $	*/
+/*	$NetBSD: t_fd.c,v 1.8 2023/08/03 20:45:50 andvar Exp $	*/
 
 /*
  * Copyright (c) 2011 The NetBSD Foundation, Inc.
@@ -57,7 +57,7 @@ ATF_TC_HEAD(sigio, tc)
 	    "SIGIO");
 }
 
-#define RUMPSERV "unix://sucket"
+#define RUMPSERV "unix://socket"
 
 ATF_TC_CLEANUP(bigenough, tc){system("env RUMP_SERVER=" RUMPSERV " rump.halt");}
 ATF_TC_CLEANUP(sigio, tc) { system("env RUMP_SERVER=" RUMPSERV " rump.halt"); }
@@ -110,7 +110,7 @@ ATF_TC_BODY(sigio, tc)
 
 	signal(SIGIO, gotsig);
 	RZ(system("rump_server -lrumpnet -lrumpnet_net -lrumpnet_netinet "
-	    "-lrumpdev -lrumpvfs " RUMPSERV));
+	    RUMPSERV));
 	RL(setenv("RUMP_SERVER", RUMPSERV, 1));
 
 	RL(rumpclient_init());

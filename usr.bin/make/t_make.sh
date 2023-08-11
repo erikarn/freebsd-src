@@ -1,6 +1,6 @@
-# $NetBSD: t_make.sh,v 1.7 2015/01/27 12:57:14 martin Exp $
+# $NetBSD: t_make.sh,v 1.17 2023/02/25 19:37:33 sjg Exp $
 #
-# Copyright (c) 2008, 2010, 2014 The NetBSD Foundation, Inc.
+# Copyright (c) 2008, 2010, 2014, 2023 The NetBSD Foundation, Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -35,11 +35,7 @@ run_and_check()
 	# 49085 - adjust for more concrete PR if there is one
 	case ${makename} in
 	escape)		atf_expect_fail "see PR toolchain/49085";;
-	impsrc)		atf_expect_fail "see PR toolchain/49085";;
-	phony*)		atf_expect_fail "see PR toolchain/49085";;
 	posix1)		atf_expect_fail "see PR toolchain/49085";;
-	suffixes)	atf_expect_fail "see PR toolchain/49085"
-			atf_fail "this uses up all memory and then fails";;
 	esac
 
 	local srcdir="$(atf_get_srcdir)"
@@ -57,13 +53,10 @@ test_case()
 {
 	local atfname="${1}"; shift	# e.g. foo_bar
 	local makename="${1}"; shift	# e.g. foo-bar
-	local descr="${1}"; shift
 
 	atf_test_case "${atfname}"
 	eval "${atfname}_head() { \
-		if [ -n '${descr}' ]; then \
-		    atf_set descr '${descr}'; \
-		fi \
+		atf_set require.user unprivileged; \
 	}"
 	eval "${atfname}_body() { \
 		run_and_check '${atfname}' '${makename}'; \
@@ -74,12 +67,22 @@ atf_init_test_cases()
 {
 	local filename basename atfname descr
 
-	for filename in "$(atf_get_srcdir)"/unit-tests/*.mk ; do
-	    basename="${filename##*/}"
-	    basename="${basename%.mk}"
-	    atfname="$(echo "${basename}" | tr "x-" "x_")"
-	    descr='' # XXX
-            test_case "${atfname}" "${basename}" "${descr}"
-	    atf_add_test_case "${atfname}"
+	for filename in "$(atf_get_srcdir)"/unit-tests/*.mk; do
+		basename="${filename##*/}"
+		basename="${basename%.mk}"
+
+		case "${basename}" in
+		varname-dot-make-meta-ignore*) continue;; # won't work
+		esac
+
+		atfname=${basename}
+		while :; do
+			case "${atfname}" in
+			(*-*)	atfname=${atfname%-*}_${atfname##*-};;
+			(*)	break;;
+			esac
+		done
+		test_case "${atfname}" "${basename}"
+		atf_add_test_case "${atfname}"
 	done
 }

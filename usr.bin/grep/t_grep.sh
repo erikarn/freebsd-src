@@ -1,4 +1,4 @@
-# $NetBSD: t_grep.sh,v 1.3 2017/01/14 20:43:52 christos Exp $
+# $NetBSD: t_grep.sh,v 1.7 2022/09/09 22:14:29 wiz Exp $
 #
 # Copyright (c) 2008, 2009 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -31,7 +31,7 @@ basic_head()
 	atf_set "descr" "Checks basic functionality"
 }
 basic_body()
-{ 
+{
 	atf_check -o file:"$(atf_get_srcdir)/d_basic.out" -x \
 	    'jot 10000 | grep 123'
 }
@@ -62,6 +62,20 @@ recurse_body()
 	atf_check -o file:"$(atf_get_srcdir)/d_recurse.out" -x "grep -r haddock recurse | sort"
 }
 
+atf_test_case recurse_noarg
+recurse_noarg_head()
+{
+	atf_set "descr" "Checks recursive searching without file argument"
+}
+recurse_noarg_body()
+{
+	mkdir -p recurse/a/f recurse/d
+	echo -e "cod\ndover sole\nhaddock\nhalibut\npilchard" > recurse/d/fish
+	echo -e "cod\nhaddock\nplaice" > recurse/a/f/favourite-fish
+
+	atf_check -o file:"$(atf_get_srcdir)/d_recurse_noarg.out" -x "cd recurse && grep -r haddock | sort"
+}
+
 atf_test_case recurse_symlink
 recurse_symlink_head()
 {
@@ -87,6 +101,106 @@ word_regexps_body()
 {
 	atf_check -o file:"$(atf_get_srcdir)/d_word_regexps.out" \
 	    grep -w separated $(atf_get_srcdir)/d_input
+}
+
+atf_test_case word_locale
+word_locale_head()
+{
+	atf_set "descr" "Checks word search with locale"
+}
+word_locale_body()
+{
+	echo "array[]" > "input"
+
+	# In the default locale, word search works.
+	atf_check -o file:"input" \
+	    env LC_ALL=C grep "array" "input"
+	atf_check -o file:"input" \
+	    env LC_ALL=C grep -w "array" "input"
+
+	# XXX: In an UTF-8 locale, GNU Grep treats '[' as a word character.
+	atf_check -s exit:1 -o empty \
+	    env LC_ALL="C.UTF-8" grep -w "array" "input"
+}
+
+atf_test_case word_in_line
+word_in_line_head()
+{
+	atf_set "descr" "Checks word search in different locations of a line"
+}
+word_in_line_body()
+{
+	# See usr.bin/grep/util.c, "Check for whole word match", which
+	# looks suspiciously wrong.  And indeed, NetBSD grep does not
+	# survive this test.  GNU Grep does.
+
+	echo "begin middle end" > "input"
+
+	# A word at the beginning of a line is found.
+	atf_check -o file:"input" \
+	    env LC_ALL=C grep -w "begin" "input"
+
+	# A word in the middle of a line is found.
+	atf_check -o file:"input" \
+	    env LC_ALL=C grep -w "middle" "input"
+
+	# A word at the end of a line is found.
+	atf_check -o file:"input" \
+	    env LC_ALL=C grep -w "end" "input"
+
+	# A subword at the beginning of a line is not found.
+	atf_check -s exit:1 -o empty \
+	    env LC_ALL=C grep -w "be" "input"
+
+	# A subword in the middle of a line is not found.
+	atf_check -s exit:1 -o empty \
+	    env LC_ALL=C grep -w "mid" "input"
+	atf_check -s exit:1 -o empty \
+	    env LC_ALL=C grep -w "dle" "input"
+
+	# A subword at the end of a line is not found.
+	atf_check -s exit:1 -o empty \
+	    env LC_ALL=C grep -w "nd" "input"
+}
+
+atf_test_case word_in_line_utf8
+word_in_line_utf8_head()
+{
+	atf_set "descr" "Checks word search at the beginning of a line"
+}
+word_in_line_utf8_body()
+{
+	# See usr.bin/grep/util.c, "Check for whole word match", which
+	# looks suspiciously wrong.  And indeed, NetBSD grep does not
+	# survive this test.  GNU Grep does.
+
+	echo "begin middle end" > "input"
+
+	# A word at the beginning of a line is found.
+	atf_check -o file:"input" \
+	    env LC_ALL="C.UTF-8" grep -w "begin" "input"
+
+	# A word in the middle of a line is found.
+	atf_check -o file:"input" \
+	    env LC_ALL="C.UTF-8" grep -w "middle" "input"
+
+	# A word at the end of a line is found.
+	atf_check -o file:"input" \
+	    env LC_ALL="C.UTF-8" grep -w "end" "input"
+
+	# A subword at the beginning of a line is not found.
+	atf_check -s exit:1 -o empty \
+	    env LC_ALL="C.UTF-8" grep -w "be" "input"
+
+	# A subword in the middle of a line is not found.
+	atf_check -s exit:1 -o empty \
+	    env LC_ALL="C.UTF-8" grep -w "mid" "input"
+	atf_check -s exit:1 -o empty \
+	    env LC_ALL="C.UTF-8" grep -w "dle" "input"
+
+	# A subword at the end of a line is not found.
+	atf_check -s exit:1 -o empty \
+	    env LC_ALL="C.UTF-8" grep -w "nd" "input"
 }
 
 atf_test_case begin_end
@@ -229,11 +343,15 @@ context2_body()
 
 atf_init_test_cases()
 {
-	atf_add_test_case basic 
+	atf_add_test_case basic
 	atf_add_test_case binary
 	atf_add_test_case recurse
+	atf_add_test_case recurse_noarg
 	atf_add_test_case recurse_symlink
 	atf_add_test_case word_regexps
+	atf_add_test_case word_locale
+	atf_add_test_case word_in_line
+	atf_add_test_case word_in_line_utf8
 	atf_add_test_case begin_end
 	atf_add_test_case ignore_case
 	atf_add_test_case invert

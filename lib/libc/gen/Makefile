@@ -1,10 +1,9 @@
-# $NetBSD: Makefile,v 1.50 2016/12/09 06:12:02 kamil Exp $
+# $NetBSD: Makefile,v 1.55 2022/05/31 13:42:59 riastradh Exp $
 
 .include <bsd.own.mk>
 
 TESTSDIR=	${TESTSBASE}/lib/libc/gen
 
-TESTS_SUBDIRS=	exect
 TESTS_SUBDIRS+=	execve
 TESTS_SUBDIRS+=	posix_spawn
 
@@ -22,6 +21,7 @@ TESTS_C+=	t_fpsetmask
 TESTS_C+=	t_fpsetround
 TESTS_C+=	t_ftok
 TESTS_C+=	t_getcwd
+TESTS_C+=	t_getentropy
 TESTS_C+=	t_getgrent
 TESTS_C+=	t_glob
 TESTS_C+=	t_humanize_number
@@ -40,7 +40,12 @@ TESTS_C+=	t_time
 TESTS_C+=	t_ttyname
 TESTS_C+=	t_vis
 
+.if ${MKSANITIZER:Uno} != "yes" && ${MKLIBCSANITIZER:Uno} != "yes"
+COPTS.t_siginfo.c+=	-DENABLE_TESTS
+.endif
+
 CPPFLAGS.t_siginfo.c+=-D__TEST_FENV
+COPTS.t_fpsetround.c+=${${ACTIVE_CC} == "gcc":? -frounding-math :}
 
 LDADD.t_siginfo+=	-lm
 DPADD.t_siginfo+=	${LIBM}

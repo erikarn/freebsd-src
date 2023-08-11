@@ -1,4 +1,4 @@
-/*	$NetBSD: t_renamerace.c,v 1.34 2017/01/13 21:30:40 christos Exp $	*/
+/*	$NetBSD: t_renamerace.c,v 1.44 2022/01/31 17:23:37 ryo Exp $	*/
 
 /*
  * Modified for rump and atf from a program supplied
@@ -86,6 +86,64 @@ w2(void *arg)
 	return NULL;
 }
 
+static void
+w3_mkdir(void)
+{
+
+	if (rump_sys_mkdir("c", 0777) == -1)
+		ATF_CHECK_MSG(errno == ENOENT || errno == EEXIST,
+		    "mkdir: %s (errno=%d)\n", strerror(errno), errno);
+	if (rump_sys_mkdir("c/d", 0777) == -1)
+		ATF_CHECK_MSG(errno == ENOENT || errno == EEXIST,
+		    "mkdir: %s (errno=%d)\n", strerror(errno), errno);
+	if (rump_sys_mkdir("c/d/e", 0777) == -1)
+		ATF_CHECK_MSG(errno == ENOENT || errno == EEXIST,
+		    "mkdir: %s (errno=%d)\n", strerror(errno), errno);
+}
+
+static void *
+w3_rmdir(void *arg)
+{
+
+	rump_pub_lwproc_newlwp(wrkpid);
+
+	while (!quittingtime) {
+		w3_mkdir();
+		rump_sys_rmdir("c/d/e");
+		rump_sys_rmdir("c/d");
+	}
+
+	return NULL;
+}
+
+static void *
+w3_rename1(void *arg)
+{
+
+	rump_pub_lwproc_newlwp(wrkpid);
+
+	while (!quittingtime) {
+		w3_mkdir();
+		rump_sys_rename("c", "c/d/e");
+	}
+
+	return NULL;
+}
+
+static void *
+w3_rename2(void *arg)
+{
+
+	rump_pub_lwproc_newlwp(wrkpid);
+
+	while (!quittingtime) {
+		w3_mkdir();
+		rump_sys_rename("c/d/e", "c");
+	}
+
+	return NULL;
+}
+
 #define NWRK 8
 static void
 renamerace(const atf_tc_t *tc, const char *mp)
@@ -102,7 +160,7 @@ renamerace(const atf_tc_t *tc, const char *mp)
 	if (FSTYPE_RUMPFS(tc))
 		atf_tc_skip("rename not supported by file system");
 	if (FSTYPE_UDF(tc))
-		atf_tc_expect_fail("PR kern/49046");
+		atf_tc_expect_fail("PR kern/53865");
 
 	RZ(rump_pub_lwproc_rfork(RUMP_RFCFDG));
 	RL(wrkpid = rump_sys_getpid());
@@ -125,19 +183,6 @@ renamerace(const atf_tc_t *tc, const char *mp)
 
 	if (FSTYPE_UDF(tc))
 		atf_tc_fail("race did not trigger this time");
-
-	if (FSTYPE_MSDOS(tc)) {
-		atf_tc_expect_fail("PR kern/43626");
-		/*
-		 * XXX: race does not trigger every time at least
-		 * on amd64/qemu.
-		 */
-		if (msdosfs_fstest_unmount(tc, mp, 0) != 0) {
-			rump_pub_vfs_mount_print(mp, 1);
-			atf_tc_fail_errno("unmount failed");
-		}
-		atf_tc_fail("race did not trigger this time");
-	}
 }
 
 static void
@@ -147,13 +192,10 @@ renamerace_dirs(const atf_tc_t *tc, const char *mp)
 
 	if (FSTYPE_SYSVBFS(tc))
 		atf_tc_skip("directories not supported by file system");
-
 	if (FSTYPE_RUMPFS(tc))
 		atf_tc_skip("rename not supported by file system");
-
-	/* XXX: msdosfs also sometimes hangs */
-	if (FSTYPE_MSDOS(tc))
-		atf_tc_expect_signal(-1, "PR kern/43626");
+	if (FSTYPE_UDF(tc))
+		atf_tc_expect_fail("PR kern/53865");
 
 	RZ(rump_pub_lwproc_rfork(RUMP_RFCFDG));
 	RL(wrkpid = rump_sys_getpid());
@@ -169,22 +211,66 @@ renamerace_dirs(const atf_tc_t *tc, const char *mp)
 	pthread_join(pt2, NULL);
 	RL(rump_sys_chdir("/"));
 
-	/*
-	 * Doesn't always trigger when run on a slow backend
-	 * (i.e. not on tmpfs/mfs).  So do the usual kludge.
-	 */
-	if (FSTYPE_MSDOS(tc))
-		abort();
+	if (FSTYPE_UDF(tc))
+		atf_tc_fail("race did not trigger this time");
+}
+
+static void
+renamerace_cycle(const atf_tc_t *tc, const char *mp)
+{
+	pthread_t pt_rmdir, pt_rename1, pt_rename2;
+
+	if (FSTYPE_SYSVBFS(tc))
+		atf_tc_skip("directories not supported by file system");
+	if (FSTYPE_RUMPFS(tc))
+		atf_tc_skip("rename not supported by file system");
+	if (FSTYPE_P2K_FFS(tc))
+		atf_tc_expect_fail("assertion \"vp->v_size == ip->i_size\" failed");
+	if (FSTYPE_PUFFS(tc))
+		atf_tc_expect_fail("assertion \"dfd\" failed");
+	if (FSTYPE_NFS(tc))
+		atf_tc_expect_fail("mkdir fails with ESTALE");
+	if (FSTYPE_UDF(tc))
+		atf_tc_expect_fail("sometimes fails with ENOSPC, PR kern/56253");
+
+	RZ(rump_pub_lwproc_rfork(RUMP_RFCFDG));
+	RL(wrkpid = rump_sys_getpid());
+
+	RL(rump_sys_chdir(mp));
+	pthread_create(&pt_rmdir, NULL, w3_rmdir, NULL);
+	pthread_create(&pt_rename1, NULL, w3_rename1, NULL);
+	pthread_create(&pt_rename2, NULL, w3_rename2, NULL);
+
+	sleep(10);
+	quittingtime = 1;
+
+	alarm(5);
+	pthread_join(pt_rmdir, NULL);
+	pthread_join(pt_rename1, NULL);
+	pthread_join(pt_rename2, NULL);
+	alarm(0);
+	RL(rump_sys_chdir("/"));
+
+	if (FSTYPE_UDF(tc))
+		atf_tc_fail("PR kern/56253 did not trigger this time");
+	if (FSTYPE_P2K_FFS(tc))
+		atf_tc_fail("did not fail this time");
+	if (FSTYPE_PUFFS(tc))
+		atf_tc_fail("did not fail this time");
+	if (FSTYPE_NFS(tc))
+		atf_tc_fail("did not fail this time");
 }
 
 ATF_TC_FSAPPLY(renamerace, "rename(2) race with file unlinked mid-operation");
 ATF_TC_FSAPPLY(renamerace_dirs, "rename(2) race with directories");
+ATF_TC_FSAPPLY(renamerace_cycle, "rename(2) race making directory cycles");
 
 ATF_TP_ADD_TCS(tp)
 {
 
 	ATF_TP_FSAPPLY(renamerace); /* PR kern/41128 */
 	ATF_TP_FSAPPLY(renamerace_dirs);
+	ATF_TP_FSAPPLY(renamerace_cycle);
 
 	return atf_no_error();
 }

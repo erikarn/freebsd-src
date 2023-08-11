@@ -1,4 +1,4 @@
-# $NetBSD: t_integration.sh,v 1.4 2014/04/21 19:10:41 christos Exp $
+# $NetBSD: t_integration.sh,v 1.82 2023/07/05 11:42:14 rillig Exp $
 #
 # Copyright (c) 2008, 2010 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -25,108 +25,146 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 
-LINT1=/usr/libexec/lint1
+: "${lint1:=/usr/libexec/lint1}"
+: "${archsubdir:=archsubdir_must_be_set}"
 
-Names=
 
-check_valid()
+configure_test_case()
 {
-	atf_check -s exit:0 ${LINT1} -g -S "$(atf_get_srcdir)/$1" /dev/null
+	local awk
+
+	# shellcheck disable=SC2016
+	awk='
+		BEGIN {
+			# see ./gen-platforms.sh
+			platform["aarch64"]	= "uchar lp64  long ldbl128"
+			platform["alpha"]	= "schar lp64  long ldbl64"
+			platform["arm"]		= "uchar ilp32 long ldbl64"
+			platform["coldfire"]	= "schar ilp32 int  ldbl64"
+			platform["hppa"]	= "schar ilp32 long ldbl64"
+			platform["i386"]	= "schar ilp32 int  ldbl96"
+			platform["ia64"]	= "schar lp64  long ldbl128"
+			platform["m68000"]	= "schar ilp32 int  ldbl64"
+			platform["m68k"]	= "schar ilp32 int  ldbl96"
+			platform["mips"]	= "schar ilp32 ???? ldbl64"
+			platform["mips64"]	= "schar ilp32 long ldbl128"
+			platform["mipsn64"]	= "schar lp64  long ldbl128"
+			platform["or1k"]	= "schar ilp32 int  ldbl64"
+			platform["powerpc"]	= "uchar ilp32 int  ldbl64"
+			platform["powerpc64"]	= "uchar lp64  long ldbl64"
+			platform["riscv32"]	= "schar ilp32 int  ldbl64"
+			platform["riscv64"]	= "schar lp64  long ldbl64"
+			platform["sh3"]		= "schar ilp32 int  ldbl64"
+			platform["sparc"]	= "schar ilp32 long ldbl64"
+			platform["sparc64"]	= "schar lp64  long ldbl128"
+			platform["vax"]		= "schar ilp32 long ldbl64"
+			platform["x86_64"]	= "schar lp64  long ldbl128"
+		}
+
+		function platform_has(prop) {
+			if (platform[prop] != "")
+				return prop == archsubdir
+			if (!match(prop, /^(schar|uchar|ilp32|lp64|int|long|ldbl64|ldbl96|ldbl128)$/)) {
+				printf("bad property '\''%s'\''\n", prop) > "/dev/stderr"
+				exit(1)
+			}
+			if (platform[archsubdir] == "") {
+				printf("bad archsubdir '\''%s'\''\n", archsubdir) > "/dev/stderr"
+				exit(1)
+			}
+			return match(" " platform[archsubdir] " ", " " prop " ")
+		}
+
+		BEGIN {
+			archsubdir = "'"$archsubdir"'"
+			flags = "-g -S -w"
+			skip = "no"
+		}
+		$1 == "/*" && $2 ~ /^lint1-/ && $NF == "*/" {
+			if ($2 == "lint1-flags:" || $2 == "lint1-extra-flags:") {
+				if ($2 == "lint1-flags:")
+					flags = ""
+				for (i = 3; i < NF; i++)
+					flags = flags " " $i
+			} else if ($2 == "lint1-only-if:") {
+				for (i = 3; i < NF; i++)
+					if (!platform_has($i))
+						skip = "yes"
+			} else if ($2 == "lint1-skip-if:") {
+				for (i = 3; i < NF; i++)
+					if (platform_has($i))
+						skip = "yes"
+			} else {
+				printf("bad lint1 comment '\''%s'\''\n", $2) > "/dev/stderr"
+				exit(1)
+			}
+		}
+
+		END {
+			printf("flags='\''%s'\''\n", flags)
+			printf("skip=%s\n", skip)
+		}
+	'
+
+	local config
+	config="$(awk "$awk" "$1")" || exit 1
+	eval "$config"
 }
 
-check_invalid()
+# shellcheck disable=SC2155
+check_lint1()
 {
-	atf_check -s not-exit:0 -o ignore -e ignore ${LINT1} -g -S -w \
-	    "$(atf_get_srcdir)/$1" /dev/null
+	local src="$(atf_get_srcdir)/$1"
+	local exp="${1%.c}.exp"
+	local exp_ln="${src%.c}.exp-ln"
+	local wrk_ln="${1%.c}.ln"
+	local flags=""
+	local skip=""
+
+	if [ ! -f "$exp_ln" ]; then
+		exp_ln='/dev/null'
+		wrk_ln='/dev/null'
+	fi
+
+	configure_test_case "$src"	# sets 'skip' and 'flags'
+
+	if [ "$skip" = "yes" ]; then
+		atf_skip "unsuitable platform"
+	fi
+
+	# shellcheck disable=SC2086
+	atf_check -s 'exit' -o "save:$exp" \
+	    "$lint1" $flags "$src" "$wrk_ln"
+	atf_check lua "$(atf_get_srcdir)/check-expect.lua" "$src"
+
+	if [ "$exp_ln" != '/dev/null' ]; then
+		# Remove comments and whitespace from the .exp-ln file.
+		sed \
+		    -e '/^#/d' \
+		    -e '/^$/d' \
+		    -e 's,^#.*,,' \
+		    -e 's,\([^%]\)[[:space:]],\1,g' \
+		    < "$exp_ln" > "./${exp_ln##*/}"
+
+		atf_check -o "file:${exp_ln##*/}" cat "$wrk_ln"
+	fi
 }
-
-test_case()
-{
-	local result="${1}"; shift
-	local name="${1}"; shift
-	local descr="${*}"
-
-	atf_test_case ${name}
-	eval "${name}_head() {
-		atf_set \"descr\" \"${descr}\";
-		atf_set \"require.progs\" \"${LINT1}\";
-	}"
-	eval "${name}_body() {
-		${result} d_${name}.c;
-	}"
-
-	Names="${Names} ${name}"
-}
-
-test_case check_valid c99_struct_init "Checks C99 struct initialization"
-test_case check_valid c99_union_init1 "Checks C99 union initialization"
-test_case check_valid c99_union_init2 "Checks C99 union initialization"
-test_case check_valid c99_union_init3 "Checks C99 union initialization"
-test_case check_valid c99_recursive_init "Checks C99 recursive struct/union" \
-    "initialization"
-test_case check_valid c9x_recursive_init "Checks C9X struct/union member" \
-    "init, with nested union and trailing member"
-test_case check_valid nested_structs "Checks nested structs"
-test_case check_valid packed_structs "Checks packed structs"
-
-test_case check_valid cast_init "Checks cast initialization"
-test_case check_valid cast_init2 "Checks cast initialization as the rhs of a" \
-    "- operand"
-test_case check_valid cast_lhs "Checks whether pointer casts are valid lhs" \
-    "lvalues"
-
-test_case check_valid gcc_func "Checks GCC __FUNCTION__"
-test_case check_valid c99_func "Checks C99 __func__"
-
-test_case check_valid gcc_variable_array_init "Checks GCC variable array" \
-    "initializers"
-test_case check_valid c9x_array_init "Checks C9X array initializers"
-test_case check_valid c99_decls_after_stmt "Checks C99 decls after statements"
-test_case check_valid c99_decls_after_stmt3 "Checks C99 decls after statements"
-test_case check_valid nolimit_init "Checks no limit initializers"
-test_case check_valid zero_sized_arrays "Checks zero sized arrays"
-
-test_case check_valid compound_literals1 "Checks compound literals"
-test_case check_valid compound_literals2 "Checks compound literals"
-test_case check_valid gcc_compound_statements1 "Checks GCC compound statements"
-test_case check_valid gcc_compound_statements2 "Checks GCC compound" \
-    "statements with non-expressions"
-test_case check_valid gcc_compound_statements3 "Checks GCC compound" \
-    "statements with void type"
-# XXX: Because of polymorphic __builtin_isnan and expression has null effect
-# test_case check_valid gcc_extension "Checks GCC __extension__ and __typeof__"
-
-test_case check_valid cvt_in_ternary "Checks CVT nodes handling in ?" \
-test_case check_valid cvt_constant "Checks constant conversion"
-test_case check_valid ellipsis_in_switch "Checks ellipsis in switch()"
-test_case check_valid c99_complex_num "Checks C99 complex numbers"
-test_case check_valid c99_complex_split "Checks C99 complex access"
-test_case check_valid c99_for_loops "Checks C99 for loops"
-test_case check_valid alignof "Checks __alignof__"
-test_case check_valid shift_to_narrower_type "Checks that type shifts that" \
-    "result in narrower types do not produce warnings"
-
-test_case check_invalid constant_conv1 "Checks failing on information-losing" \
-    "constant conversion in argument lists"
-test_case check_invalid constant_conv2 "Checks failing on information-losing" \
-    "constant conversion in argument lists"
-
-test_case check_invalid type_conv1 "Checks failing on information-losing" \
-    "type conversion in argument lists"
-test_case check_invalid type_conv2 "Checks failing on information-losing" \
-    "type conversion in argument lists"
-test_case check_invalid type_conv3 "Checks failing on information-losing" \
-    "type conversion in argument lists"
-
-test_case check_invalid incorrect_array_size "Checks failing on incorrect" \
-    "array sizes"
-
-test_case check_invalid long_double_int "Checks for confusion of 'long" \
-    "double' with 'long int'; PR 39639"
 
 atf_init_test_cases()
 {
-	for name in ${Names}; do
-		atf_add_test_case ${name}
+	local src name
+
+	for src in "$(atf_get_srcdir)"/*.c; do
+		src=${src##*/}
+		name=${src%.c}
+
+		atf_test_case "$name"
+		eval "${name}_head() {
+			atf_set 'require.progs' '$lint1'
+		}"
+		eval "${name}_body() {
+			check_lint1 '$name.c'
+		}"
+		atf_add_test_case "$name"
 	done
 }

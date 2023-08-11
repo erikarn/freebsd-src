@@ -1,4 +1,4 @@
-/*	$NetBSD: isqemu.h,v 1.4 2015/01/03 14:21:05 gson Exp $	*/
+/*	$NetBSD: isqemu.h,v 1.6 2021/12/15 09:19:28 gson Exp $	*/
 
 /*-
  * Copyright (c) 2013 The NetBSD Foundation, Inc.
@@ -33,14 +33,36 @@
  */
 #include <sys/param.h>
 #include <sys/sysctl.h>
+#include <sys/drvctlio.h>
+#include <sys/ioctl.h>
+#include <fcntl.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <err.h>
+#include <unistd.h>
 
 static __inline bool
 isQEMU(void) {
+       struct devlistargs dla = {
+	       .l_devname = "qemufwcfg0",
+	       .l_childname = NULL,
+	       .l_children = 0,
+       };
+       int fd = open(DRVCTLDEV, O_RDONLY, 0);
+       if (fd == -1)
+	       return false;
+       if (ioctl(fd, DRVLISTDEV, &dla) == -1) {
+	       close(fd);
+	       return false;
+       }
+       close(fd);
+       return true;
+}
+
+static __inline bool
+isQEMU_TCG(void) {
 #if defined(__i386__) || defined(__x86_64__)
 	char name[1024];
 	size_t len = sizeof(name);
@@ -50,10 +72,18 @@ isQEMU(void) {
 			return false;
 		err(EXIT_FAILURE, "sysctl");
 	}
-	return strstr(name, "QEMU") != NULL;
-#else
-	return false;
+	if (strstr(name, "QEMU") == NULL)
+		return false;
+	if (sysctlbyname("machdep.hypervisor", name, &len, NULL, 0) == -1) {
+		if (errno == ENOENT)
+			return true;
+		err(EXIT_FAILURE, "sysctl");
+	}
+	if (strcmp(name, "KVM") == 0)
+		return false;
+	return true;
 #endif
+	return false;
 }
 
 #ifdef TEST

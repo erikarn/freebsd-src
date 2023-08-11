@@ -1,4 +1,4 @@
-/*	$NetBSD: fstest_puffs.c,v 1.11 2013/09/09 19:47:38 pooka Exp $	*/
+/*	$NetBSD: fstest_puffs.c,v 1.14 2023/08/03 20:45:50 andvar Exp $	*/
 
 /*
  * Copyright (c) 2010, 2011 The NetBSD Foundation, Inc.
@@ -46,6 +46,7 @@
 #include <stdlib.h>
 
 #include <rump/rump.h>
+#include <rump/rump_syscallshotgun.h>
 #include <rump/rump_syscalls.h>
 
 #include "h_fsmacros.h"
@@ -264,7 +265,7 @@ donewfs(const atf_tc_t *tc, void **argp,
 
 	pflags = &args->pta_pflags;
 
-	/* Create sucketpair for communication with the real file server */
+	/* Create socketpair for communication with the real file server */
 	if (socketpair(PF_LOCAL, SOCK_STREAM, 0, sv) == -1)
 		return errno;
 
@@ -277,8 +278,8 @@ donewfs(const atf_tc_t *tc, void **argp,
 		if (setenv("PUFFS_COMFD", comfd, 1) == -1)
 			return errno;
 
-		if (execvp(theargv[0], theargv) == -1)
-			return errno;
+		execvp(theargv[0], theargv);
+		return errno;
 	case -1:
 		return errno;
 	default:

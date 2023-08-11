@@ -1,4 +1,4 @@
-# $NetBSD: t_redir.sh,v 1.9 2016/05/14 00:33:02 kre Exp $
+# $NetBSD: t_redir.sh,v 1.14 2021/11/21 20:50:35 kre Exp $
 #
 # Copyright (c) 2016 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -42,30 +42,36 @@ basic_test_method_test_body()
 {
 	cat <<- 'DONE' |
 	DONE
-	atf_check -s exit:0 -o empty -e empty ${TEST_SH}
+	atf_check -s exit:0 -o empty -e empty ${TEST_SH} ||
+		atf_fail 'empty piped input'
 	cat <<- 'DONE' |
 	DONE
-	atf_check -s exit:0 -o match:0 -e empty ${TEST_SH} -c 'wc -l'
+	atf_check -s exit:0 -o match:0 -e empty ${TEST_SH} -c 'wc -l' ||
+		atf_fail 'empty piped input line count'
 
 	cat <<- 'DONE' |
 		echo hello
 	DONE
-	atf_check -s exit:0 -o match:hello -e empty ${TEST_SH} 
+	atf_check -s exit:0 -o match:hello -e empty ${TEST_SH}  ||
+		atf_fail 'piped hello'
 	cat <<- 'DONE' |
 		echo hello
 	DONE
-	atf_check -s exit:0 -o match:1 -e empty ${TEST_SH} -c 'wc -l'
+	atf_check -s exit:0 -o match:1 -e empty ${TEST_SH} -c 'wc -l' ||
+		atf_fail 'piped hello line count'
 
 	cat <<- 'DONE' |
 		echo hello\
 					world
 	DONE
-	atf_check -s exit:0 -o match:helloworld -e empty ${TEST_SH} 
+	atf_check -s exit:0 -o match:helloworld -e empty ${TEST_SH}  ||
+		atf_fail 'piped hello world'
 	cat <<- 'DONE' |
 		echo hello\
 					world
 	DONE
-	atf_check -s exit:0 -o match:2 -e empty ${TEST_SH} -c 'wc -l'
+	atf_check -s exit:0 -o match:2 -e empty ${TEST_SH} -c 'wc -l' ||
+		atf_fail 'piped hello world line check'
 
 	printf '%s\n%s\n%s\n' Line1 Line2 Line3 > File
 	atf_check -s exit:0 -o inline:'Line1\nLine2\nLine3\n' -e empty \
@@ -83,7 +89,16 @@ basic_test_method_test_body()
 		EOF
 	DONE
 	atf_check -s exit:0 -o match:ARGS=4 -o match:'-X- -- -- -Y-' \
-		-o match:X=X -o match:'Y=\$4' -e empty ${TEST_SH} 
+		-o match:X=X -o match:'Y=\$4' -e empty ${TEST_SH}  ||
+			atf_fail "complex piped input"
+
+	cat <<- 'DONE' |
+		echo expect to see a non-detected failure here
+	DONE
+	atf_check -s exit:1 -o empty -e empty ${TEST_SH} &&
+		atf_fail "Failed to fail as expected"
+
+	return 0
 }
 
 atf_test_case do_input_redirections
@@ -129,7 +144,8 @@ do_input_redirections_body()
 	EOF
 	atf_check -s exit:0 -e empty \
 		-o inline:'First Line\nFirst Line\nFirst Line\n' \
-		${TEST_SH}
+		${TEST_SH} ||
+			atf_fail 'loop rereading first line'
 
 	cat <<- 'EOF' |
 		for l in 1 2 3; do
@@ -139,7 +155,8 @@ do_input_redirections_body()
 	EOF
 	atf_check -s exit:0 -e empty \
 		-o inline:'First Line\nSecond Line\nLine 3\n' \
-		${TEST_SH}
+		${TEST_SH} ||
+			atf_fail 'loop reading file'
 
 	cat <<- 'EOF' |
 		for l in 1 2 3; do
@@ -149,7 +166,8 @@ do_input_redirections_body()
 	EOF
 	atf_check -s exit:0 -e empty \
 		-o inline:'First Line\nFirst Line\nFirst Line\n' \
-		${TEST_SH}
+		${TEST_SH} ||
+			atf_fail 'double redirect'
 
 	cat <<- 'EOF' |
 		line=
@@ -160,7 +178,8 @@ do_input_redirections_body()
 	EOF
 	atf_check -s exit:0 -e empty \
 		-o inline:'First Line\nSecond Line\nLine 3\nEND\n' \
-		${TEST_SH}
+		${TEST_SH} ||
+			atf_fail 'read and test content'
 
 	cat <<- 'EOF' |
 		while :; do
@@ -170,7 +189,8 @@ do_input_redirections_body()
 	EOF
 	atf_check -s exit:0 -e empty \
 		-o inline:'First Line\nSecond Line\nLine 3\nEND\n' \
-		${TEST_SH}
+		${TEST_SH} ||
+			atf_fail 'read and test status'
 
 	cat <<- 'EOF' |
 		l=''
@@ -184,7 +204,8 @@ do_input_redirections_body()
 	EOF
 	atf_check -s exit:0 -e empty \
 		-o inline:'First Line\nFirst Line\nFirst Line\nDONE\n' \
-		${TEST_SH}
+		${TEST_SH} ||
+			atf_fail 'read 3 lines'
 
 	cat <<- 'EOF' |
 		while read line
@@ -195,7 +216,8 @@ do_input_redirections_body()
 	EOF
 	atf_check -s exit:0 -e empty \
 		-o inline:'First Line\nSecond Line\nLine 3\nEND\nDONE\n' \
-		${TEST_SH}
+		${TEST_SH} ||
+			atf_fail 'read to EOF'
 
 	cat <<- 'EOF' |
 		l=''
@@ -208,7 +230,9 @@ do_input_redirections_body()
 		echo DONE
 	EOF
 	atf_check -s exit:0 -e empty \
-		-o inline:'First Line\nSecond Line\nLine 3\nDONE\n' ${TEST_SH}
+		-o inline:'First Line\nSecond Line\nLine 3\nDONE\n' \
+		${TEST_SH} ||
+			atf_fail 'read 3 and break'
 
 	cat <<- 'EOF' |
 		l=''
@@ -223,7 +247,8 @@ do_input_redirections_body()
 	EOF
 	atf_check -s exit:0 -e empty \
 	    -o inline:'First Line:First Line\nFirst Line:Second Line\nDONE\n' \
-		${TEST_SH}
+		${TEST_SH} ||
+			atf_fail 'read and read again'
 }
 
 atf_test_case do_output_redirections
@@ -305,7 +330,8 @@ nl='
 			echo "$arg" > Out1
 		done > Out2
 	EOF
-	atf_check -s exit:0 -o empty -e empty ${TEST_SH} 
+	atf_check -s exit:0 -o empty -e empty ${TEST_SH}  ||
+		atf_fail "#$T:  not empty/empty/0"
 	test "$(cat Out1)" = "line 3" || atf_fail \
 		"#$T:  Incorrect Out1: Should be 'line 3' is '$(cat Out1)'"
 	test "$(cat Out2)" = "line 1${nl}line 2${nl}line 3" || atf_fail \
@@ -319,11 +345,80 @@ nl='
 			echo "$arg" >> Out1
 		done > Out2
 	EOF
-	atf_check -s exit:0 -o empty -e empty ${TEST_SH} 
+	atf_check -s exit:0 -o empty -e empty ${TEST_SH}  ||
+		atf_fail "#$T:  not empty/empty/0"
 	test "$(cat Out1)" = "line 1${nl}line 2${nl}line 3" || atf_fail \
     "#$T: Incorrect Out1: Should be 'line 1\\nline 2\\nline 3' is '$(cat Out1)'"
 	test "$(cat Out2)" = "line 1${nl}line 2${nl}line 3" || atf_fail \
     "#$T: Incorrect Out2: Should be 'line 1\\nline 2\\nline 3' is '$(cat Out2)'"
+}
+
+atf_test_case do_redirect_input_output
+do_redirect_input_output_head()
+{
+	atf_set "descr" "Test Input+Output (BiDir) redirections"
+}
+do_redirect_input_output_body()
+{
+nl='
+'
+	T=0
+	i() { T=$(expr "$T" + 1); }
+
+	rm -f Output 2>/dev/null || :
+	test -f Output && atf_fail "Unable to remove Output file"
+#1
+	i; atf_check -s exit:0 -o empty -e empty ${TEST_SH} -c '<> Output'
+	test -f Output || atf_fail "#$T: Did not make Output file"
+
+#2
+	echo data >Output 2>/dev/null || :
+	i
+	atf_check -s exit:0 -o empty -e empty ${TEST_SH} -c \
+		'<>Output'
+	test -f Output || atf_fail "#$T: Removed Output file"
+	test -s Output || atf_fail "#$T: Did not keep data in Output file"
+	test "$(cat Output)" = "data" ||
+	  atf_fail "#$T: Incorrect Output: Should be 'data' is '$(cat Output)'"
+
+#3
+	rm -f Output 2>/dev/null || :
+	i
+	atf_check -s exit:0 -o empty -e empty ${TEST_SH} -c \
+		'echo Hello 1<>Output'
+	test -s Output || atf_fail "#$T: Did not keep non-empty Output file"
+	test "$(cat Output)" = "Hello" ||
+	  atf_fail "#$T: Incorrect Output: Should be 'Hello' is '$(cat Output)'"
+
+#4
+	printf data >Output 2>/dev/null || :
+	i
+	atf_check -s exit:0 -o inline:'data' -e empty ${TEST_SH} -c \
+		'cat <>Output'
+	test -f Output || atf_fail "#$T: Removed Output file"
+	test -s Output || atf_fail "#$T: Did not keep data in Output file"
+	test "$(cat Output)" = "data" ||
+	  atf_fail "#$T: Incorrect Output: Should be 'data' is '$(cat Output)'"
+
+#5
+	echo data >Output 2>/dev/null || :
+	i
+	atf_check -s exit:0 -o empty -e empty ${TEST_SH} -c \
+		'echo Hello 1<>Output'
+	test -s Output || atf_fail "#$T: Did not make non-empty Output file"
+	test "$(cat Output)" = "Hello" ||
+	  atf_fail "#$T: Incorrect Output: Should be 'Hello' is '$(cat Output)'"
+
+#6
+	printf data >Output 2>/dev/null || :
+	i
+	atf_check -s exit:0 -o inline:data -e empty ${TEST_SH} -c \
+		'{ cat >&3; printf file; } <>Output 3>&1 >&0'
+	test -f Output || atf_fail "#$T: Removed Output file"
+	test -s Output || atf_fail "#$T: Did not keep data in Output file"
+	test "$(cat Output)" = "datafile" ||
+	  atf_fail \
+	      "#$T: Incorrect Output: Should be 'datafile' is '$(cat Output)'"
 }
 
 atf_test_case fd_redirections
@@ -493,9 +588,11 @@ named_fd_redirections_body()
 		atf_require_prog cat
 
 		echo GOOD | atf_check -s exit:0 -o inline:'GOOD\n' -e empty \
-			${TEST_SH} -c 'read var </dev/stdin; echo $var'
+			${TEST_SH} -c 'read var </dev/stdin; echo $var' ||
+				atf_fail "/dev/stdin test 1"
 		echo GOOD | atf_check -s exit:0 -o inline:'GOOD\n' -e empty \
-			${TEST_SH} -c 'cat </dev/stdin'
+			${TEST_SH} -c 'cat </dev/stdin' ||
+				atf_fail "/dev/stdin test 2"
 	fi
 
 	if test -c /dev/stderr
@@ -583,6 +680,37 @@ incorrect_redirections_body() {
 	test -f '>' || atf_file "File '>' not created when it should"
 	test "$(cat '>')" = 'A Line Output' || atf_fail \
 	    "Output file ('>') contains '$(cat '>')' instead of 'A Line Output'"
+
+	rm -fr OutDir
+	atf-check -s not-exit:0 -o empty -e not-empty \
+		${TEST_SH} -c ': > OutDir/stdout; printf foo'
+	atf-check -s not-exit:0 -o empty -e not-empty \
+		${TEST_SH} -c ': > OutDir/stdout || printf foo; printf bar'
+	atf-check -s exit:0 -o inline:bar -e not-empty \
+		${TEST_SH} -c '> OutDir/stdout; printf bar'
+	atf-check -s exit:0 -o inline:foobar -e not-empty \
+		${TEST_SH} -c '> OutDir/stdout || printf foo; printf bar'
+	atf-check -s exit:0 -o inline:bar -e not-empty \
+		${TEST_SH} -c 'command : > OutDir/stdout; printf bar'
+	atf-check -s exit:0 -o inline:foobar -e not-empty ${TEST_SH} -c \
+		'command : > OutDir/stdout || printf foo; printf bar'
+	atf-check -s not-exit:0 -o empty -e not-empty \
+		${TEST_SH} -c ': <> OutDir/stdout; printf foo'
+
+	atf-check -s not-exit:0 -o empty -e not-empty \
+		${TEST_SH} -c ': >&8 ; printf foo'
+	atf-check -s not-exit:0 -o empty -e not-empty \
+		${TEST_SH} -c ': >&8 || printf foo; printf bar'
+	atf-check -s exit:0 -o inline:bar -e not-empty \
+		${TEST_SH} -c '>&8 ; printf bar'
+	atf-check -s exit:0 -o inline:foobar -e not-empty \
+		${TEST_SH} -c '>&8 || printf foo; printf bar'
+	atf-check -s exit:0 -o inline:bar -e not-empty \
+		${TEST_SH} -c 'command : >&7; printf bar'
+	atf-check -s exit:0 -o inline:foobar -e not-empty ${TEST_SH} -c \
+		'command : >&7 || printf foo; printf bar'
+
+	return 0
 }
 
 # Many more tests in t_here, so here we have just rudimentary checks
@@ -601,7 +729,8 @@ redir_here_doc_body()
 		EOF
 	DONE
 	atf_check -s exit:0 -o match:printf -o match:'hello\\n' \
-		-e empty ${TEST_SH} 
+		-e empty ${TEST_SH}  ||
+			atf_fail "redir_here_doc failed"
 }
 
 atf_test_case subshell_redirections
@@ -632,7 +761,8 @@ subshell_redirections_body()
 		echo Bye="$bye"
 	DONE
 	atf_check -s exit:0 -o match:Bye=bye-bye -e empty \
-		${TEST_SH}
+		${TEST_SH} ||
+			atf_fail 'bye-bye failure'
 
 	cat <<- 'DONE' |
 		for arg in one-4 two-24 three-14
@@ -664,7 +794,8 @@ subshell_redirections_body()
 		)
 	DONE
 	atf_check -s exit:0 -o inline:'line-1\nline-2\nline-3\n' \
-		-e empty ${TEST_SH}
+		-e empty ${TEST_SH} ||
+			atf_fail 'complex 3 line redirects'
 
 	cat <<- 'DONE' |
 		for arg in one-4-5 two-6-7 three-8-9 four-11-10 five-3-12
@@ -687,7 +818,8 @@ subshell_redirections_body()
 		( ( ( cat <&7 >&1 ) 7<&6 >&10 ) 10>&2 6<&8 ) 2>&1
 	DONE
 	atf_check -s exit:0 -o inline:'line-1\nline-2\nline-3\n' \
-		-e empty ${TEST_SH}
+		-e empty ${TEST_SH} ||
+			atf_fail 'absurd 3 line redirects'
 }
 
 atf_test_case ulimit_redirection_interaction
@@ -767,11 +899,11 @@ validate_fn_redirects_body()
 		${TEST_SH} -c ". ./f-def; f ; printf '%s\n' success1"
 	atf_check -s exit:0 -o inline:'success2\n' -e empty \
 		${TEST_SH} -c ". ./f-def; f >/dev/null; printf '%s\n' success2"
-	atf_check -s exit:0 -o inline:'success3\n' -e empty \
+	atf_check -s exit:0 -o inline:'success3\n' -e not-empty \
 		${TEST_SH} -c ". ./f-def; f >&- ; printf '%s\n' success3"
 	atf_check -s exit:0 -o inline:'In-Func\nsuccess4\n' -e empty \
 		${TEST_SH} -c ". ./f-def; f & wait; printf '%s\n' success4"
-	atf_check -s exit:0 -o inline:'success5\n' -e empty \
+	atf_check -s exit:0 -o inline:'success5\n' -e not-empty \
 		${TEST_SH} -c ". ./f-def; f >&- & wait; printf '%s\n' success5"
 	atf_check -s exit:0 -o inline:'In-Func\nIn-Func\nsuccess6\n' -e empty \
 		${TEST_SH} -c ". ./f-def; f;f; printf '%s\n' success6"
@@ -820,13 +952,16 @@ validate_fn_redirects_body()
 	echo ". ./f-def || echo >&2 FAIL
 		f
 		printf '%s\n' stdin1
-	"| atf_check -s exit:0 -o inline:'In-Func\nstdin1\n' -e empty ${TEST_SH}
+	" | atf_check -s exit:0 -o inline:'In-Func\nstdin1\n' -e empty \
+	      ${TEST_SH} ||
+		atf_fail "stdin1 test failure"
 
 	echo '
 		. ./f-def || echo >&2 FAIL
-		f >&-
+		f >&- 2>/dev/null
 		printf "%s\n" stdin2
-	' | atf_check -s exit:0 -o inline:'stdin2\n' -e empty ${TEST_SH}
+	' | atf_check -s exit:0 -o inline:'stdin2\n' -e empty ${TEST_SH} ||
+		atf_fail "stdin2 test failure"
 
 	cat <<- 'DONE' > fgh.def
 		f() {
@@ -884,13 +1019,15 @@ validate_fn_redirects_body()
 		echo X $( f >&- & sleep 1; g >&- & sleep 1 ; h ) Y
 		sleep 3
 		exec 4>&1 || echo FD_FAIL
-	' | atf_check -s exit:0 -o inline:'fghX Y\nGF' -e empty ${TEST_SH}
+	' | atf_check -s exit:0 -o inline:'fghX Y\nGF' -e empty ${TEST_SH} ||
+		atf_fail "48875 stdin variant failure"
 }
 
 atf_init_test_cases() {
 	atf_add_test_case basic_test_method_test
 	atf_add_test_case do_input_redirections
 	atf_add_test_case do_output_redirections
+	atf_add_test_case do_redirect_input_output
 	atf_add_test_case fd_redirections
 	atf_add_test_case local_redirections
 	atf_add_test_case incorrect_redirections

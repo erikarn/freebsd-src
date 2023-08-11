@@ -1,4 +1,4 @@
-/* $NetBSD: t_uvm_physseg.c,v 1.2 2016/12/22 08:15:20 cherry Exp $ */
+/* $NetBSD: t_uvm_physseg.c,v 1.11 2022/07/26 19:49:32 andvar Exp $ */
 
 /*-
  * Copyright (c) 2015, 2016 The NetBSD Foundation, Inc.
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: t_uvm_physseg.c,v 1.2 2016/12/22 08:15:20 cherry Exp $");
+__RCSID("$NetBSD: t_uvm_physseg.c,v 1.11 2022/07/26 19:49:32 andvar Exp $");
 
 /*
  * If this line is commented out tests related to uvm_physseg_get_pmseg()
@@ -228,7 +228,7 @@ uvmpdpol_reinit(void)
 #define PAGE_COUNT_1M      256
 
 /*
- * A debug fucntion to print the content of upm.
+ * A debug function to print the content of upm.
  */
 	static inline void
 	uvm_physseg_dump_seg(uvm_physseg_t upm)
@@ -269,6 +269,11 @@ uvm_physseg_alloc(size_t sz)
 	return &vm_physmem[vm_nphysseg++];
 }
 #endif
+
+/*
+ * This macro was added to convert uvmexp.npages from int to psize_t
+ */
+#define INT_TO_PSIZE_T(X) (psize_t)X
 
 /*
  * Test Fixture SetUp().
@@ -396,7 +401,7 @@ ATF_TC(uvm_physseg_atboot_free_leak);
 ATF_TC_HEAD(uvm_physseg_atboot_free_leak, tc)
 {
 	atf_tc_set_md_var(tc, "descr",
-	    "does free() leak at boot ?\n"
+	    "does free() leak at boot ?"
 	    "This test needs VM_PHYSSEG_MAX > 1)");
 }
 
@@ -498,7 +503,7 @@ ATF_TC_BODY(uvm_physseg_plug, tc)
 #if VM_PHYSSEG_MAX > 2
 	    + npages2
 #endif
-	    , uvmexp.npages);
+	    , INT_TO_PSIZE_T(uvmexp.npages));
 #if VM_PHYSSEG_MAX > 1
 	/* Scavenge plug - goes into the same slab */
 	ATF_REQUIRE_EQ(uvm_physseg_plug(VALID_START_PFN_3, npages3, &upm3), true);
@@ -507,7 +512,7 @@ ATF_TC_BODY(uvm_physseg_plug, tc)
 #if VM_PHYSSEG_MAX > 2
 	    + npages2
 #endif
-	    + npages3, uvmexp.npages);
+	    + npages3, INT_TO_PSIZE_T(uvmexp.npages));
 
 	/* Scavenge plug should fit right in the slab */
 	pgs = uvm_physseg_get_pg(upm3, 0);
@@ -517,7 +522,7 @@ ATF_TC_BODY(uvm_physseg_plug, tc)
 	ATF_REQUIRE_EQ(uvm_physseg_plug(VALID_START_PFN_4, npages4, &upm4), true);
 	/* The hot plug slab should have nothing to do with the original slab */
 	pgs = uvm_physseg_get_pg(upm4, 0);
-	ATF_REQUIRE(pgs < slab || pgs > (slab + npages1
+	ATF_REQUIRE(pgs < slab || pgs >= (slab + npages1
 #if VM_PHYSSEG_MAX > 2
 		+ npages2
 #endif
@@ -706,7 +711,7 @@ ATF_TC_BODY(uvm_page_physload_postboot, tc)
 	/* Should return a valid handle */
 	ATF_REQUIRE(uvm_physseg_valid_p(upm));
 
-	ATF_REQUIRE_EQ(npages1 + npages2, uvmexp.npages);
+	ATF_REQUIRE_EQ(npages1 + npages2, INT_TO_PSIZE_T(uvmexp.npages));
 
 	/* After the second call two segments should exist */
 	ATF_CHECK_EQ(2, uvm_physseg_get_entries());
@@ -889,7 +894,7 @@ ATF_TC_BODY(uvm_physseg_init_seg, tc)
 
 	uvm_physseg_init_seg(PHYSSEG_NODE_TO_HANDLE(seg), pgs);
 
-	ATF_REQUIRE_EQ(npages, uvmexp.npages);
+	ATF_REQUIRE_EQ(npages, INT_TO_PSIZE_T(uvmexp.npages));
 }
 
 #if 0
@@ -1881,7 +1886,7 @@ ATF_TC(vm_physseg_find_invalid);
 ATF_TC_HEAD(vm_physseg_find_invalid, tc)
 {
 	atf_tc_set_md_var(tc, "descr", "Tests if the returned segment number \
-	    is (paddr_t) -1  when a non existant PFN is passed into \
+	    is (paddr_t) -1  when a non-existent PFN is passed into \
 	    uvm_physseg_find() call.");
 }
 ATF_TC_BODY(vm_physseg_find_invalid, tc)
@@ -2037,7 +2042,7 @@ ATF_TC_BODY(uvm_page_physunload_none, tc)
 	/*
 	 * Note: start != avail_start and end != avail_end.
 	 *
-	 * This prevents any unload from occuring.
+	 * This prevents any unload from occurring.
 	 */
 	upm = uvm_page_physload(VALID_START_PFN_2, VALID_END_PFN_2,
 	    VALID_AVAIL_START_PFN_2 + 1, VALID_AVAIL_END_PFN_2 - 1,
@@ -2150,7 +2155,7 @@ ATF_TC_BODY(uvm_page_physunload_delete_end, tc)
 	 */
 
 	upm = uvm_page_physload(VALID_START_PFN_1, VALID_START_PFN_1 + 2,
-	    VALID_AVAIL_START_PFN_1 + 1, VALID_AVAIL_START_PFN_1 + 2,
+	    VALID_AVAIL_START_PFN_1, VALID_AVAIL_START_PFN_1 + 2,
 	    VM_FREELIST_DEFAULT);
 
 	ATF_REQUIRE_EQ(1, uvm_physseg_get_entries());
@@ -2172,11 +2177,13 @@ ATF_TC_BODY(uvm_page_physunload_delete_end, tc)
 
 	ATF_CHECK_EQ(true, uvm_page_physunload(upm, VM_FREELIST_DEFAULT, &p));
 
+	ATF_CHECK_EQ(VALID_START_PFN_1, atop(p));
+
 	p = 0;
 
 	ATF_CHECK_EQ(true, uvm_page_physunload(upm, VM_FREELIST_DEFAULT, &p));
 
-	ATF_CHECK_EQ(VALID_START_PFN_1 + 2, atop(p));
+	ATF_CHECK_EQ(VALID_START_PFN_1 + 1, atop(p));
 
 	ATF_CHECK_EQ(1, uvm_physseg_get_entries());
 
@@ -2244,7 +2251,7 @@ ATF_TC_BODY(uvm_page_physunload_force, tc)
 	/* Insert more than one segment iff VM_PHYSSEG_MAX > 1 */
 #if VM_PHYSSEG_MAX > 1
 	/*
-	 * We have couple of physloads done this is bacause of the fact that if
+	 * We have couple of physloads done this is because of the fact that if
 	 * we physunload all the PFs from a given range and we have only one
 	 * segment in total a panic() is called
 	 */
@@ -2279,7 +2286,11 @@ ATF_TC_BODY(uvm_page_physunload_force, tc)
 	upm = uvm_physseg_find(VALID_AVAIL_END_PFN_1 - 1, NULL);
 
 	/* It should no longer exist */
+#if defined(UVM_HOTPLUG)
 	ATF_CHECK_EQ(NULL, upm);
+#else
+	ATF_CHECK_EQ(-1, upm);
+#endif
 
 	ATF_CHECK_EQ(1, uvm_physseg_get_entries());
 }

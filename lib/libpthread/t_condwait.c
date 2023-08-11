@@ -1,4 +1,4 @@
-/* $NetBSD: t_condwait.c,v 1.5 2017/01/16 16:29:19 christos Exp $ */
+/* $NetBSD: t_condwait.c,v 1.10 2022/12/11 10:02:53 kre Exp $ */
 
 /*
  * Copyright (c) 2013 The NetBSD Foundation, Inc.
@@ -26,7 +26,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: t_condwait.c,v 1.5 2017/01/16 16:29:19 christos Exp $");
+__RCSID("$NetBSD: t_condwait.c,v 1.10 2022/12/11 10:02:53 kre Exp $");
 
 #include <sys/time.h>
 #include <errno.h>
@@ -43,7 +43,7 @@ __RCSID("$NetBSD: t_condwait.c,v 1.5 2017/01/16 16:29:19 christos Exp $");
 
 #include "h_common.h"
 
-#define WAITTIME 2	/* Timeout wait secound */
+#define WAITTIME 2	/* Timeout wait in seconds */
 
 static const int debug = 1;
 
@@ -78,21 +78,18 @@ run(void *param)
 	case ETIMEDOUT:
 		/* Timeout */
 		ATF_REQUIRE_EQ(clock_gettime(clck, &te), 0);
-		timespecsub(&te, &to, &to);
 		if (debug) {
 			printf("timeout: %lld.%09ld sec\n",
 			    (long long)te.tv_sec, te.tv_nsec);
+			timespecsub(&te, &to, &to);
 			printf("elapsed: %lld.%09ld sec\n",
 			    (long long)to.tv_sec, to.tv_nsec);
 		}
-		if (isQEMU()) {
-			double to_seconds = to.tv_sec + 1e-9 * to.tv_nsec;
-			ATF_REQUIRE(to_seconds >= WAITTIME * 0.9);
-			/* Loose upper limit because of qemu timing bugs */
-			ATF_REQUIRE(to_seconds < WAITTIME * 2.5);
-		} else {
-			ATF_REQUIRE_EQ(to.tv_sec, WAITTIME);
-		}
+		if (clck == CLOCK_MONOTONIC)
+			ATF_REQUIRE(timespeccmp(&te, &ts, >=));
+		break;
+	case 0:
+		atf_tc_fail("pthread_cond_timedwait returned before timeout");
 		break;
 	default:
 		ATF_REQUIRE_MSG(0, "pthread_cond_timedwait: %s", strerror(ret));
@@ -141,5 +138,5 @@ ATF_TP_ADD_TCS(tp)
 {
 	ATF_TP_ADD_TC(tp, cond_wait_real);
 	ATF_TP_ADD_TC(tp, cond_wait_mono);
-	return 0;
+	return atf_no_error();
 }

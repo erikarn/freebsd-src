@@ -1,4 +1,4 @@
-#	$NetBSD: t_shmif.sh,v 1.3 2016/08/10 23:49:03 kre Exp $
+#	$NetBSD: t_shmif.sh,v 1.5 2020/09/09 09:17:14 gson Exp $
 #
 # Copyright (c) 2011 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -39,7 +39,7 @@ startserver()
 
 	export RUMP_SERVER=unix://sock${1}
 	atf_check -s exit:0 rump_server -lrumpnet -lrumpnet_net \
-	    -lrumpnet_netinet -lrumpnet_shmif -lrumpdev ${RUMP_SERVER}
+	    -lrumpnet_netinet -lrumpnet_shmif ${RUMP_SERVER}
 	atf_check -s exit:0 rump.ifconfig shmif0 create
 	atf_check -s exit:0 rump.ifconfig shmif0 linkstr shmbus
 	atf_check -s exit:0 rump.ifconfig shmif0 inet 1.1.1.${1}
@@ -61,7 +61,7 @@ crossping_body()
 		do
 			[ ${y} -eq ${x} ] && continue
 			atf_check -s exit:0 -o ignore -e ignore \
-			    rump.ping -c 1 1.1.1.${y}
+			    rump.ping -n -c 1 1.1.1.${y}
 		done
 	done
 }

@@ -1,10 +1,11 @@
-#	$NetBSD: Makefile,v 1.5 2011/01/14 13:08:00 pooka Exp $
+#	$NetBSD: Makefile,v 1.7 2018/12/24 21:42:05 thorpej Exp $
 #
 
 .include <bsd.own.mk>
 
 LIB=	kernspace
-SRCS=	thread.c busypage.c tsleep.c alloc.c lockme.c sendsig.c
+SRCS=	thread.c threadpool.c busypage.c tsleep.c alloc.c lockme.c \
+	workqueue.c sendsig.c
 
 RUMPTOP=${NETBSDSRCDIR}/sys/rump
 

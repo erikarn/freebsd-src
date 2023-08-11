@@ -1,4 +1,4 @@
-/*	$NetBSD: t_ro.c,v 1.6 2017/01/13 21:30:40 christos Exp $	*/
+/*	$NetBSD: t_ro.c,v 1.8 2019/09/21 14:25:42 kre Exp $	*/
 
 /*-
  * Copyright (c) 2010 The NetBSD Foundation, Inc.
@@ -79,7 +79,8 @@ create(const atf_tc_t *tc, const char *mp)
 {
 
 	FSTEST_ENTER();
-	ATF_REQUIRE_ERRNO(EROFS, rump_sys_open(AFILE, O_CREAT|O_RDONLY) == -1);
+	ATF_REQUIRE_ERRNO(EROFS, rump_sys_open(AFILE, O_CREAT|O_RDONLY,
+	    0600) == -1);
 	FSTEST_EXIT();
 }
 
@@ -119,7 +120,7 @@ fileio(const atf_tc_t *tc, const char *mp)
 static void
 attrs(const atf_tc_t *tc, const char *mp)
 {
-	struct timeval sometvs[2];
+	struct timeval sometvs[2] = { {0,0}, {0,0} };
 	struct stat sb;
 	int fd;
 

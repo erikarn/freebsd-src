@@ -1,4 +1,4 @@
-/* $NetBSD: h_spawnattr.c,v 1.1 2012/02/13 21:03:08 martin Exp $ */
+/* $NetBSD: h_spawnattr.c,v 1.3 2021/11/07 15:46:20 christos Exp $ */
 
 /*-
  * Copyright (c) 2012 The NetBSD Foundation, Inc.
@@ -29,6 +29,8 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+#include <sys/cdefs.h>
+__RCSID("$NetBSD: h_spawnattr.c,v 1.3 2021/11/07 15:46:20 christos Exp $");
 
 #include <errno.h>
 #include <stdio.h>
@@ -38,7 +40,7 @@
 
 /*
  * Helper to test the hardcoded assumptions from t_spawnattr.c
- * Exit with apropriate exit status and print diagnostics to
+ * Exit with appropriate exit status and print diagnostics to
  * stderr explaining what is wrong.
  */
 int

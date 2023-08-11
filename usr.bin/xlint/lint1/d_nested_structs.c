@@ -1,10 +1,15 @@
+/*	$NetBSD: d_nested_structs.c,v 1.4 2023/03/28 14:44:34 rillig Exp $	*/
+# 3 "d_nested_structs.c"
+
+/* lint1-extra-flags: -X 351 */
+
 /* Nested struct */
 typedef void *EditLine;
 typedef void *History;
 
 typedef struct {
-	EditLine	*el;
-	History		*hist;
+	EditLine *el;
+	History *hist;
 } el_mode_t;
 
 struct el_modes_s {

@@ -1,4 +1,4 @@
-/*	$NetBSD: scsitest.c,v 1.2 2014/04/25 00:24:39 pooka Exp $	*/
+/*	$NetBSD: scsitest.c,v 1.5 2021/08/07 22:05:26 cjep Exp $	*/
 
 /*
  * Copyright (c) 2010 Antti Kantee.  All Rights Reserved.
@@ -35,7 +35,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: scsitest.c,v 1.2 2014/04/25 00:24:39 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: scsitest.c,v 1.5 2021/08/07 22:05:26 cjep Exp $");
 
 #include <sys/param.h>
 #include <sys/atomic.h>
@@ -123,9 +123,9 @@ scsitest_request(struct scsipi_channel *chan,
 		memset(inqbuf, 0, sizeof(*inqbuf));
 		inqbuf->device = T_CDROM;
 		inqbuf->dev_qual2 = SID_REMOVABLE;
-		strcpy(inqbuf->vendor, "RUMPHOBO");
-		strcpy(inqbuf->product, "It's a LIE");
-		strcpy(inqbuf->revision, "0.00");
+		strncpy(inqbuf->vendor, "RUMPHOBO", sizeof inqbuf->vendor);
+		strncpy(inqbuf->product, "It's a LIE", sizeof inqbuf->product);
+		strncpy(inqbuf->revision, "0.00", sizeof inqbuf->revision);
 		break;
 	}
 	case READ_CD_CAPACITY: {
@@ -255,5 +255,6 @@ scsitest_attach(device_t parent, device_t self, void *aux)
 	sc->sc_channel.chan_flags = SCSIPI_CHAN_NOSETTLE;
 	sc->sc_channel.chan_adapter = &sc->sc_adapter;
 
-	config_found_ia(self, "scsi", &sc->sc_channel, scsiprint);
+	config_found(self, &sc->sc_channel, scsiprint,
+		CFARGS(.iattr = "scsi"));
 }

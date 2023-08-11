@@ -1,4 +1,4 @@
-/* $NetBSD: h_spawn.c,v 1.1 2012/02/13 21:03:08 martin Exp $ */
+/* $NetBSD: h_spawn.c,v 1.3 2021/11/07 15:46:20 christos Exp $ */
 
 /*-
  * Copyright (c) 2012 The NetBSD Foundation, Inc.
@@ -29,9 +29,13 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+#include <sys/cdefs.h>
+__RCSID("$NetBSD: h_spawn.c,v 1.3 2021/11/07 15:46:20 christos Exp $");
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 int
 main(int argc, char **argv)
@@ -39,11 +43,25 @@ main(int argc, char **argv)
 	unsigned long ret;
 	char *endp;
 
-	if (argc < 2) {
+	if (argc == 2 && strcmp(argv[1], "--resetids") == 0) {
+		if (getuid() != geteuid() || getgid() != getegid()) {
+			fprintf(stderr, "uid/gid do not match effective ids, "
+			    "uid: %d euid: %d gid: %d egid: %d\n",
+			    getuid(), geteuid(), getgid(), getegid());
+			exit(255);
+		}
+		return 0;
+	} else if (argc != 2) {
 		fprintf(stderr, "usage:\n\t%s (retcode)\n", getprogname());
 		exit(255);
 	}
 	ret = strtoul(argv[1], &endp, 10);
+	if (*endp != 0) {
+		fprintf(stderr,
+		    "invalid arg: %s\n"
+		    "usage:\n\t%s (retcode)\n", endp, getprogname());
+		exit(255);
+	}
 
 	fprintf(stderr, "%s exiting with status %lu\n", getprogname(), ret);
 	return ret;

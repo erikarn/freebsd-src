@@ -1,4 +1,4 @@
-/* $NetBSD: t_parsedate.c,v 1.25 2016/06/22 15:01:38 kre Exp $ */
+/* $NetBSD: t_parsedate.c,v 1.33 2022/05/02 19:57:50 christos Exp $ */
 /*-
  * Copyright (c) 2010, 2015 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -29,7 +29,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: t_parsedate.c,v 1.25 2016/06/22 15:01:38 kre Exp $");
+__RCSID("$NetBSD: t_parsedate.c,v 1.33 2022/05/02 19:57:50 christos Exp $");
 
 #include <atf-c.h>
 #include <errno.h>
@@ -84,6 +84,9 @@ parsecheck(const char *datestr, const time_t *reftime, const int *zoff,
 
 	ATF_CHECK_MSG((t = parsedate(datestr, reftime, zoff)) != -1,
 	    "parsedate(%s) returned -1\n", argstr);
+	if (t == -1)
+		return;
+
 	ATF_CHECK(time_to_tm(&t, &tm) != NULL);
 	if (year != ANY)
 		ATF_CHECK_MSG(tm.tm_year + 1900 == year,
@@ -122,18 +125,20 @@ ATF_TC_HEAD(dates, tc)
 ATF_TC_BODY(dates, tc)
 {
 
+	parsecheck("9/10/68", NULL, NULL, localtime_r,
+		2068, 9, 10, 0, 0, 0); /* year < 69: add 2000 */
 	parsecheck("9/10/69", NULL, NULL, localtime_r,
-		2069, 9, 10, 0, 0, 0); /* year < 70: add 2000 */
-	parsecheck("9/10/70", NULL, NULL, localtime_r,
-		1970, 9, 10, 0, 0, 0); /* 70 <= year < 100: add 1900 */
-	parsecheck("69-09-10", NULL, NULL, localtime_r,
-		69, 9, 10, 0, 0, 0); /* ISO8601 year remains unchanged */
+		1969, 9, 10, 0, 0, 0); /* 69 <= year < 100: add 1900 */
+	parsecheck("68-09-10", NULL, NULL, localtime_r,
+		68, 9, 10, 0, 0, 0); /* ISO8601 year remains unchanged */
 	parsecheck("70-09-10", NULL, NULL, localtime_r,
 		70, 9, 10, 0, 0, 0); /* ISO8601 year remains unchanged */
 	parsecheck("2006-11-17", NULL, NULL, localtime_r,
 		2006, 11, 17, 0, 0, 0);
 	parsecheck("10/1/2000", NULL, NULL, localtime_r,
 		2000, 10, 1, 0, 0, 0); /* month/day/year */
+	parsecheck("12/01/2022", NULL, NULL, localtime_r,
+		2022, 12, 1, 0, 0, 0); /* month/day/year, December */
 	parsecheck("20 Jun 1994", NULL, NULL, localtime_r,
 		1994, 6, 20, 0, 0, 0);
 	parsecheck("97 September 2", NULL, NULL, localtime_r,
@@ -180,6 +185,51 @@ ATF_TC_BODY(times, tc)
 		ANY, ANY, ANY, 0, 0, 0);
 	parsecheck("noon", NULL, NULL, localtime_r,
 		ANY, ANY, ANY, 12, 0, 0);
+
+	/*
+	 * The following tests used to trigger the bug from PR lib/52101
+	 * but that is fixed now.
+	 *
+	atf_tc_expect_fail("PR lib/52101");
+	 */
+
+	parsecheck("12:30 am", NULL, NULL, localtime_r,
+		ANY, ANY, ANY, 0, 30, 0);
+	parsecheck("12:30 pm", NULL, NULL, localtime_r,
+		ANY, ANY, ANY, 12, 30, 0);
+
+	/*
+	 * Technically, these are invalid, noon and midnight
+	 * are neither am, nor pm, but this is what people expect...
+	 */
+	parsecheck("12:00:00 am", NULL, NULL, localtime_r,
+		ANY, ANY, ANY, 0, 0, 0);
+	parsecheck("12:00:00 pm", NULL, NULL, localtime_r,
+		ANY, ANY, ANY, 12, 0, 0);
+	parsecheck("12am", NULL, NULL, localtime_r,
+		ANY, ANY, ANY, 0, 0, 0);
+	parsecheck("12pm", NULL, NULL, localtime_r,
+		ANY, ANY, ANY, 12, 0, 0);
+
+	/* end 52101 bug tests */
+
+	parsecheck("12 noon", NULL, NULL, localtime_r,
+		ANY, ANY, ANY, 12, 0, 0);
+	parsecheck("12 midnight", NULL, NULL, localtime_r,
+		ANY, ANY, ANY, 0, 0, 0);
+	parsecheck("12 midday", NULL, NULL, localtime_r,	/* unlikely! */
+		ANY, ANY, ANY, 12, 0, 0);
+	parsecheck("12 mn", NULL, NULL, localtime_r,
+		ANY, ANY, ANY, 0, 0, 0);
+
+	parsecheck("12:00 noon", NULL, NULL, localtime_r,
+		ANY, ANY, ANY, 12, 0, 0);
+	parsecheck("12:00 midnight", NULL, NULL, localtime_r,
+		ANY, ANY, ANY, 0, 0, 0);
+	parsecheck("12:00:00 noon", NULL, NULL, localtime_r,
+		ANY, ANY, ANY, 12, 0, 0);
+	parsecheck("12:00:00 midnight", NULL, NULL, localtime_r,
+		ANY, ANY, ANY, 0, 0, 0);
 }
 
 ATF_TC(dsttimes);
@@ -570,6 +620,8 @@ ATF_TC_BODY(gibberish, tc)
 
 ATF_TP_ADD_TCS(tp)
 {
+	setenv("TZ", "UTC", 1);
+	tzset();
 	ATF_TP_ADD_TC(tp, dates);
 	ATF_TP_ADD_TC(tp, times);
 	ATF_TP_ADD_TC(tp, dsttimes);

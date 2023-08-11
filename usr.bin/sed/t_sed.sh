@@ -1,4 +1,4 @@
-# $NetBSD: t_sed.sh,v 1.6 2016/04/05 00:48:53 christos Exp $
+# $NetBSD: t_sed.sh,v 1.11 2023/05/06 02:12:11 gutteridge Exp $
 #
 # Copyright (c) 2012 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -31,7 +31,7 @@
 atf_test_case c2048
 c2048_head() {
 	atf_set "descr" "Test that sed(1) does not fail when the " \
-			"2048'th character is a backslash (PR bin/25899)"
+			"2048th character is a backslash (PR bin/25899)"
 }
 
 c2048_body() {
@@ -42,16 +42,13 @@ c2048_body() {
 
 atf_test_case emptybackref
 emptybackref_head() {
-	atf_set "descr" "Test that sed(1) handles " \
-			"empty back references (PR bin/28126)"
+	atf_set "descr" "Test that sed(1) handles empty back references"
 }
 
 emptybackref_body() {
 
 	atf_check -o inline:"foo1bar1\n" \
 		-x "echo foo1bar1 | sed -ne '/foo\(.*\)bar\1/p'"
-
-	atf_expect_fail "PR bin/28126"
 
 	atf_check -o inline:"foobar\n" \
 		-x "echo foobar | sed -ne '/foo\(.*\)bar\1/p'"
@@ -84,7 +81,7 @@ rangeselection_body() {
 		-x "printf 'A\nB\nC\nD\n' | sed '1,3d'"
 	atf_check -o inline:"A\n" \
 		-x "printf 'A\nB\nC\nD\n' | sed '2,4d'"
-	# two nonoverlapping ranges
+	# two non-overlapping ranges
 	atf_check -o inline:"C\n" \
 		-x "printf 'A\nB\nC\nD\nE\n' | sed '1,2d;4,5d'"
 	# overlapping ranges; the first prevents the second from being entered
@@ -101,7 +98,7 @@ rangeselection_body() {
 		-x "printf 'A\nB\nC\nD\n' | sed '/A/,/C/d'"
 	atf_check -o inline:"A\n" \
 		-x "printf 'A\nB\nC\nD\n' | sed '/B/,/D/d'"
-	# two nonoverlapping ranges
+	# two non-overlapping ranges
 	atf_check -o inline:"C\n" \
 		-x "printf 'A\nB\nC\nD\nE\n' | sed '/A/,/B/d;/D/,/E/d'"
 	# two overlapping ranges; the first blocks the second as above
@@ -133,10 +130,69 @@ preserve_leading_ws_ia_body() {
     7 8 9"'
 }
 
+atf_test_case escapes_in_subst
+escapes_in_subst_head() {
+	atf_set "descr" "Test that sed(1) expands \x \d \o escapes " \
+		"in substitution strings"
+}
+
+escapes_in_subst_body() {
+	atf_check -o inline:"fooXbar\n" \
+		-x 'echo "foo bar" | sed -e "s/ /\x58/"'
+	atf_check -o inline:"fooXbar\n" \
+		-x 'echo "foo bar" | sed -e "s/ /\o130/"'
+	atf_check -o inline:"fooXbar\n" \
+		-x 'echo "foo bar" | sed -e "s/ /\d88/"'
+}
+
+atf_test_case escapes_in_re
+escapes_in_re_head() {
+	atf_set "descr" "Test that sed(1) expands \x \d \o escapes " \
+		"in regex strings"
+}
+
+escapes_in_re_body() {
+	atf_check -o inline:"foo bar\n" \
+		-x 'echo "fooXbar" | sed -e "s/\x58/ /"'
+	atf_check -o inline:"foo bar\n" \
+		-x 'echo "fooXbar" | sed -e "s/\o130/ /"'
+	atf_check -o inline:"foo bar\n" \
+		-x 'echo "fooXbar" | sed -e "s/\d88/ /"'
+}
+
+atf_test_case escapes_in_re_bracket
+escapes_in_re_bracket_head() {
+	atf_set "descr" "Test that sed(1) does not expand \x \d \o escapes " \
+		"in regex strings inside braces"
+}
+
+escapes_in_re_bracket_body() {
+	atf_check -o inline:"foo    bar\n" \
+		-x 'echo "foo\\x58bar" | sed -e "s/[\x58]/ /g"'
+	atf_check -o inline:"f       bar\n" \
+		-x 'echo "fooo\\130bar" | sed -e "s/[\o130]/ /g"'
+	atf_check -o inline:"foo    bar\n" \
+		-x 'echo "foo\\d88bar" | sed -e "s/[\d88]/ /g"'
+}
+
+atf_test_case relative_addressing
+relative_addressing_head() {
+	atf_set "descr" "Test that sed(1) handles relative addressing " \
+		"properly (PR bin/49109)"
+}
+
+relative_addressing_body() {
+	atf_check -o match:"3" -x 'seq 1 4 | sed -n "1,+2p" | wc -l'
+}
+
 atf_init_test_cases() {
 	atf_add_test_case c2048
 	atf_add_test_case emptybackref
 	atf_add_test_case longlines
 	atf_add_test_case rangeselection
 	atf_add_test_case preserve_leading_ws_ia
+	atf_add_test_case escapes_in_subst
+	atf_add_test_case escapes_in_re
+	atf_add_test_case escapes_in_re_bracket
+	atf_add_test_case relative_addressing
 }

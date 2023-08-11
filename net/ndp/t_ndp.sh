@@ -1,4 +1,4 @@
-#	$NetBSD: t_ndp.sh,v 1.17 2016/11/25 08:51:17 ozaki-r Exp $
+#	$NetBSD: t_ndp.sh,v 1.40 2022/01/07 03:07:41 ozaki-r Exp $
 #
 # Copyright (c) 2015 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -28,9 +28,13 @@
 SOCKSRC=unix://commsock1
 SOCKDST=unix://commsock2
 IP6SRC=fc00::1
+IP6SRC2=fc00::3
 IP6DST=fc00::2
+IP6NET=fc00::0
+IP6DST_FAIL1=fc00::99
+IP6DST_FAIL2=fc01::99
 
-DEBUG=${DEBUG:-true}
+DEBUG=${DEBUG:-false}
 TIMEOUT=1
 
 atf_test_case ndp_cache_expiration cleanup
@@ -99,8 +103,8 @@ setup_src_server()
 	# Sanity check
 	$DEBUG && rump.ifconfig shmif0
 	$DEBUG && rump.ndp -n -a
-	atf_check -s exit:0 -o ignore rump.ndp -n $IP6SRC
-	atf_check -s not-exit:0 -o ignore -e ignore rump.ndp -n $IP6DST
+	atf_check -s not-exit:0 -o ignore -e match:'no entry' rump.ndp -n $IP6SRC
+	atf_check -s not-exit:0 -o ignore -e match:'no entry' rump.ndp -n $IP6DST
 }
 
 get_timeout()
@@ -112,6 +116,7 @@ get_timeout()
 
 ndp_cache_expiration_body()
 {
+	local macaddr=
 
 	rump_server_start $SOCKSRC netinet6
 	rump_server_start $SOCKDST netinet6
@@ -119,14 +124,26 @@ ndp_cache_expiration_body()
 	setup_dst_server
 	setup_src_server
 
+	# Shorten the expire time of cache entries
+	export RUMP_SERVER=$SOCKSRC
+	atf_check -s exit:0 -o match:'basereachable=7s0ms' \
+	    rump.ndp -i shmif0 basereachable=7000
+
+	# Make a permanent cache entry to avoid sending an NS packet disturbing
+	# the test
+	macaddr=$(get_macaddr $SOCKSRC shmif0)
+	export RUMP_SERVER=$SOCKDST
+	atf_check -s exit:0 -o ignore rump.ndp -s $IP6SRC $macaddr
+
+	export RUMP_SERVER=$SOCKSRC
+
 	#
 	# Check if a cache is expired expectedly
 	#
-	export RUMP_SERVER=$SOCKSRC
 	atf_check -s exit:0 -o ignore rump.ping6 -n -X $TIMEOUT -c 1 $IP6DST
 
 	$DEBUG && rump.ndp -n -a
-	atf_check -s exit:0 -o match:'permanent' rump.ndp -n $IP6SRC
+	atf_check -s not-exit:0 -o ignore -e match:'no entry' rump.ndp -n $IP6SRC
 	# Should be cached
 	atf_check -s exit:0 -o not-match:'permanent' rump.ndp -n $IP6DST
 
@@ -135,9 +152,9 @@ ndp_cache_expiration_body()
 	atf_check -s exit:0 sleep $(($timeout + 1))
 
 	$DEBUG && rump.ndp -n -a
-	atf_check -s exit:0 -o match:'permanent' rump.ndp -n $IP6SRC
+	atf_check -s not-exit:0 -o ignore -e match:'no entry' rump.ndp -n $IP6SRC
 	# Expired but remains until GC sweaps it (1 day)
-	atf_check -s exit:0 -o match:'(1d0h0m|23h59m)' rump.ndp -n $IP6DST
+	atf_check -s exit:0 -o match:"$ONEDAYISH" rump.ndp -n $IP6DST
 
 	rump_server_destroy_ifaces
 }
@@ -160,17 +177,16 @@ ndp_commands_body()
 
 	export RUMP_SERVER=$SOCKSRC
 
-	# We can delete the entry for the interface's IP address
-	atf_check -s exit:0 -o match:"$IP6SRC" rump.ndp -d $IP6SRC
-
 	# Add and delete a static entry
 	$DEBUG && rump.ndp -n -a
 	atf_check -s exit:0 -o ignore rump.ndp -s fc00::10 b2:a0:20:00:00:10
 	$DEBUG && rump.ndp -n -a
 	atf_check -s exit:0 -o match:'permanent' rump.ndp -n fc00::10
+	check_route fc00::10 'b2:a0:20:00:00:10' UHLS shmif0
 	atf_check -s exit:0 -o match:'deleted' rump.ndp -d fc00::10
 	$DEBUG && rump.ndp -n -a
 	atf_check -s not-exit:0 -o ignore -e ignore rump.ndp -n fc00::10
+	check_route_no_entry fc00::10
 
 	# Add multiple entries via a file (XXX not implemented)
 	#cat - > ./list <<-EOF
@@ -191,6 +207,9 @@ ndp_commands_body()
 	atf_check -s exit:0 -o not-match:'permanent' rump.ndp -n $IP6DST
 	atf_check -s exit:0 -o match:'permanent' rump.ndp -n fc00::11
 	atf_check -s exit:0 -o match:'permanent' rump.ndp -n fc00::12
+	check_route_flags $IP6DST UHL
+	check_route_flags fc00::11 UHLS
+	check_route_flags fc00::12 UHLS
 
 	# Test ndp -a
 	atf_check -s exit:0 -o match:'fc00::11' rump.ndp -n -a
@@ -204,15 +223,20 @@ ndp_commands_body()
 	atf_check -s exit:0 -o ignore rump.ndp -c
 	atf_check -s not-exit:0 -o ignore -e ignore rump.ndp -n $IP6SRC
 	atf_check -s not-exit:0 -o ignore -e ignore rump.ndp -n $IP6DST
+	#check_route_no_entry $IP6SRC
+	check_route_no_entry $IP6DST
 	# Only the static caches are not deleted
 	atf_check -s exit:0 -o ignore -e ignore rump.ndp -n fc00::11
 	atf_check -s exit:0 -o ignore -e ignore rump.ndp -n fc00::12
+	check_route_flags fc00::11 UHLS
+	check_route_flags fc00::12 UHLS
 
 	$DEBUG && rump.ndp -n -a
 	atf_check -s exit:0 -o ignore rump.ndp -s fc00::10 b2:a0:20:00:00:10 temp
 	rump.ndp -s fc00::10 b2:a0:20:00:00:10 temp
 	$DEBUG && rump.ndp -n -a
 	atf_check -s exit:0 -o not-match:'permanent' rump.ndp -n fc00::10
+	check_route fc00::10 'b2:a0:20:00:00:10' UHL shmif0
 
 	rump_server_destroy_ifaces
 }
@@ -229,8 +253,9 @@ ndp_cache_overwriting_body()
 	export RUMP_SERVER=$SOCKSRC
 
 	# Cannot overwrite a permanent cache
-	atf_check -s not-exit:0 -e ignore rump.ndp -s $IP6SRC b2:a0:20:00:00:ff
+	atf_check -s exit:0 rump.ndp -s $IP6SRC b2:a0:20:00:00:ff
 	$DEBUG && rump.ndp -n -a
+	atf_check -s not-exit:0 -e ignore rump.ndp -s $IP6SRC b2:a0:20:00:00:fe
 
 	atf_check -s exit:0 -o ignore rump.ping6 -n -X $TIMEOUT -c 1 $IP6DST
 	$DEBUG && rump.ndp -n -a
@@ -396,6 +421,392 @@ ndp_link_activation_cleanup()
 	cleanup
 }
 
+atf_test_case ndp_rtm cleanup
+ndp_rtm_head()
+{
+
+	atf_set "descr" "Tests for routing messages on operations of NDP entries"
+	atf_set "require.progs" "rump_server"
+}
+
+ndp_rtm_body()
+{
+	local macaddr_src= macaddr_dst=
+	local file=./tmp
+	local pid= hdr= what= addr=
+
+	rump_server_start $SOCKSRC netinet6
+	rump_server_start $SOCKDST netinet6
+
+	setup_dst_server
+	setup_src_server
+
+	macaddr_src=$(get_macaddr $SOCKSRC shmif0)
+	macaddr_dst=$(get_macaddr $SOCKDST shmif0)
+
+	export RUMP_SERVER=$SOCKSRC
+
+	# Test ping and a resulting routing message (RTM_ADD)
+	rump.route -n monitor -c 1 > $file &
+	pid=$!
+	sleep 1
+	atf_check -s exit:0 -o ignore rump.ping6 -n -X 1 -c 1 $IP6DST
+	wait $pid
+	$DEBUG && cat $file
+
+	hdr="RTM_ADD.+<UP,HOST,DONE,LLINFO,CLONED>"
+	what="<DST,GATEWAY,AUTHOR>"
+	addr="$IP6DST $macaddr_dst $IP6DST"
+	atf_check -s exit:0 -o match:"$hdr" -o match:"$what" -o match:"$addr" \
+		cat $file
+
+	# Test ping and a resulting routing message (RTM_MISS) on subnet
+	rump.route -n monitor -c 1 > $file &
+	pid=$!
+	sleep 1
+	atf_check -s exit:1 -o ignore -e ignore \
+		rump.ping6 -n -X 1 -c 1 $IP6DST_FAIL1
+	wait $pid
+	$DEBUG && cat $file
+
+	hdr="RTM_MISS.+<DONE>"
+	what="<DST,GATEWAY,AUTHOR>"
+	addr="$IP6DST_FAIL1 link#2 $IP6SRC"
+	atf_check -s exit:0 -o match:"$hdr" -o match:"$what" -o match:"$addr" \
+		cat $file
+
+	# Test ping and a resulting routing message (RTM_MISS) off subnet
+	rump.route -n monitor -c 1 > $file &
+	pid=$!
+	sleep 1
+	atf_check -s exit:1 -o ignore -e ignore \
+		rump.ping6 -n -X 1 -c 1 $IP6DST_FAIL2
+	wait $pid
+	$DEBUG && cat $file
+
+	hdr="RTM_MISS.+<DONE>"
+	what="<DST>"
+	addr="$IP6DST_FAIL2"
+	atf_check -s exit:0 -o match:"$hdr" -o match:"$what" -o match:"$addr" \
+		cat $file
+
+	# Test ndp -d and resulting routing messages (RTM_DELETE)
+	rump.route -n monitor -c 1 > $file &
+	pid=$!
+	sleep 1
+	atf_check -s exit:0 -o ignore rump.ndp -d $IP6DST
+	wait $pid
+	$DEBUG && cat $file
+
+	hdr="RTM_DELETE.+<HOST,DONE,LLINFO,CLONED>"
+	what="<DST,GATEWAY>"
+	addr="$IP6DST $macaddr_dst"
+	atf_check -s exit:0 -o match:"$hdr" -o match:"$what" -o match:"$addr" \
+		grep -A 3 RTM_DELETE $file
+
+	rump_server_destroy_ifaces
+}
+
+ndp_rtm_cleanup()
+{
+
+	$DEBUG && dump
+	cleanup
+}
+
+atf_test_case ndp_purge_on_route_change cleanup
+ndp_purge_on_route_change_head()
+{
+
+	atf_set "descr" "Tests if NDP entries are removed on route change"
+	atf_set "require.progs" "rump_server"
+}
+
+ndp_purge_on_route_change_body()
+{
+
+	rump_server_start $SOCKSRC netinet6
+	rump_server_start $SOCKDST netinet6
+
+	setup_dst_server
+	setup_src_server
+
+	rump_server_add_iface $SOCKSRC shmif1 bus1
+	export RUMP_SERVER=$SOCKSRC
+	atf_check -s exit:0 rump.ifconfig shmif1 inet6 fc00:1::1
+	atf_check -s exit:0 rump.ifconfig -w 10
+
+	$DEBUG && rump.netstat -nr -f inet6
+	atf_check -s exit:0 -o ignore rump.ping6 -n -X 1 -c 1 $IP6DST
+	atf_check -s exit:0 -o match:'shmif0' rump.ndp -n $IP6DST
+
+	atf_check -s exit:0 -o ignore \
+	    rump.route change -inet6 -net $IP6NET/64 -ifp shmif1
+	$DEBUG && rump.netstat -nr -f inet6
+	$DEBUG && rump.ndp -na
+	# The entry was already removed on route change
+	atf_check -s not-exit:0 -o ignore -e match:'no entry' \
+	    rump.ndp -n $IP6DST
+
+	rump_server_destroy_ifaces
+}
+
+ndp_purge_on_route_change_cleanup()
+{
+
+	$DEBUG && dump
+	cleanup
+}
+
+atf_test_case ndp_purge_on_route_delete cleanup
+ndp_purge_on_route_delete_head()
+{
+
+	atf_set "descr" "Tests if NDP entries are removed on route delete"
+	atf_set "require.progs" "rump_server"
+}
+
+ndp_purge_on_route_delete_body()
+{
+
+	rump_server_start $SOCKSRC netinet6
+	rump_server_start $SOCKDST netinet6
+
+	setup_dst_server
+	setup_src_server
+
+	$DEBUG && rump.netstat -nr -f inet6
+	atf_check -s exit:0 -o ignore rump.ping6 -n -X 1 -c 1 $IP6DST
+	atf_check -s exit:0 -o match:'shmif0' rump.ndp -n $IP6DST
+
+	atf_check -s exit:0 -o ignore rump.route delete -inet6 -net $IP6NET/64
+	$DEBUG && rump.netstat -nr -f inet6
+	$DEBUG && rump.ndp -na
+
+	# The entry was already removed on route delete
+	atf_check -s not-exit:0 -o ignore -e match:'no entry' \
+	    rump.ndp -n $IP6DST
+
+	rump_server_destroy_ifaces
+}
+
+ndp_purge_on_route_delete_cleanup()
+{
+
+	$DEBUG && dump
+	cleanup
+}
+
+atf_test_case ndp_purge_on_ifdown cleanup
+ndp_purge_on_ifdown_head()
+{
+
+	atf_set "descr" "Tests if NDP entries are removed on interface down"
+	atf_set "require.progs" "rump_server"
+}
+
+ndp_purge_on_ifdown_body()
+{
+
+	rump_server_start $SOCKSRC netinet6
+	rump_server_start $SOCKDST netinet6
+
+	setup_dst_server
+	setup_src_server
+
+	$DEBUG && rump.netstat -nr -f inet6
+	atf_check -s exit:0 -o ignore rump.ping6 -n -X 1 -c 1 $IP6DST
+	atf_check -s exit:0 -o match:'shmif0' rump.ndp -n $IP6DST
+
+	# Shutdown the interface
+	atf_check -s exit:0 rump.ifconfig shmif0 down
+	$DEBUG && rump.netstat -nr -f inet6
+	$DEBUG && rump.ndp -na
+
+	# The entry was already removed on ifconfig down
+	atf_check -s not-exit:0 -o ignore -e match:'no entry' \
+	    rump.ndp -n $IP6DST
+
+	rump_server_destroy_ifaces
+}
+
+ndp_purge_on_ifdown_cleanup()
+{
+
+	$DEBUG && dump
+	cleanup
+}
+
+atf_test_case ndp_stray_entries cleanup
+ndp_stray_entries_head()
+{
+
+	atf_set "descr" "Tests if NDP entries are removed on route change"
+	atf_set "require.progs" "rump_server"
+}
+
+ndp_stray_entries_body()
+{
+
+	rump_server_start $SOCKSRC netinet6
+	rump_server_start $SOCKDST netinet6
+
+	setup_dst_server
+	setup_src_server
+
+	rump_server_add_iface $SOCKSRC shmif1 bus1
+
+	export RUMP_SERVER=$SOCKSRC
+	atf_check -s exit:0 rump.ifconfig shmif1 inet6 $IP6SRC2/64
+	atf_check -s exit:0 rump.ifconfig -w 10
+
+	$DEBUG && rump.netstat -nr -f inet6
+	atf_check -s exit:0 -o ignore rump.ping6 -n -X 1 -c 1 $IP6DST
+	$DEBUG && rump.ndp -na
+	atf_check -s exit:0 -o match:'shmif0' rump.ndp -n $IP6DST
+	atf_check -s exit:0 -o not-match:'shmif1' rump.ndp -n $IP6DST
+
+	# Clean up
+	atf_check -s exit:0 -o ignore rump.ndp -c
+	atf_check -s not-exit:0 -o ignore -e match:'no entry' rump.ndp -n $IP6DST
+
+	# ping from a different source address
+	atf_check -s exit:0 -o ignore \
+	    rump.ping6 -n -X 1 -c 1 -S $IP6SRC2 $IP6DST
+	$DEBUG && rump.ndp -na
+	atf_check -s exit:0 -o match:'shmif0' rump.ndp -n $IP6DST
+	# ARP reply goes back via shmif1, so a cache is created on shmif1
+	atf_check -s exit:0 -o match:'shmif1' rump.ndp -n $IP6DST
+
+	# Clean up by ndp -c
+	atf_check -s exit:0 -o ignore rump.ndp -c
+	atf_check -s not-exit:0 -o ignore -e match:'no entry' rump.ndp -n $IP6DST
+
+	# ping from a different source address again
+	atf_check -s exit:0 -o ignore \
+	    rump.ping6 -n -X 1 -c 1 -S $IP6SRC2 $IP6DST
+	atf_check -s exit:0 -o match:'shmif0' rump.ndp -n $IP6DST
+	# ARP reply doen't come
+	atf_check -s exit:0 -o not-match:'shmif1' rump.ndp -n $IP6DST
+
+	# Cleanup caches on the destination
+	export RUMP_SERVER=$SOCKDST
+	$DEBUG && rump.ndp -na
+	atf_check -s exit:0 -o ignore rump.ndp -c
+	$DEBUG && rump.ndp -na
+	export RUMP_SERVER=$SOCKSRC
+
+	# ping from a different source address again
+	atf_check -s exit:0 -o ignore \
+	    rump.ping6 -n -X 1 -c 1 -S $IP6SRC2 $IP6DST
+	atf_check -s exit:0 -o match:'shmif0' rump.ndp -n $IP6DST
+	# ARP reply goes back via shmif1
+	atf_check -s exit:0 -o match:'shmif1' rump.ndp -n $IP6DST
+
+	# Clean up by ndp -d <ip>
+	atf_check -s exit:0 -o ignore rump.ndp -d $IP6DST
+	# Both entries should be deleted
+	atf_check -s not-exit:0 -o ignore -e match:'no entry' rump.ndp -n $IP6DST
+
+	rump_server_destroy_ifaces
+}
+
+ndp_stray_entries_cleanup()
+{
+
+	$DEBUG && dump
+	cleanup
+}
+
+atf_test_case ndp_cache_state cleanup
+ndp_cache_state_head()
+{
+
+	atf_set "descr" "Tests states of neighbor cache entries"
+	atf_set "require.progs" "rump_server"
+}
+
+check_cache_state()
+{
+	local dst=$1
+	local state=$2
+
+	$DEBUG && rump.ndp -n $dst
+	atf_check -s exit:0 -o match:"^$dst.*$state " rump.ndp -n $dst
+}
+
+wait_until_stalled()
+{
+	local dst=$1
+	local state=$2
+
+	$DEBUG && rump.ndp -n $dst
+	while true; do
+		 rump.ndp -n $dst | grep -q "^$dst.*S " && break
+		 sleep 1
+	done
+	$DEBUG && rump.ndp -n $dst
+}
+
+ndp_cache_state_body()
+{
+	local macaddr=
+
+	skip_if_qemu
+
+	rump_server_start $SOCKSRC netinet6
+	rump_server_start $SOCKDST netinet6
+
+	setup_dst_server
+	setup_src_server
+
+	# Shorten the expire time of cache entries
+	export RUMP_SERVER=$SOCKSRC
+	atf_check -s exit:0 -o match:'basereachable=7s0ms' \
+	    rump.ndp -i shmif0 basereachable=7000
+
+	# Make a permanent cache entry to avoid sending an NS packet disturbing
+	# the test
+	macaddr=$(get_macaddr $SOCKSRC shmif0)
+	export RUMP_SERVER=$SOCKDST
+	atf_check -s exit:0 -o ignore rump.ndp -s $IP6SRC $macaddr
+
+	export RUMP_SERVER=$SOCKSRC
+
+	#
+	# Reachability confirmation (RFC 4861 7.3.3)
+	#
+	atf_check -s exit:0 -o ignore rump.ping6 -n -X $TIMEOUT -c 1 $IP6DST
+
+	# Receiving a solicited NA packet changes the state of the cache to REACHABLE
+	check_cache_state $IP6DST R
+
+	# The state of the cache transits to STALE after a while
+	wait_until_stalled $IP6DST
+
+	# Sending a packet on the cache will run a reachability confirmation
+	atf_check -s exit:0 -o ignore rump.ping6 -n -X $TIMEOUT -c 1 $IP6DST
+
+	sleep 1
+
+	# The state of the cache is changed to DELAY and stay for 5s, then
+	# send a NS packet and change the state to PROBE
+	check_cache_state $IP6DST D
+
+	sleep $((5 + 1))
+
+	# If the reachability confirmation is success, the state of the cache
+	# is changed to REACHABLE
+	check_cache_state $IP6DST R
+}
+
+ndp_cache_state_cleanup()
+{
+
+	$DEBUG && dump
+	cleanup
+}
+
 atf_init_test_cases()
 {
 	atf_add_test_case ndp_cache_expiration
@@ -403,4 +814,10 @@ atf_init_test_cases()
 	atf_add_test_case ndp_cache_overwriting
 	atf_add_test_case ndp_neighborgcthresh
 	atf_add_test_case ndp_link_activation
+	atf_add_test_case ndp_rtm
+	atf_add_test_case ndp_purge_on_route_change
+	atf_add_test_case ndp_purge_on_route_delete
+	atf_add_test_case ndp_purge_on_ifdown
+	atf_add_test_case ndp_stray_entries
+	atf_add_test_case ndp_cache_state
 }

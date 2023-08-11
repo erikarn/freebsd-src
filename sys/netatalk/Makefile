@@ -1,4 +1,4 @@
-# $NetBSD: Makefile,v 1.1 2014/12/02 19:48:21 christos Exp $
+# $NetBSD: Makefile,v 1.3 2023/06/03 09:09:16 lukem Exp $
 #
 WARNS?=6
 
@@ -8,5 +8,7 @@ TESTSDIR=	${TESTSBASE}/sys/netatalk
 CPPFLAGS+=	-I${NETBSDSRCDIR}/sys -D_TEST
 
 TESTS_C=	t_print
+
+COPTS.t_print.c+=	${CC_WNO_FORMAT_TRUNCATION}
 
 .include <bsd.test.mk>

@@ -1,4 +1,4 @@
-#	$NetBSD: net_common.sh,v 1.11 2017/01/10 05:55:34 ozaki-r Exp $
+#	$NetBSD: net_common.sh,v 1.44 2022/11/02 09:35:12 ozaki-r Exp $
 #
 # Copyright (c) 2016 Internet Initiative Japan Inc.
 # All rights reserved.
@@ -29,7 +29,11 @@
 # Common utility functions for tests/net
 #
 
-HIJACKING="env LD_PRELOAD=/usr/lib/librumphijack.so RUMPHIJACK=sysctl=yes"
+export PATH="/sbin:/usr/sbin:/bin:/usr/bin"
+
+HIJACKING="env LD_PRELOAD=/usr/lib/librumphijack.so \
+    RUMPHIJACK=path=/rump,socket=all:nolocal,sysctl=yes"
+ONEDAYISH="(23h5[0-9]m|1d0h0m)[0-9]+s ?"
 
 extract_new_packets()
 {
@@ -40,9 +44,9 @@ extract_new_packets()
 		old=/dev/null
 	fi
 
-	shmif_dumpbus -p - $bus 2>/dev/null| \
+	shmif_dumpbus -p - $bus 2>/dev/null |
 	    tcpdump -n -e -r - 2>/dev/null > ./.__new
-	diff -u $old ./.__new |grep '^+' |cut -d '+' -f 2 > ./.__diff
+	diff -u $old ./.__new | grep '^+' | cut -d '+' -f 2   > ./.__diff
 	mv -f ./.__new ./.__old
 	cat ./.__diff
 }
@@ -54,11 +58,11 @@ check_route()
 	local flags=${3:-\.\+}
 	local ifname=${4:-\.\+}
 
-	target=$(echo $target |sed 's/\./\\./g')
+	target=$(echo $target | sed 's/\./\\./g')
 	if [ "$gw" = "" ]; then
 		gw=".+"
 	else
-		gw=$(echo $gw |sed 's/\./\\./g')
+		gw=$(echo $gw | sed 's/\./\\./g')
 	fi
 
 	atf_check -s exit:0 -e ignore \
@@ -80,19 +84,16 @@ check_route_gw()
 
 check_route_no_entry()
 {
-	local target=$(echo $1 |sed 's/\./\\./g')
+	local target=$(echo "$1" | sed 's/\./\\./g')
 
-	atf_check -s exit:0 -e ignore -o not-match:"^$target" \
-	    rump.netstat -rn
+	atf_check -s exit:0 -e ignore -o not-match:"^$target" rump.netstat -rn
 }
 
 get_linklocal_addr()
 {
 
-	export RUMP_SERVER=${1}
-	rump.ifconfig ${2} inet6 |
+	RUMP_SERVER=${1} rump.ifconfig ${2} inet6 |
 	    awk "/fe80/ {sub(/%$2/, \"\"); sub(/\\/[0-9]*/, \"\"); print \$2;}"
-	unset RUMP_SERVER
 
 	return 0
 }
@@ -100,8 +101,7 @@ get_linklocal_addr()
 get_macaddr()
 {
 
-	env RUMP_SERVER=${1} \
-	    rump.ifconfig ${2} |awk '/address/ {print $2;}'
+	RUMP_SERVER=${1} rump.ifconfig ${2} | awk '/address/ {print $2;}'
 }
 
 HTTPD_PID=./.__httpd.pid
@@ -132,24 +132,97 @@ stop_httpd()
 	fi
 }
 
-BASIC_LIBS="-lrumpnet -lrumpnet_net -lrumpnet_netinet \
-    -lrumpnet_shmif -lrumpdev"
-FS_LIBS="$BASIC_LIBS -lrumpvfs -lrumpfs_ffs"
+NC_PID=./.__nc.pid
+start_nc_server()
+{
+	local sock=$1
+	local port=$2
+	local outfile=$3
+	local proto=${4:-ipv4}
+	local extra_opts="$5"
+	local backup=$RUMP_SERVER
+	local opts=
+
+	export RUMP_SERVER=$sock
+
+	if [ $proto = ipv4 ]; then
+		opts="-l -4"
+	else
+		opts="-l -6"
+	fi
+	opts="$opts $extra_opts"
+
+	env LD_PRELOAD=/usr/lib/librumphijack.so nc $opts $port > $outfile &
+	echo $! > $NC_PID
+
+	if [ $proto = ipv4 ]; then
+		$DEBUG && rump.netstat -a -f inet
+	else
+		$DEBUG && rump.netstat -a -f inet6
+	fi
+
+	export RUMP_SERVER=$backup
+
+	sleep 1
+}
+
+stop_nc_server()
+{
+
+	if [ -f $NC_PID ]; then
+		kill -9 $(cat $NC_PID)
+		rm -f $NC_PID
+		sleep 1
+	fi
+}
+
+BASIC_LIBS="-lrumpnet -lrumpnet_net -lrumpnet_netinet -lrumpnet_shmif"
+FS_LIBS="$BASIC_LIBS -lrumpdev -lrumpvfs -lrumpfs_ffs"
+CRYPTO_LIBS="$BASIC_LIBS -lrumpdev -lrumpdev_opencrypto \
+    -lrumpkern_z -lrumpkern_crypto"
+NPF_LIBS="$BASIC_LIBS -lrumpdev -lrumpvfs -lrumpdev_bpf -lrumpnet_npf"
+CRYPTO_NPF_LIBS="$CRYPTO_LIBS -lrumpvfs -lrumpdev_bpf -lrumpnet_npf"
+BPF_LIBS="$BASIC_LIBS -lrumpdev -lrumpvfs -lrumpdev_bpf"
 
 # We cannot keep variables between test phases, so need to store in files
 _rump_server_socks=./.__socks
 _rump_server_ifaces=./.__ifaces
 _rump_server_buses=./.__buses
+_rump_server_macaddrs=./.__macaddrs
+
+DEBUG_SYSCTL_ENTRIES="net.inet.arp.debug net.inet6.icmp6.nd6_debug \
+    net.inet.ipsec.debug"
+
+IPSEC_KEY_DEBUG=${IPSEC_KEY_DEBUG:-false}
 
 _rump_server_start_common()
 {
 	local sock=$1
-	local libs=
+	local backup=$RUMP_SERVER
 
 	shift 1
-	libs="$*"
 
-	atf_check -s exit:0 rump_server $libs $sock
+	atf_check -s exit:0 rump_server "$@" "$sock"
+
+	if $DEBUG; then
+		# Enable debugging features in the kernel
+		export RUMP_SERVER=$sock
+		for ent in $DEBUG_SYSCTL_ENTRIES; do
+			if rump.sysctl -q $ent; then
+				atf_check -s exit:0 rump.sysctl -q -w $ent=1
+			fi
+		done
+		export RUMP_SERVER=$backup
+	fi
+	if $IPSEC_KEY_DEBUG; then
+		# Enable debugging features in the kernel
+		export RUMP_SERVER=$sock
+		if rump.sysctl -q net.key.debug; then
+			atf_check -s exit:0 \
+			    rump.sysctl -q -w net.key.debug=0xffff
+		fi
+		export RUMP_SERVER=$backup
+	fi
 
 	echo $sock >> $_rump_server_socks
 	$DEBUG && cat $_rump_server_socks
@@ -158,13 +231,13 @@ _rump_server_start_common()
 rump_server_start()
 {
 	local sock=$1
-	local _libs=
+	local lib=
 	local libs="$BASIC_LIBS"
 
 	shift 1
-	_libs="$*"
 
-	for lib in $_libs; do
+	for lib
+	do
 		libs="$libs -lrumpnet_$lib"
 	done
 
@@ -176,13 +249,85 @@ rump_server_start()
 rump_server_fs_start()
 {
 	local sock=$1
-	local _libs=
+	local lib=
 	local libs="$FS_LIBS"
 
 	shift 1
-	_libs="$*"
 
-	for lib in $_libs; do
+	for lib
+	do
+		libs="$libs -lrumpnet_$lib"
+	done
+
+	_rump_server_start_common $sock $libs
+
+	return 0
+}
+
+rump_server_crypto_start()
+{
+	local sock=$1
+	local lib=
+	local libs="$CRYPTO_LIBS"
+
+	shift 1
+
+	for lib
+	do
+		libs="$libs -lrumpnet_$lib"
+	done
+
+	_rump_server_start_common $sock $libs
+
+	return 0
+}
+
+rump_server_npf_start()
+{
+	local sock=$1
+	local lib=
+	local libs="$NPF_LIBS"
+
+	shift 1
+
+	for lib
+	do
+		libs="$libs -lrumpnet_$lib"
+	done
+
+	_rump_server_start_common $sock $libs
+
+	return 0
+}
+
+rump_server_crypto_npf_start()
+{
+	local sock=$1
+	local lib=
+	local libs="$CRYPTO_NPF_LIBS"
+
+	shift 1
+
+	for lib
+	do
+		libs="$libs -lrumpnet_$lib"
+	done
+
+	_rump_server_start_common $sock $libs
+
+	return 0
+}
+
+rump_server_bpf_start()
+{
+	local sock=$1
+	local lib=
+	local libs="$BPF_LIBS"
+
+	shift 1
+
+	for lib
+	do
 		libs="$libs -lrumpnet_$lib"
 	done
 
@@ -197,10 +342,23 @@ rump_server_add_iface()
 	local ifname=$2
 	local bus=$3
 	local backup=$RUMP_SERVER
+	local macaddr=
 
 	export RUMP_SERVER=$sock
 	atf_check -s exit:0 rump.ifconfig $ifname create
-	atf_check -s exit:0 rump.ifconfig $ifname linkstr $bus
+	if [ -n "$bus" ]; then
+		atf_check -s exit:0 rump.ifconfig $ifname linkstr $bus
+	fi
+
+	macaddr=$(get_macaddr $sock $ifname)
+	if [ -n "$macaddr" ]; then
+		if [ -f $_rump_server_macaddrs ]; then
+			atf_check -s not-exit:0 \
+			    grep -q $macaddr $_rump_server_macaddrs
+		fi
+		echo $macaddr >> $_rump_server_macaddrs
+	fi
+
 	export RUMP_SERVER=$backup
 
 	echo $sock $ifname >> $_rump_server_ifaces
@@ -214,33 +372,81 @@ rump_server_add_iface()
 	return 0
 }
 
+rump_server_check_poolleaks()
+{
+	local target=$1
+
+	# XXX rumphijack doesn't work with a binary with suid/sgid bits like
+	# vmstat.  Use a copied one to drop sgid bit as a workaround until
+	# vmstat stops using kvm(3) for /dev/kmem and the sgid bit.
+	cp /usr/bin/vmstat ./vmstat
+	reqs=$($HIJACKING ./vmstat -mv | awk "/$target/ {print \$3;}")
+	rels=$($HIJACKING ./vmstat -mv | awk "/$target/ {print \$5;}")
+	rm -f ./vmstat
+	atf_check_equal '$target$reqs' '$target$rels'
+}
+
+#
+# rump_server_check_memleaks detects memory leaks.  It can detect leaks of pool
+# objects that are guaranteed to be all deallocated at this point, i.e., all
+# created interfaces are destroyed.  Currently only llentpl satisfies this
+# constraint.  This mechanism can't be applied to objects allocated through
+# pool_cache(9) because it doesn't track released objects explicitly.
+#
+rump_server_check_memleaks()
+{
+
+	rump_server_check_poolleaks llentrypl
+	# This doesn't work for objects allocated through pool_cache
+	#rump_server_check_poolleaks mbpl
+	#rump_server_check_poolleaks mclpl
+	#rump_server_check_poolleaks socket
+}
+
 rump_server_destroy_ifaces()
 {
 	local backup=$RUMP_SERVER
+	local output=ignore
+	local reqs= rels=
 
 	$DEBUG && cat $_rump_server_ifaces
 
 	# Try to dump states before destroying interfaces
 	for sock in $(cat $_rump_server_socks); do
 		export RUMP_SERVER=$sock
-		atf_check -s exit:0 -o ignore rump.ifconfig
-		atf_check -s exit:0 -o ignore rump.netstat -nr
+		if $DEBUG; then
+			output=save:/dev/stdout
+		fi
+		atf_check -s exit:0 -o $output rump.ifconfig
+		atf_check -s exit:0 -o $output rump.netstat -nr
 		# XXX still need hijacking
-		atf_check -s exit:0 -o ignore $HIJACKING rump.netstat -i -a
-		atf_check -s exit:0 -o ignore rump.arp -na
-		atf_check -s exit:0 -o ignore rump.ndp -na
-		atf_check -s exit:0 -o ignore $HIJACKING ifmcstat
+		atf_check -s exit:0 -o $output $HIJACKING rump.netstat -nai
+		atf_check -s exit:0 -o $output rump.arp -na
+		atf_check -s exit:0 -o $output rump.ndp -na
+		atf_check -s exit:0 -o $output $HIJACKING ifmcstat
 	done
 
 	# XXX using pipe doesn't work. See PR bin/51667
 	#cat $_rump_server_ifaces | while read sock ifname; do
+	# Destroy interfaces in the reverse order
+	tac $_rump_server_ifaces > __ifaces
 	while read sock ifname; do
 		export RUMP_SERVER=$sock
 		if rump.ifconfig -l |grep -q $ifname; then
+			if $DEBUG; then
+				rump.ifconfig -v $ifname
+			fi
 			atf_check -s exit:0 rump.ifconfig $ifname destroy
 		fi
 		atf_check -s exit:0 -o ignore rump.ifconfig
-	done < $_rump_server_ifaces
+	done < __ifaces
+	rm -f __ifaces
+
+	for sock in $(cat $_rump_server_socks); do
+		export RUMP_SERVER=$sock
+		rump_server_check_memleaks
+	done
+
 	export RUMP_SERVER=$backup
 
 	return 0
@@ -259,29 +465,47 @@ rump_server_halt_servers()
 	return 0
 }
 
+extract_rump_server_core()
+{
+
+	if [ -f rump_server.core ]; then
+		gdb -ex bt /usr/bin/rump_server rump_server.core
+		# Extract kernel logs including a panic message
+		strings rump_server.core |grep -E '^\[.+\] '
+	fi
+}
+
+dump_kernel_stats()
+{
+	local sock=$1
+
+	echo "### Dumping $sock"
+	export RUMP_SERVER=$sock
+	rump.ifconfig -av
+	rump.netstat -nr
+	# XXX still need hijacking
+	$HIJACKING rump.netstat -nai
+	# XXX workaround for vmstat with the sgid bit
+	cp /usr/bin/vmstat ./vmstat
+	$HIJACKING ./vmstat -m
+	rm -f ./vmstat
+	rump.arp -na
+	rump.ndp -na
+	$HIJACKING ifmcstat
+	$HIJACKING dmesg
+}
+
 rump_server_dump_servers()
 {
 	local backup=$RUMP_SERVER
 
 	$DEBUG && cat $_rump_server_socks
 	for sock in $(cat $_rump_server_socks); do
-		echo "### Dumping $sock"
-		export RUMP_SERVER=$sock
-		rump.ifconfig
-		rump.netstat -nr
-		# XXX still need hijacking
-		$HIJACKING rump.netstat -i -a
-		rump.arp -na
-		rump.ndp -na
-		$HIJACKING ifmcstat
-		$HIJACKING dmesg
+		dump_kernel_stats $sock
 	done
 	export RUMP_SERVER=$backup
 
-	if [ -f rump_server.core ]; then
-		gdb -ex bt /usr/bin/rump_server rump_server.core
-		strings rump_server.core |grep panic
-	fi
+	extract_rump_server_core
 	return 0
 }
 
@@ -311,4 +535,54 @@ dump()
 
 	rump_server_dump_servers
 	rump_server_dump_buses
+}
+
+skip_if_qemu()
+{
+	if drvctl -l qemufwcfg0 >/dev/null 2>&1
+	then
+	    atf_skip "unreliable under qemu, skip until PR kern/43997 fixed"
+	fi
+}
+
+test_create_destroy_common()
+{
+	local sock=$1
+	local ifname=$2
+	local test_address=${3:-false}
+	local ipv4="10.0.0.1/24"
+	local ipv6="fc00::1"
+
+	export RUMP_SERVER=$sock
+
+	atf_check -s exit:0 rump.ifconfig $ifname create
+	atf_check -s exit:0 rump.ifconfig $ifname destroy
+
+	atf_check -s exit:0 rump.ifconfig $ifname create
+	atf_check -s exit:0 rump.ifconfig $ifname up
+	atf_check -s exit:0 rump.ifconfig $ifname down
+	atf_check -s exit:0 rump.ifconfig $ifname destroy
+
+	# Destroy while UP
+	atf_check -s exit:0 rump.ifconfig $ifname create
+	atf_check -s exit:0 rump.ifconfig $ifname up
+	atf_check -s exit:0 rump.ifconfig $ifname destroy
+
+	if ! $test_address; then
+		return
+	fi
+
+	# With an IPv4 address
+	atf_check -s exit:0 rump.ifconfig $ifname create
+	atf_check -s exit:0 rump.ifconfig $ifname inet $ipv4
+	atf_check -s exit:0 rump.ifconfig $ifname up
+	atf_check -s exit:0 rump.ifconfig $ifname destroy
+
+	# With an IPv6 address
+	atf_check -s exit:0 rump.ifconfig $ifname create
+	atf_check -s exit:0 rump.ifconfig $ifname inet6 $ipv6
+	atf_check -s exit:0 rump.ifconfig $ifname up
+	atf_check -s exit:0 rump.ifconfig $ifname destroy
+
+	unset RUMP_SERVER
 }

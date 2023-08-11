@@ -1,4 +1,4 @@
-#	$NetBSD: t_bridge.sh,v 1.16 2016/11/25 08:51:16 ozaki-r Exp $
+#	$NetBSD: t_bridge.sh,v 1.19 2019/08/19 03:22:05 ozaki-r Exp $
 #
 # Copyright (c) 2014 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -40,11 +40,18 @@ IP6BR2=fc00::12
 DEBUG=${DEBUG:-false}
 TIMEOUT=5
 
+atf_test_case bridge_create_destroy cleanup
 atf_test_case bridge_ipv4 cleanup
 atf_test_case bridge_ipv6 cleanup
-atf_test_case bridge_rtable cleanup
 atf_test_case bridge_member_ipv4 cleanup
 atf_test_case bridge_member_ipv6 cleanup
+
+bridge_create_destroy_head()
+{
+
+	atf_set "descr" "Test creating/destroying bridge interfaces"
+	atf_set "require.progs" "rump_server"
+}
 
 bridge_ipv4_head()
 {
@@ -55,12 +62,6 @@ bridge_ipv4_head()
 bridge_ipv6_head()
 {
 	atf_set "descr" "Does simple if_bridge tests (IPv6)"
-	atf_set "require.progs" "rump_server"
-}
-
-bridge_rtable_head()
-{
-	atf_set "descr" "Tests route table operations of if_bridge"
 	atf_set "require.progs" "rump_server"
 }
 
@@ -168,7 +169,7 @@ setup6()
 setup_bridge()
 {
 	export RUMP_SERVER=$SOCK2
-	atf_check -s exit:0 rump.ifconfig bridge0 create
+	rump_server_add_iface $SOCK2 bridge0
 	atf_check -s exit:0 rump.ifconfig bridge0 up
 
 	export LD_PRELOAD=/usr/lib/librumphijack.so
@@ -319,61 +320,12 @@ test_ping6_member()
 	rump.ifconfig -v shmif0
 }
 
-get_number_of_caches()
+bridge_create_destroy_body()
 {
-	export RUMP_SERVER=$SOCK2
-	export LD_PRELOAD=/usr/lib/librumphijack.so
-	echo $(($(/sbin/brconfig bridge0 |grep -A 100 "Address cache" |wc -l) - 1))
-	unset LD_PRELOAD
-}
 
-test_brconfig_maxaddr()
-{
-	addr1= addr3= n=
+	rump_server_start $SOCK1 bridge
 
-	# Get MAC addresses of the endpoints.
-	addr1=$(get_macaddr $SOCK1 shmif0)
-	addr3=$(get_macaddr $SOCK3 shmif0)
-
-	# Refill the MAC addresses of the endpoints.
-	export RUMP_SERVER=$SOCK1
-	atf_check -s exit:0 -o ignore rump.ping -n -w $TIMEOUT -c 1 $IP2
-	export RUMP_SERVER=$SOCK2
-	export LD_PRELOAD=/usr/lib/librumphijack.so
-	/sbin/brconfig bridge0
-	atf_check -s exit:0 -o match:"$addr1 shmif0" /sbin/brconfig bridge0
-	atf_check -s exit:0 -o match:"$addr3 shmif1" /sbin/brconfig bridge0
-
-	# Check the default # of caches is 100
-	atf_check -s exit:0 -o match:"max cache: 100" /sbin/brconfig bridge0
-
-	# Test two MAC addresses are cached
-	n=$(get_number_of_caches)
-	atf_check_equal $n 2
-
-	# Limit # of caches to one
-	atf_check -s exit:0 -o ignore /sbin/brconfig bridge0 maxaddr 1
-	atf_check -s exit:0 -o match:"max cache: 1" /sbin/brconfig bridge0
-	/sbin/brconfig bridge0
-
-	# Test just one address is cached
-	n=$(get_number_of_caches)
-	atf_check_equal $n 1
-
-	# Increase # of caches to two
-	atf_check -s exit:0 -o ignore /sbin/brconfig bridge0 maxaddr 2
-	atf_check -s exit:0 -o match:"max cache: 2" /sbin/brconfig bridge0
-	unset LD_PRELOAD
-
-	# Test we can cache two addresses again
-	export RUMP_SERVER=$SOCK1
-	atf_check -s exit:0 -o ignore rump.ping -n -w $TIMEOUT -c 1 $IP2
-	export RUMP_SERVER=$SOCK2
-	export LD_PRELOAD=/usr/lib/librumphijack.so
-	/sbin/brconfig bridge0
-	atf_check -s exit:0 -o match:"$addr1 shmif0" /sbin/brconfig bridge0
-	atf_check -s exit:0 -o match:"$addr3 shmif1" /sbin/brconfig bridge0
-	unset LD_PRELOAD
+	test_create_destroy_common $SOCK1 bridge0
 }
 
 bridge_ipv4_body()
@@ -409,78 +361,6 @@ bridge_ipv6_body()
 
 	teardown_bridge
 	test_ping6_failure
-
-	rump_server_destroy_ifaces
-}
-
-bridge_rtable_body()
-{
-	addr1= addr3=
-
-	setup
-	setup_bridge
-
-	# Get MAC addresses of the endpoints.
-	addr1=$(get_macaddr $SOCK1 shmif0)
-	addr3=$(get_macaddr $SOCK3 shmif0)
-
-	# Confirm there is no MAC address caches.
-	export RUMP_SERVER=$SOCK2
-	export LD_PRELOAD=/usr/lib/librumphijack.so
-	$DEBUG && /sbin/brconfig bridge0
-	atf_check -s exit:0 -o not-match:"$addr1" /sbin/brconfig bridge0
-	atf_check -s exit:0 -o not-match:"$addr3" /sbin/brconfig bridge0
-	unset LD_PRELOAD
-
-	# Make the bridge learn the MAC addresses of the endpoints.
-	export RUMP_SERVER=$SOCK1
-	atf_check -s exit:0 -o ignore rump.ping -n -w $TIMEOUT -c 1 $IP2
-	unset RUMP_SERVER
-
-	# Tests the addresses are in the cache.
-	export RUMP_SERVER=$SOCK2
-	export LD_PRELOAD=/usr/lib/librumphijack.so
-	$DEBUG && /sbin/brconfig bridge0
-	atf_check -s exit:0 -o match:"$addr1 shmif0" /sbin/brconfig bridge0
-	atf_check -s exit:0 -o match:"$addr3 shmif1" /sbin/brconfig bridge0
-
-	# Tests brconfig deladdr
-	atf_check -s exit:0 -o ignore /sbin/brconfig bridge0 deladdr "$addr1"
-	atf_check -s exit:0 -o not-match:"$addr1 shmif0" /sbin/brconfig bridge0
-	atf_check -s exit:0 -o ignore /sbin/brconfig bridge0 deladdr "$addr3"
-	atf_check -s exit:0 -o not-match:"$addr3 shmif1" /sbin/brconfig bridge0
-	unset LD_PRELOAD
-
-	# Refill the MAC addresses of the endpoints.
-	export RUMP_SERVER=$SOCK1
-	atf_check -s exit:0 -o ignore rump.ping -n -w $TIMEOUT -c 1 $IP2
-	unset RUMP_SERVER
-	export RUMP_SERVER=$SOCK2
-	export LD_PRELOAD=/usr/lib/librumphijack.so
-	$DEBUG && /sbin/brconfig bridge0
-	atf_check -s exit:0 -o match:"$addr1 shmif0" /sbin/brconfig bridge0
-	atf_check -s exit:0 -o match:"$addr3 shmif1" /sbin/brconfig bridge0
-
-	# Tests brconfig flush.
-	atf_check -s exit:0 -o ignore /sbin/brconfig bridge0 flush
-	atf_check -s exit:0 -o not-match:"$addr1 shmif0" /sbin/brconfig bridge0
-	atf_check -s exit:0 -o not-match:"$addr3 shmif1" /sbin/brconfig bridge0
-	unset LD_PRELOAD
-
-	# Tests brconfig timeout.
-	export RUMP_SERVER=$SOCK2
-	export LD_PRELOAD=/usr/lib/librumphijack.so
-	atf_check -s exit:0 -o match:"timeout: 1200" /sbin/brconfig bridge0
-	atf_check -s exit:0 -o ignore /sbin/brconfig bridge0 timeout 10
-	atf_check -s exit:0 -o match:"timeout: 10" /sbin/brconfig bridge0
-	unset LD_PRELOAD
-
-	# Tests brconfig maxaddr.
-	test_brconfig_maxaddr
-
-	# TODO: brconfig static/flushall/discover/learn
-	# TODO: cache expiration; it takes 5 minutes at least and we want to
-	#       wait here so long. Should we have a sysctl to change the period?
 
 	rump_server_destroy_ifaces
 }
@@ -528,6 +408,13 @@ bridge_member_ipv6_body()
 	rump_server_destroy_ifaces
 }
 
+bridge_create_destroy_cleanup()
+{
+
+	$DEBUG && dump
+	cleanup
+}
+
 bridge_ipv4_cleanup()
 {
 
@@ -536,13 +423,6 @@ bridge_ipv4_cleanup()
 }
 
 bridge_ipv6_cleanup()
-{
-
-	$DEBUG && dump
-	cleanup
-}
-
-bridge_rtable_cleanup()
 {
 
 	$DEBUG && dump
@@ -565,9 +445,10 @@ bridge_member_ipv6_cleanup()
 
 atf_init_test_cases()
 {
+
+	atf_add_test_case bridge_create_destroy
 	atf_add_test_case bridge_ipv4
 	atf_add_test_case bridge_ipv6
-	atf_add_test_case bridge_rtable
 	atf_add_test_case bridge_member_ipv4
 	atf_add_test_case bridge_member_ipv6
 }

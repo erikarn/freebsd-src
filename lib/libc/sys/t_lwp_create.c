@@ -1,4 +1,4 @@
-/* $NetBSD: t_lwp_create.c,v 1.2 2012/05/22 09:23:39 martin Exp $ */
+/* $NetBSD: t_lwp_create.c,v 1.4 2021/08/22 20:18:39 andvar Exp $ */
 
 /*-
  * Copyright (c) 2012 The NetBSD Foundation, Inc.
@@ -119,6 +119,30 @@ ATF_TC_BODY(lwp_create_works, tc)
 	ATF_REQUIRE(lid == the_lwp_id);
 }
 
+ATF_TC(lwp_create_bad_lid_ptr);
+ATF_TC_HEAD(lwp_create_bad_lid_ptr, tc)
+{
+	atf_tc_set_md_var(tc, "descr",
+	    "Verify _lwp_create() fails as expected with bad lid pointer");
+}
+
+ATF_TC_BODY(lwp_create_bad_lid_ptr, tc)
+{
+	ucontext_t uc;
+	int error;
+	int serrno;
+	void *stack;
+	static const size_t ssize = 16*1024;
+
+	stack = malloc(ssize);
+	_lwp_makecontext(&uc, lwp_main_func, NULL, NULL, stack, ssize);
+
+	error = _lwp_create(&uc, 0, NULL);
+	serrno = errno;
+	ATF_REQUIRE(error == -1);
+	ATF_REQUIRE(serrno == EFAULT);
+}
+
 INVALID_UCONTEXT(generic, no_uc_cpu, "not setting cpu registers")
 	uc->uc_flags &= ~_UC_CPU;
 }
@@ -161,7 +185,7 @@ INVALID_UCONTEXT(hppa, invalid_0, "clear illegal bits in psw")
 INVALID_UCONTEXT(i386, untouchable_eflags, "changing forbidden eflags")
 	uc->uc_mcontext.__gregs[_REG_EFL] |= PSL_IOPL;
 }
-INVALID_UCONTEXT(i386, priv_escalation, "modifying priviledge level")
+INVALID_UCONTEXT(i386, priv_escalation, "modifying privilege level")
 	uc->uc_mcontext.__gregs[_REG_CS] &= ~SEL_RPL;
 }
 #endif
@@ -206,6 +230,7 @@ INVALID_UCONTEXT(vax, psl_cm, "setting CM bit in psl")
 ATF_TP_ADD_TCS(tp)
 {
 	ATF_TP_ADD_TC(tp, lwp_create_works);
+	ATF_TP_ADD_TC(tp, lwp_create_bad_lid_ptr);
 	ATF_TP_ADD_TC(tp, lwp_create_generic_fail_no_uc_cpu);
 #ifdef __alpha__
 	ATF_TP_ADD_TC(tp, lwp_create_alpha_fail_pslset);

@@ -1,4 +1,4 @@
-#	$NetBSD: t_gif.sh,v 1.9 2016/12/21 09:46:39 ozaki-r Exp $
+#	$NetBSD: t_gif.sh,v 1.13 2019/08/19 03:22:05 ozaki-r Exp $
 #
 # Copyright (c) 2015 Internet Initiative Japan Inc.
 # All rights reserved.
@@ -61,8 +61,31 @@ ROUTER2_GIFIP6_DUMMY=fc00:14::1
 ROUTER2_GIFIP6_RECURSIVE1=fc00:104::1
 ROUTER2_GIFIP6_RECURSIVE2=fc00:204::1
 
-DEBUG=${DEBUG:-true}
+DEBUG=${DEBUG:-false}
 TIMEOUT=5
+
+atf_test_case gif_create_destroy cleanup
+gif_create_destroy_head()
+{
+
+	atf_set "descr" "Test creating/destroying gif interfaces"
+	atf_set "require.progs" "rump_server"
+}
+
+gif_create_destroy_body()
+{
+
+	rump_server_start $SOCK1 netinet6 gif
+
+	test_create_destroy_common $SOCK1 gif0 true
+}
+
+gif_create_destroy_cleanup()
+{
+
+	$DEBUG && dump
+	cleanup
+}
 
 setup_router()
 {
@@ -198,7 +221,7 @@ setup_if_gif()
 	peernet=${7}
 
 	export RUMP_SERVER=${sock}
-	atf_check -s exit:0 rump.ifconfig gif0 create
+	rump_server_add_iface $sock gif0
 	atf_check -s exit:0 rump.ifconfig gif0 tunnel ${src} ${dst}
 	if [ ${inner} = "ipv6" ]; then
 		atf_check -s exit:0 rump.ifconfig gif0 inet6 ${addr}/128 ${remote}
@@ -312,7 +335,7 @@ setup_dummy_if_gif()
 	dst=${6}
 
 	export RUMP_SERVER=${sock}
-	atf_check -s exit:0 rump.ifconfig gif1 create
+	rump_server_add_iface $sock gif1
 	atf_check -s exit:0 rump.ifconfig gif1 tunnel ${src} ${dst}
 	if [ ${inner} = "ipv6" ]; then
 		atf_check -s exit:0 rump.ifconfig gif1 inet6 ${addr}/128 ${remote}
@@ -399,7 +422,7 @@ setup_recursive_if_gif()
 	dst=${7}
 
 	export RUMP_SERVER=${sock}
-	atf_check -s exit:0 rump.ifconfig ${gif} create
+	rump_server_add_iface $sock $gif
 	atf_check -s exit:0 rump.ifconfig ${gif} tunnel ${src} ${dst}
 	if [ ${inner} = "ipv6" ]; then
 		atf_check -s exit:0 rump.ifconfig ${gif} inet6 ${addr}/128 ${remote}
@@ -727,19 +750,19 @@ add_test()
 	fulldesc="Does ${inner} over ${outer} if_gif ${desc}"
 
 	atf_test_case ${name} cleanup
-	eval "${name}_head() { \
-			atf_set \"descr\" \"${fulldesc}\"; \
-			atf_set \"require.progs\" \"rump_server\"; \
-		}; \
-	    ${name}_body() { \
-			${category}_setup ${inner} ${outer}; \
-			${category}_test ${inner} ${outer}; \
-			${category}_teardown ${inner} ${outer}; \
-			rump_server_destroy_ifaces; \
-	    }; \
-	    ${name}_cleanup() { \
-			$DEBUG && dump; \
-			cleanup; \
+	eval "${name}_head() {
+			atf_set descr \"${fulldesc}\"
+			atf_set require.progs rump_server
+		}
+	    ${name}_body() {
+			${category}_setup ${inner} ${outer}
+			${category}_test ${inner} ${outer}
+			${category}_teardown ${inner} ${outer}
+			rump_server_destroy_ifaces
+	    }
+	    ${name}_cleanup() {
+			\$DEBUG && dump
+			cleanup
 		}"
 	atf_add_test_case ${name}
 }
@@ -757,6 +780,9 @@ add_test_allproto()
 
 atf_init_test_cases()
 {
+
+	atf_add_test_case gif_create_destroy
+
 	add_test_allproto basic "basic tests"
 	add_test_allproto ioctl "ioctl tests"
 	add_test_allproto recursive "recursive check tests"

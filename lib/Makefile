@@ -1,19 +1,19 @@
-# $NetBSD: Makefile,v 1.27 2016/11/16 21:36:23 kamil Exp $
+# $NetBSD: Makefile,v 1.35 2022/11/21 22:01:33 christos Exp $
 
 .include <bsd.own.mk>
 
-TESTS_SUBDIRS=	csu libbluetooth libc libcrypt libcurses libevent libexecinfo \
-		libm libobjc libposix libppath libprop libpthread \
-		libpthread_dbg librefuse librt libtre libusbhid libutil \
-		semaphore
+TESTS_SUBDIRS=	csu libarchive libbluetooth libc libcrypt libcurses \
+		libexecinfo libi386 libm libnvmm libobjc libposix libppath \
+		libprop libpthread librefuse librt libtre libusbhid libutil \
+		libossaudio lua semaphore
+
+TESTS_SUBDIR_INSTALL_ONLY=	libevent
 
 .if (${MKRUMP} != "no") && !defined(BSD_MK_COMPAT_FILE)
 TESTS_SUBDIRS+= librumpclient librumphijack
 .endif
 
-.if ${MKCRYPTO} != "no"
 TESTS_SUBDIRS+= libdes
-.endif
 
 .if ${MKKYUA} != "no"
 # These tests come from external/bsd/lutok/tests/lib/liblutok.  Ensure they

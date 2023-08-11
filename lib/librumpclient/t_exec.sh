@@ -1,4 +1,4 @@
-#       $NetBSD: t_exec.sh,v 1.9 2016/08/10 21:10:18 kre Exp $
+#       $NetBSD: t_exec.sh,v 1.12 2020/11/08 08:54:50 martin Exp $
 #
 # Copyright (c) 2011 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -25,7 +25,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 
-rumpsrv='rump_server -lrumpnet -lrumpnet_net -lrumpnet_netinet -lrumpdev -lrumpvfs'
+rumpsrv='rump_server -lrumpnet -lrumpnet_net -lrumpnet_netinet'
 export RUMP_SERVER=unix://csock
 export RUMPHIJACK_RETRYCONNECT='die'
 
@@ -135,6 +135,7 @@ threxec_head()
 
 threxec_body()
 {
+	# atf_skip "PR 55338: triggers a scheduler bug"
 	atf_check -s exit:0 rump_server ${RUMP_SERVER}
 	atf_check -s exit:0 $(atf_get_srcdir)/h_execthr
 }

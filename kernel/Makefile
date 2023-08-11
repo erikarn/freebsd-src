@@ -1,4 +1,4 @@
-# $NetBSD: Makefile,v 1.44 2016/12/14 06:19:59 kamil Exp $
+# $NetBSD: Makefile,v 1.75 2023/08/03 12:24:46 nia Exp $
 
 NOMAN=		# defined
 
@@ -6,31 +6,49 @@ NOMAN=		# defined
 
 TESTSDIR=	${TESTSBASE}/kernel
 
-TESTS_SUBDIRS=	arch
 TESTS_SUBDIRS+=	kqueue
-TESTS_C=	t_lock
+#TESTS_C=	t_epoll
+TESTS_C+=	t_fcntl
+TESTS_C+=	t_lock
 TESTS_C+=	t_lockf
-TESTS_C+=	t_ptrace
-TESTS_C+=	t_ptrace_wait
-TESTS_C+=	t_ptrace_wait3
-TESTS_C+=	t_ptrace_wait4
-TESTS_C+=	t_ptrace_wait6
-TESTS_C+=	t_ptrace_waitid
-TESTS_C+=	t_ptrace_waitpid
 TESTS_C+=	t_pty
+TESTS_C+=	t_memfd_create
 TESTS_C+=	t_mqueue
+TESTS_C+=	t_proccwd
 TESTS_C+=	t_sysv
 TESTS_C+=	t_subr_prf
 TESTS_C+=	t_kauth_pr_47598
+TESTS_C+=	t_ksem
 TESTS_C+=	t_sysctl
+TESTS_C+=	t_timeleft
+TESTS_C+=	t_zombie
+TESTS_C+=	t_open_pr_57260
 
 TESTS_SH=	t_umount
 TESTS_SH+=	t_umountstress
 TESTS_SH+=	t_ps_strings
+TESTS_SH+=	t_trapsignal
+TESTS_SH+=	t_interp
+TESTS_SH+=	t_magic_symlinks
+TESTS_SH+=	t_nointerpreter
+TESTS_SH+=	t_origin
+TESTS_SH+=	t_procpath
+TESTS_SH+=	t_fexecve
+TESTS_SH+=	t_fpufork
+.if ${MKRUMP} != "no"
+TESTS_SH+=	t_simplehook
+.endif
 
 BINDIR=		${TESTSDIR}
-PROGS=		h_ps_strings1
+PROGS=		h_fexecve
+PROGS+=		h_ps_strings1
 PROGS+=		h_ps_strings2
+PROGS+=		h_segv
+PROGS+=		h_getprocpath
+PROGS+=		h_fpufork
+
+SCRIPTSDIR=	${TESTSDIR}
+SCRIPTS=	h_interpreter.sh
 
 LDADD.t_mqueue+= -lrt
 
@@ -41,13 +59,13 @@ TESTS_SUBDIRS+=	tty
 TESTS_C+=	t_extattrctl
 TESTS_C+=	t_filedesc
 TESTS_C+=	t_rnd
-LDADD.t_extattrctl+= -lrumpvfs -lrump -lrumpuser
-LDADD.t_extattrctl+= -lrump -lpthread
+LDADD.t_extattrctl+= ${LIBRUMPBASE}
 LDADD.t_filedesc+=  ${LDADD.t_rnd}
-LDADD.t_rnd+=  -lrumpvfs -lrumpdev_rnd -lrumpdev -lrump -lrumpuser
-LDADD.t_rnd+=  -lrump -lpthread
+LDADD.t_rnd+=  -lrumpdev_rnd -lrumpdev ${LIBRUMPBASE}
 
 .endif
+
+LDADD.t_timeleft+=	-lpthread
 
 CPPFLAGS+=	-D_KERNTYPES
 
@@ -59,8 +77,26 @@ CPPFLAGS.subr_extent.c=	-D_EXTENT_TESTING -D__POOL_EXPOSE -D_KERNTYPES
 
 t_subr_prf.c: gen_t_subr_prf ${NETBSDSRCDIR}/sys/kern/subr_prf.c
 	${HOST_SH} ${.ALLSRC} ${.TARGET}
+.if ${MKSANITIZER:Uno} == "yes"
+	# These symbols will be redefined by MKSANITIZER
+	${TOOL_SED} -i '/undef .*printf/d' ${.TARGET}
+.endif
+
 CPPFLAGS.t_subr_prf.c=	-Wno-pointer-sign	# XXX platform vs kernel SHA2
 
+# Test explicitly tests failure modes.
+CPPFLAGS.t_subr_prf.c+=	${CC_WNO_FORMAT_TRUNCATION}
+
+SANITIZER_RENAME_CLASSES+=		t_subr_prf
+SANITIZER_RENAME_FILES.t_subr_prf+=	t_subr_prf.c
+SANITIZER_RENAME_SYMBOL.t_subr_prf+=	snprintf
+SANITIZER_RENAME_SYMBOL.t_subr_prf+=	vsnprintf
+SANITIZER_RENAME_SYMBOL.t_subr_prf+=	sprintf
+SANITIZER_RENAME_SYMBOL.t_subr_prf+=	vsnprintf
+SANITIZER_RENAME_SYMBOL.t_subr_prf+=	vasprintf
+
 CLEANFILES+=	t_subr_prf.c
+
+LDADD.h_segv+=	-lm
 
 .include <bsd.test.mk>

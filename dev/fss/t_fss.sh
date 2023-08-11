@@ -1,4 +1,4 @@
-# $NetBSD: t_fss.sh,v 1.2 2016/07/29 20:27:37 pgoyette Exp $
+# $NetBSD: t_fss.sh,v 1.6 2023/05/11 01:56:31 gutteridge Exp $
 #
 # Copyright (c) 2006, 2007, 2008 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -28,11 +28,23 @@
 # Verify basic operation of fss(4) file system snapshot device
 #
 
+vnddev=vnd0
+vnd=/dev/${vnddev}
+
 orig_data="Original data"
 repl_data="Replacement data"
 
 atf_test_case basic cleanup
+basic_head() {
+	atf_set "descr" "Verify basic operation of fss(4) file system " \
+		"snapshot device"
+}
+
 basic_body() {
+
+# verify fss is available (or loadable as a module)
+
+	fssconfig -l /dev/fss0 > /dev/null || atf_skip "FSS not available"
 
 # create of mount-points for the file system and snapshot
 
@@ -43,9 +55,9 @@ basic_body() {
 # and mount it
 
 	dd if=/dev/zero of=./image bs=32k count=64
-	vndconfig -c vnd0 ./image
-	newfs /dev/vnd0a
-	mount /dev/vnd0a ./m1
+	vndconfig -c ${vnddev} ./image
+	newfs -I ${vnd}
+	mount ${vnd} ./m1
 
 	echo "${orig_data}" > ./m1/text
 
@@ -62,23 +74,17 @@ basic_body() {
 
 	read test_data < ./m2/text
 	atf_check_equal "${orig_data}" "${test_data}"
-
-# Unmount our temporary stuff
-
-	umount /dev/fss0	|| true
-	fssconfig -u fss0	|| true
-	umount /dev/vnd0a	|| true
-	vndconfig -u vnd0	|| true
 }
 
 basic_cleanup() {
-	umount /dev/vnd0a	|| true
-	fssconfig -u fss0	|| true
+# Unmount our temporary stuff
 	umount /dev/fss0	|| true
-	vndconfig -u vnd0	|| true
+	fssconfig -u fss0	|| true
+	umount ${vnd}		|| true
+	vndconfig -u ${vnddev}	|| true
 }
 
 atf_init_test_cases()
 {
-        atf_add_test_case basic
+	atf_add_test_case basic
 }

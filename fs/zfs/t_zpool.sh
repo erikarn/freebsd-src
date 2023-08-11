@@ -1,4 +1,4 @@
-#	$NetBSD: t_zpool.sh,v 1.3 2011/12/06 18:18:59 njoly Exp $
+#	$NetBSD: t_zpool.sh,v 1.6 2020/03/15 20:10:26 martin Exp $
 #
 # Copyright (c) 2011 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -25,7 +25,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 
-server='rump_server -lrumpvfs -lrumpkern_solaris -lrumpfs_zfs -lrumpdev -lrumpdev_rnd -d key=/dk,hostpath=zfs.img,size=100m'
+server='rump_server -lrumpvfs -lrumpdev_disk -lrumpkern_solaris -lrumpfs_zfs -lrumpdev -lrumpdev_rnd -d key=/dk,hostpath=zfs.img,size=100m'
 
 export RUMP_SERVER=unix://zsuck
 
@@ -43,10 +43,15 @@ jippo on /jippo type zfs (local)
 create_body()
 {
 
+	AVAIL=$( df -m ${TMPDIR} | awk '{if (int($4) > 0) print $4}' )
+	if [ $AVAIL -lt 65 ]; then
+		atf_skip "not enough free space in working directory"
+	fi
+
 	atf_check -s exit:0 -o ignore -e ignore ${server} ${RUMP_SERVER}
 
 	export LD_PRELOAD=/usr/lib/librumphijack.so
-	export RUMPHIJACK=blanket=/dev/zfs:/dk:/jippo
+	export RUMPHIJACK=blanket=/dev/zfs:/dk:/jippo,sysctl=yes,modctl=yes
 	atf_check -s exit:0 zpool create jippo /dk
 
 	export RUMPHIJACK=vfs=all

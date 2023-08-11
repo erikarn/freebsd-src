@@ -1,5 +1,5 @@
 #! /usr/bin/atf-sh
-#	$NetBSD: t_raid.sh,v 1.12 2013/02/19 21:08:24 joerg Exp $
+#	$NetBSD: t_raid.sh,v 1.16 2022/11/30 17:49:09 martin Exp $
 #
 # Copyright (c) 2010 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -26,11 +26,28 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 
-rawpart=`sysctl -n kern.rawpartition | tr '01234' 'abcde'`
+rawpart=$( set -- a b c d e f g h i j k l m n o p q r s t u v w x y z;
+	shift $( sysctl -n kern.rawpartition ); printf %s "$1" )
 rawraid=/dev/rraid0${rawpart}
 raidserver="rump_server -lrumpvfs -lrumpdev -lrumpdev_disk -lrumpdev_raidframe"
 
 makecfg()
+{
+	level=${1}
+	ncol=${2}
+
+	printf "START array\n${ncol} 0\nSTART disks\n" > raid.conf
+	diskn=0
+	while [ ${ncol} -gt ${diskn} ] ; do
+		echo "/disk${diskn}" >> raid.conf
+		diskn=$((diskn+1))
+	done
+
+	printf "START layout\n32 1 1 ${level}\nSTART queue\nfifo 100\n" \
+	    >> raid.conf
+}
+
+makecfg_old()
 {
 	level=${1}
 	ncol=${2}
@@ -54,9 +71,8 @@ smalldisk_head()
 	atf_set "require.progs" "rump_server"
 }
 
-smalldisk_body()
+smalldisk_body_backend()
 {
-	makecfg 1 2
 	export RUMP_SERVER=unix://sock
 	atf_check -s exit:0 ${raidserver}			\
 	    -d key=/disk0,hostpath=disk0.img,size=1m		\
@@ -66,15 +82,39 @@ smalldisk_body()
 	atf_check -s exit:0 rump.raidctl -C raid.conf raid0
 }
 
+smalldisk_body()
+{
+	makecfg 1 2
+	smalldisk_body_backend
+}
+
 smalldisk_cleanup()
 {
 	export RUMP_SERVER=unix://sock
 	rump.halt
 }
 
+# The old configuration test case uses the smalldisk backend
+atf_test_case old_numrows_config cleanup
+old_numrows_config_head()
+{
+	atf_set "descr" "Checks the old numRows configuration works"
+	atf_set "require.progs" "rump_server"
+}
 
-# make this smaller once 44239 is fixed
-export RAID_MEDIASIZE=32m
+old_numrows_config_body()
+{
+	makecfg_old 1 2
+	smalldisk_body_backend
+}
+
+old_numrows_config_cleanup()
+{
+	export RUMP_SERVER=unix://sock
+	rump.halt
+}
+
+export RAID_MEDIASIZE=4m
 
 atf_test_case raid1_compfail cleanup
 raid1_compfail_head()
@@ -112,7 +152,7 @@ raid1_compfail_body()
 
 	atf_check -s exit:0 rump.raidctl -c raid.conf raid0
 
-	# check if we we get what we wrote
+	# check if we get what we wrote
 	atf_check -s exit:0 -o file:testfile -e ignore \
 	    rump.dd if=${rawraid} count=4
 }
@@ -200,7 +240,7 @@ raid1_normal_body()
 
         atf_check -s exit:0 rump.raidctl -c raid.conf raid0
 
-        # check if we we get what we wrote
+        # check if we get what we wrote
         atf_check -s exit:0 -o file:testfile -e ignore \
             rump.dd if=${rawraid} count=4
 
@@ -251,7 +291,7 @@ raid5_compfail_body()
 
 	atf_check -s exit:0 rump.raidctl -c raid.conf raid0
 
-	# check if we we get what we wrote
+	# check if we get what we wrote
 	atf_check -s exit:0 -o file:testfile -e ignore \
 	    rump.dd if=${rawraid} count=4
 }
@@ -301,7 +341,7 @@ raid5_normal_body()
 
         atf_check -s exit:0 rump.raidctl -c raid.conf raid0
 
-        # check if we we get what we wrote
+        # check if we get what we wrote
         atf_check -s exit:0 -o file:testfile -e ignore \
             rump.dd if=${rawraid} count=4
 }
@@ -315,6 +355,7 @@ raid5_normal_cleanup()
 atf_init_test_cases()
 {
 	atf_add_test_case smalldisk
+	atf_add_test_case old_numrows_config
 	atf_add_test_case raid1_normal
 	atf_add_test_case raid1_comp0fail
 	atf_add_test_case raid1_compfail

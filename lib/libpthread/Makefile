@@ -1,4 +1,4 @@
-# $NetBSD: Makefile,v 1.12 2016/10/30 16:17:16 kamil Exp $
+# $NetBSD: Makefile,v 1.15 2020/06/21 07:06:05 lukem Exp $
 
 NOMAN=		# defined
 
@@ -38,6 +38,7 @@ TESTS_C+=	t_sigsuspend
 TESTS_C+=	t_siglongjmp
 TESTS_C+=	t_sleep
 TESTS_C+=	t_swapcontext
+TESTS_SH+=	t_thread_local_dtor
 TESTS_C+=	t_timedmutex
 
 LDADD.t_sem+=	-lrt
@@ -47,6 +48,14 @@ PROGS=		h_atexit
 PROGS+=		h_cancel
 PROGS+=		h_exit
 PROGS+=		h_resolv
+PROGS_CXX+=	h_thread_local_dtor
+
+TESTS_C+=	t_call_once t_cnd t_mtx t_thrd t_tss # C11 threads(3)
+
+COPTS.h_thread_local_dtor.cpp+=	-std=c++11
+# Deal with questionable warning and header quality in libstdc++.
+COPTS.h_thread_local_dtor.cpp+=	 ${${ACTIVE_CC} == "gcc" :?  -Wno-ctor-dtor-privacy -Wno-sign-compare -Wno-shadow :}
+SRCS.h_thread_local_dtor= h_thread_local_dtor.cpp
 
 FILESDIR=	${TESTSDIR}
 FILES=		d_mach
