@@ -1,2 +1,2 @@
-The functions defined in passwdqc.h may be used without PAM at all.
-They will eventually be moved into a libpasswdqc.
+The functions defined in passwdqc.h may be used without PAM at all, and
+all of them are in fact exported by libpasswdqc.
