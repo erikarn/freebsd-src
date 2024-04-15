@@ -709,15 +709,16 @@ ieee80211_ioctl_getdevcaps(struct ieee80211com *ic,
 	if (dc == NULL)
 		return ENOMEM;
 	dc->dc_drivercaps = ic->ic_caps;
-
-	/* XXX TODO: why is this returning the HARDWARE crypto caps? */
 	/*
-	 * Surely we would want to return the ciphers that we support,
-	 * hardware or software?
+	 * Announce the net80211 supported ciphers; not JUST the
+	 * hardware supported ciphers.
+	 *
+	 * Drivers will mask ciphers OUT of this during attach if
+	 * they can't support them - ie they're required to do hardware
+	 * ciphers only and don't support the software encrypt/decrypt
+	 * path.
 	 */
-
-	/* TODO: change this to return the supported cipher set */
-	dc->dc_cryptocaps = ic->ic_cryptocaps;
+	dc->dc_cryptocaps = ic->ic_wpa_cryptocaps;
 
 	dc->dc_htcaps = ic->ic_htcaps;
 	dc->dc_vhtcaps = ic->ic_vht_cap.vht_cap_info;

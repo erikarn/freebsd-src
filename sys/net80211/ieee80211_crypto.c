@@ -142,6 +142,21 @@ ieee80211_crypto_attach(struct ieee80211com *ic)
 {
 	/* NB: we assume everything is pre-zero'd */
 	ciphers[IEEE80211_CIPHER_NONE] = &ieee80211_cipher_none;
+
+	/*
+	 * Default set of supported ciphers.
+	 *
+	 * These are the ones announced via wpa_supplicant.
+	 * ic_cryptocaps is actually the /hardware supported/ ciphers.
+	 *
+	 * If drivers can NOT support a specific cipher then they
+	 * should mask them OUT of this field.
+	 */
+	ic->ic_wpa_cryptocaps =
+	    IEEE80211_CRYPTO_WEP
+	    | IEEE80211_CRYPTO_TKIP
+	    | IEEE80211_CRYPTO_AES_CCM
+	;
 }
 
 /*
