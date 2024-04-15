@@ -1266,7 +1266,7 @@ struct ieee80211_csa_ie {
 #define	WPA_CSE_NULL		0x00
 #define	WPA_CSE_WEP40		0x01
 #define	WPA_CSE_TKIP		0x02
-#define	WPA_CSE_CCMP		0x04
+#define	WPA_CSE_CCMP		0x04	/* CCMP 128-bit */
 #define	WPA_CSE_WEP104		0x05
 
 #define	WPA_ASE_NONE		0x00
@@ -1275,6 +1275,7 @@ struct ieee80211_csa_ie {
 
 #define	WPS_OUI_TYPE		0x04
 
+/* 802.11-2016 Table 9.131 - Cipher Suite Selectors */
 #define	RSN_OUI			0xac0f00
 #define	RSN_VERSION		1		/* current supported version */
 
@@ -1282,8 +1283,16 @@ struct ieee80211_csa_ie {
 #define	RSN_CSE_WEP40		0x01
 #define	RSN_CSE_TKIP		0x02
 #define	RSN_CSE_WRAP		0x03
-#define	RSN_CSE_CCMP		0x04
+#define	RSN_CSE_CCMP		0x04		/* CCMP 128 bit */
 #define	RSN_CSE_WEP104		0x05
+#define	RSN_CSE_BIP_CMAC_128	0x06
+/* 0x07 - "Group addressed traffic not allowed */
+#define	RSN_CSE_GCMP_128	0x08
+#define	RSN_CSE_GCMP_256	0x09
+#define	RSN_CSE_CCMP_256	0x0a		/* CCMP 256 bit */
+#define	RSN_CSE_BIP_GMAC_128	0x0b
+#define	RSN_CSE_BIP_GMAC_256	0x0c
+#define	RSN_CSE_BIP_CMAC_256	0x0d
 
 #define	RSN_ASE_NONE		0x00
 #define	RSN_ASE_8021X_UNSPEC	0x01

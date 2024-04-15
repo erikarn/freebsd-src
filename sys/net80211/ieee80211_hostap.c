@@ -1209,6 +1209,8 @@ wpa_cipher(const uint8_t *sel, uint8_t *keylen, uint8_t *cipher)
 		break;
 	case WPA_SEL(WPA_CSE_CCMP):
 		*cipher = IEEE80211_CIPHER_AES_CCM;
+		if (keylen)
+			*keylen = 128 / NBBY;
 		break;
 	default:
 		return (EINVAL);
@@ -1322,7 +1324,6 @@ ieee80211_parse_wpa(struct ieee80211vap *vap, const uint8_t *frm,
 		    w);
 		return IEEE80211_REASON_PAIRWISE_CIPHER_INVALID;
 	}
-	/* XXX other? */
 	if (w & (1 << IEEE80211_CIPHER_AES_CCM))
 		rsn->rsn_ucastcipher = IEEE80211_CIPHER_AES_CCM;
 	else
@@ -1358,6 +1359,11 @@ ieee80211_parse_wpa(struct ieee80211vap *vap, const uint8_t *frm,
  * Convert an RSN cipher selector OUI to an internal
  * cipher algorithm.  Where appropriate we also
  * record any key length.
+ *
+ * [adrian] TODO: the keylen is currently only used for
+ * display; it isn't being used in the code paths that
+ * create the keys themselves?  Or is that just 100%
+ * up to the supplicant code to handle / provide?
  */
 static int
 rsn_cipher(const uint8_t *sel, uint8_t *keylen, uint8_t *cipher)
@@ -1382,11 +1388,49 @@ rsn_cipher(const uint8_t *sel, uint8_t *keylen, uint8_t *cipher)
 	case RSN_SEL(RSN_CSE_TKIP):
 		*cipher = IEEE80211_CIPHER_TKIP;
 		break;
-	case RSN_SEL(RSN_CSE_CCMP):
+	case RSN_SEL(RSN_CSE_CCMP): /* Note: 128 bit CCMP */
 		*cipher = IEEE80211_CIPHER_AES_CCM;
+		if (keylen)
+			*keylen = 128 / NBBY;
+		break;
+	case RSN_SEL(RSN_CSE_CCMP_256):
+		*cipher = IEEE80211_CIPHER_AES_CCM_256;
+		if (keylen)
+			*keylen = 256 / NBBY;
 		break;
 	case RSN_SEL(RSN_CSE_WRAP):
-		*cipher = IEEE80211_CIPHER_AES_OCB;
+		if (keylen)
+			*cipher = IEEE80211_CIPHER_AES_OCB;
+		break;
+	case RSN_SEL(RSN_CSE_BIP_CMAC_128):
+		*cipher = IEEE80211_CIPHER_BIP_CMAC_128;
+		if (keylen)
+			*keylen = 128 / NBBY;
+		break;
+	case RSN_SEL(RSN_CSE_BIP_CMAC_256):
+		*cipher = IEEE80211_CIPHER_BIP_CMAC_256;
+		if (keylen)
+			*keylen = 256 / NBBY;
+		break;
+	case RSN_SEL(RSN_CSE_BIP_GMAC_128):
+		*cipher = IEEE80211_CIPHER_BIP_GMAC_128;
+		if (keylen)
+			*keylen = 128 / NBBY;
+		break;
+	case RSN_SEL(RSN_CSE_BIP_GMAC_256):
+		*cipher = IEEE80211_CIPHER_BIP_GMAC_256;
+		if (keylen)
+			*keylen = 256 / NBBY;
+		break;
+	case RSN_SEL(RSN_CSE_GCMP_128):
+		*cipher = IEEE80211_CIPHER_AES_GCM_128;
+		if (keylen)
+			*keylen = 128 / NBBY;
+		break;
+	case RSN_SEL(RSN_CSE_GCMP_256):
+		*cipher = IEEE80211_CIPHER_AES_GCM_256;
+		if (keylen)
+			*keylen = 256 / NBBY;
 		break;
 	default:
 		return (EINVAL);
@@ -1500,8 +1544,20 @@ ieee80211_parse_rsn(struct ieee80211vap *vap, const uint8_t *frm,
 
 		frm += 4, len -= 4;
 	}
-        if (w & (1 << IEEE80211_CIPHER_AES_CCM))
-                rsn->rsn_ucastcipher = IEEE80211_CIPHER_AES_CCM;
+
+#if 0
+	/* [adrian] Prefer GCM if available, prefer 256 over 128 bit */
+	if (w & (1 << IEEE80211_CIPHER_AES_GCM_256))
+		rsn->rsn_ucastcipher = IEEE80211_CIPHER_AES_GCM_256;
+	else if (w & (1 << IEEE80211_CIPHER_AES_CCM_256))
+		rsn->rsn_ucastcipher = IEEE80211_CIPHER_AES_CCM_256;
+	else if (w & (1 << IEEE80211_CIPHER_AES_GCM_128))
+		rsn->rsn_ucastcipher = IEEE80211_CIPHER_AES_GCM_128;
+	else
+#endif
+
+	if (w & (1 << IEEE80211_CIPHER_AES_CCM))
+		rsn->rsn_ucastcipher = IEEE80211_CIPHER_AES_CCM;
 	else if (w & (1 << IEEE80211_CIPHER_AES_OCB))
 		rsn->rsn_ucastcipher = IEEE80211_CIPHER_AES_OCB;
 	else if (w & (1 << IEEE80211_CIPHER_TKIP))
@@ -2224,6 +2280,10 @@ hostap_recv_mgmt(struct ieee80211_node *ni, struct mbuf *m0,
 		 * or AES-CCM; the 11n spec only specifies these ciphers
 		 * so permitting any others is undefined and can lead
 		 * to interoperability problems.
+		 *
+		 * TODO: is AES-GCM ok?
+		 *
+		 * TODO: find the specification note to quote here.
 		 */
 		if ((ni->ni_flags & IEEE80211_NODE_HT) &&
 		    (((vap->iv_flags & IEEE80211_F_WPA) &&
