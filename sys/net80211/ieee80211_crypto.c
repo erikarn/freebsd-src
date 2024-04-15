@@ -217,6 +217,9 @@ ieee80211_crypto_register(const struct ieee80211_cipher *cip)
 			__func__, cip->ic_name);
 		return;
 	}
+
+	printf("%s: registered cipher %s (%d)\n", __func__, cip->ic_name,
+	    cip->ic_cipher);
 	ciphers[cip->ic_cipher] = cip;
 }
 
@@ -238,6 +241,8 @@ ieee80211_crypto_unregister(const struct ieee80211_cipher *cip)
 	}
 	/* NB: don't complain about not being registered */
 	/* XXX disallow if references */
+	printf("%s: unregister cipher %s (%d)\n", __func__, cip->ic_name,
+	    cip->ic_cipher);
 	ciphers[cip->ic_cipher] = NULL;
 }
 
