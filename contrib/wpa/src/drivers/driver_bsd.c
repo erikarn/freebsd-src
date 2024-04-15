@@ -378,7 +378,16 @@ bsd_set_key(void *priv, struct wpa_driver_set_key_params *params)
 	case WPA_ALG_CCMP:
 		wk.ik_type = IEEE80211_CIPHER_AES_CCM;
 		break;
-	/* TODO: add CCMP_256, GCM, etc */
+	case WPA_ALG_CCMP_256:
+		wk.ik_type = IEEE80211_CIPHER_AES_CCM_256;
+		break;
+	case WPA_ALG_GCMP:
+		wk.ik_type = IEEE80211_CIPHER_AES_GCM_128;
+		break;
+	case WPA_ALG_GCMP_256:
+		wk.ik_type = IEEE80211_CIPHER_AES_GCM_256;
+		break;
+	/* TODO: add BIP */
 	default:
 		wpa_printf(MSG_ERROR, "%s: unknown alg=%d", __func__, alg);
 		return -1;
@@ -442,13 +451,27 @@ static int
 bsd_configure_wpa(void *priv, struct wpa_bss_params *params)
 {
 #ifndef IEEE80211_IOC_APPIE
-	/* TODO: add CCMP_256, GCM, etc */
+
+	/* TODO: what do we do for earlier platforms where ciphername "NONE" has changed? */
+	/* TODO: is this used for freebsd? I don't think so */
 	static const char *ciphernames[] =
-		{ "WEP", "TKIP", "AES-OCB", "AES-CCM", "CKIP", "NONE" };
+		{ "WEP", "TKIP", "AES-OCB", "AES-CCM", "CKIP", "AES-CCM-256",
+		  "BIP-CMAC-128", "BIP-CMAC-256", "BIP-GMAC-128", "BIP-GMAC-256",
+		  "AES-GCM-128", "AES-GCM-256",
+		  "NONE" };
 	int v;
 
 	switch (params->wpa_group) {
-	/* TODO: add CCMP_256, GCM, etc */
+	/* TODO: add BIP */
+	case WPA_CIPHER_GCMP:
+		v = IEEE80211_CIPHER_AES_GCM_128;
+		break;
+	case WPA_CIPHER_GCMP_256:
+		v = IEEE80211_CIPHER_AES_GCM_256;
+		break;
+	case WPA_CIPHER_CCMP_256:
+		v = IEEE80211_CIPHER_AES_CCM_256;
+		break;
 	case WPA_CIPHER_CCMP:
 		v = IEEE80211_CIPHER_AES_CCM;
 		break;
@@ -488,7 +511,13 @@ bsd_configure_wpa(void *priv, struct wpa_bss_params *params)
 	}
 
 	v = 0;
-	/* TODO: add CCMP_256, GCM, etc */
+	/* TODO: add BIP */
+	if (params->wpa_pairwise & WPA_CIPHER_GCMP)
+		v |= 1<<IEEE80211_CIPHER_AES_GCM_128;
+	if (params->wpa_pairwise & WPA_CIPHER_GCMP_256)
+		v |= 1<<IEEE80211_CIPHER_AES_GCM_256;
+	if (params->wpa_pairwise & WPA_CIPHER_CCMP_256)
+		v |= 1<<IEEE80211_CIPHER_AES_CCM_256;
 	if (params->wpa_pairwise & WPA_CIPHER_CCMP)
 		v |= 1<<IEEE80211_CIPHER_AES_CCM;
 	if (params->wpa_pairwise & WPA_CIPHER_TKIP)
@@ -1538,9 +1567,25 @@ static int wpa_driver_bsd_capa(struct bsd_driver_data *drv)
 #define IEEE80211_CIPHER_WEP            0
 #define IEEE80211_CIPHER_TKIP           1
 #define IEEE80211_CIPHER_AES_CCM        3
+#define IEEE80211_CIPHER_AES_CCM_256    7
+#define IEEE80211_CIPHER_BIP_CMAC_128   8
+#define IEEE80211_CIPHER_BIP_CMAC_256   9
+#define IEEE80211_CIPHER_BIP_GMAC_128   10
+#define IEEE80211_CIPHER_BIP_GMAC_256   11
+#define IEEE80211_CIPHER_AES_GCM_128    12
+#define IEEE80211_CIPHER_AES_GCM_256    13
+
 #define IEEE80211_CRYPTO_WEP            (1<<IEEE80211_CIPHER_WEP)
 #define IEEE80211_CRYPTO_TKIP           (1<<IEEE80211_CIPHER_TKIP)
 #define IEEE80211_CRYPTO_AES_CCM        (1<<IEEE80211_CIPHER_AES_CCM)
+#define IEEE80211_CRYPTO_AES_CCM_256    (1<<IEEE80211_CIPHER_AES_CCM_256)
+#define IEEE80211_CRYPTO_BIP_CMAC_128   (1<<IEEE80211_CIPHER_BIP_CMAC_128)
+#define IEEE80211_CRYPTO_BIP_CMAC_256   (1<<IEEE80211_CIPHER_BIP_CMAC_256)
+#define IEEE80211_CRYPTO_BIP_GMAC_128   (1<<IEEE80211_CIPHER_BIP_GMAC_128)
+#define IEEE80211_CRYPTO_BIP_GMAC_256   (1<<IEEE80211_CIPHER_BIP_GMAC_256)
+#define IEEE80211_CRYPTO_AES_GCM_128    (1<<IEEE80211_CIPHER_AES_GCM_128)
+#define IEEE80211_CRYPTO_AES_GCM_256    (1<<IEEE80211_CIPHER_AES_GCM_256)
+
 #define IEEE80211_C_HOSTAP      0x00000400      /* CAPABILITY: HOSTAP avail */
 #define IEEE80211_C_WPA1        0x00800000      /* CAPABILITY: WPA1 avail */
 #define IEEE80211_C_WPA2        0x01000000      /* CAPABILITY: WPA2 avail */
@@ -1562,44 +1607,59 @@ static int wpa_driver_bsd_capa(struct bsd_driver_data *drv)
 	if (devcaps.dc_drivercaps & IEEE80211_C_WPA2)
 		drv->capa.key_mgmt = WPA_DRIVER_CAPA_KEY_MGMT_WPA2 |
 			WPA_DRIVER_CAPA_KEY_MGMT_WPA2_PSK;
-#ifdef __FreeBSD__
-	/*
-	 * TODO: it would be much nicer if freebsd exported the actual
-	 * supported cryptocaps / ciphers rather than the hardware ones.
-	 * (I don't quite understand why it WOULD want to expose hardware
-	 * caps to userland?)
-	 *
-	 * That way we could simply query it for whether the newer ciphers
-	 * are supported and add them here.
-	 */
-	drv->capa.enc |= WPA_DRIVER_CAPA_ENC_WEP40 |
-	    WPA_DRIVER_CAPA_ENC_WEP104 |
-	    WPA_DRIVER_CAPA_ENC_TKIP |
-	    WPA_DRIVER_CAPA_ENC_CCMP;
-#else
-	/*
-	 * XXX
-	 * FreeBSD exports hardware cryptocaps.  These have no meaning for wpa
-	 * since net80211 performs software crypto.
-	 */
 
 	if (devcaps.dc_cryptocaps & IEEE80211_CRYPTO_WEP)
 		drv->capa.enc |= WPA_DRIVER_CAPA_ENC_WEP40 |
 			WPA_DRIVER_CAPA_ENC_WEP104;
 	if (devcaps.dc_cryptocaps & IEEE80211_CRYPTO_TKIP)
 		drv->capa.enc |= WPA_DRIVER_CAPA_ENC_TKIP;
+
 	if (devcaps.dc_cryptocaps & IEEE80211_CRYPTO_AES_CCM)
 		drv->capa.enc |= WPA_DRIVER_CAPA_ENC_CCMP;
-#endif
+	if (devcaps.dc_cryptocaps & IEEE80211_CRYPTO_AES_CCM_256)
+		drv->capa.enc |= WPA_DRIVER_CAPA_ENC_CCMP_256;
+
+	if (devcaps.dc_cryptocaps & IEEE80211_CRYPTO_AES_GCM_128)
+		drv->capa.enc |= WPA_DRIVER_CAPA_ENC_GCMP;
+	if (devcaps.dc_cryptocaps & IEEE80211_CRYPTO_AES_GCM_256)
+		drv->capa.enc |= WPA_DRIVER_CAPA_ENC_GCMP_256;
+
+	if (devcaps.dc_cryptocaps & IEEE80211_CRYPTO_BIP_CMAC_128)
+		drv->capa.enc |= WPA_DRIVER_CAPA_ENC_BIP;
+	if (devcaps.dc_cryptocaps & IEEE80211_CRYPTO_BIP_CMAC_256)
+		drv->capa.enc |= WPA_DRIVER_CAPA_ENC_BIP_CMAC_256;
+
+	if (devcaps.dc_cryptocaps & IEEE80211_CRYPTO_BIP_GMAC_128)
+		drv->capa.enc |= WPA_DRIVER_CAPA_ENC_BIP_GMAC_128;
+	if (devcaps.dc_cryptocaps & IEEE80211_CRYPTO_BIP_GMAC_256)
+		drv->capa.enc |= WPA_DRIVER_CAPA_ENC_BIP_GMAC_256;
+
+	/* TODO: NO_GROUP_ADDRESSED (WPA_DRIVER_CAPA_ENC_GTK_NOT_USED) support */
 
 	if (devcaps.dc_drivercaps & IEEE80211_C_HOSTAP)
 		drv->capa.flags |= WPA_DRIVER_FLAGS_AP;
 #undef IEEE80211_CIPHER_WEP
 #undef IEEE80211_CIPHER_TKIP
 #undef IEEE80211_CIPHER_AES_CCM
+#undef IEEE80211_CIPHER_AES_CCM_256
+#undef IEEE80211_CIPHER_BIP_CMAC_128
+#undef IEEE80211_CIPHER_BIP_CMAC_256
+#undef IEEE80211_CIPHER_BIP_GMAC_128
+#undef IEEE80211_CIPHER_BIP_GMAC_256
+#undef IEEE80211_CIPHER_AES_GCM_128
+#undef IEEE80211_CIPHER_AES_GCM_256
+
 #undef IEEE80211_CRYPTO_WEP
 #undef IEEE80211_CRYPTO_TKIP
 #undef IEEE80211_CRYPTO_AES_CCM
+#undef IEEE80211_CRYPTO_AES_CCM_256
+#undef IEEE80211_CRYPTO_BIP_CMAC_128
+#undef IEEE80211_CRYPTO_BIP_CMAC_256
+#undef IEEE80211_CRYPTO_BIP_GMAC_128
+#undef IEEE80211_CRYPTO_BIP_GMAC_256
+#undef IEEE80211_CRYPTO_AES_GCM_128
+#undef IEEE80211_CRYPTO_AES_GCM_256
+
 #undef IEEE80211_C_HOSTAP
 #undef IEEE80211_C_WPA1
 #undef IEEE80211_C_WPA2
