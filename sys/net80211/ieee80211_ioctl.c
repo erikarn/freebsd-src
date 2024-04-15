@@ -709,7 +709,16 @@ ieee80211_ioctl_getdevcaps(struct ieee80211com *ic,
 	if (dc == NULL)
 		return ENOMEM;
 	dc->dc_drivercaps = ic->ic_caps;
+
+	/* XXX TODO: why is this returning the HARDWARE crypto caps? */
+	/*
+	 * Surely we would want to return the ciphers that we support,
+	 * hardware or software?
+	 */
+
+	/* TODO: change this to return the supported cipher set */
 	dc->dc_cryptocaps = ic->ic_cryptocaps;
+
 	dc->dc_htcaps = ic->ic_htcaps;
 	dc->dc_vhtcaps = ic->ic_vht_cap.vht_cap_info;
 	ci = &dc->dc_chaninfo;

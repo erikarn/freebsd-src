@@ -378,6 +378,7 @@ bsd_set_key(void *priv, struct wpa_driver_set_key_params *params)
 	case WPA_ALG_CCMP:
 		wk.ik_type = IEEE80211_CIPHER_AES_CCM;
 		break;
+	/* TODO: add CCMP_256, GCM, etc */
 	default:
 		wpa_printf(MSG_ERROR, "%s: unknown alg=%d", __func__, alg);
 		return -1;
@@ -441,11 +442,13 @@ static int
 bsd_configure_wpa(void *priv, struct wpa_bss_params *params)
 {
 #ifndef IEEE80211_IOC_APPIE
+	/* TODO: add CCMP_256, GCM, etc */
 	static const char *ciphernames[] =
 		{ "WEP", "TKIP", "AES-OCB", "AES-CCM", "CKIP", "NONE" };
 	int v;
 
 	switch (params->wpa_group) {
+	/* TODO: add CCMP_256, GCM, etc */
 	case WPA_CIPHER_CCMP:
 		v = IEEE80211_CIPHER_AES_CCM;
 		break;
@@ -485,6 +488,7 @@ bsd_configure_wpa(void *priv, struct wpa_bss_params *params)
 	}
 
 	v = 0;
+	/* TODO: add CCMP_256, GCM, etc */
 	if (params->wpa_pairwise & WPA_CIPHER_CCMP)
 		v |= 1<<IEEE80211_CIPHER_AES_CCM;
 	if (params->wpa_pairwise & WPA_CIPHER_TKIP)
@@ -1529,6 +1533,7 @@ wpa_driver_bsd_get_scan_results2(void *priv)
 static int wpa_driver_bsd_capa(struct bsd_driver_data *drv)
 {
 #ifdef IEEE80211_IOC_DEVCAPS
+/* TODO: add CCMP_256, GCM, etc */
 /* kernel definitions copied from net80211/ieee80211_var.h */
 #define IEEE80211_CIPHER_WEP            0
 #define IEEE80211_CIPHER_TKIP           1
@@ -1558,6 +1563,15 @@ static int wpa_driver_bsd_capa(struct bsd_driver_data *drv)
 		drv->capa.key_mgmt = WPA_DRIVER_CAPA_KEY_MGMT_WPA2 |
 			WPA_DRIVER_CAPA_KEY_MGMT_WPA2_PSK;
 #ifdef __FreeBSD__
+	/*
+	 * TODO: it would be much nicer if freebsd exported the actual
+	 * supported cryptocaps / ciphers rather than the hardware ones.
+	 * (I don't quite understand why it WOULD want to expose hardware
+	 * caps to userland?)
+	 *
+	 * That way we could simply query it for whether the newer ciphers
+	 * are supported and add them here.
+	 */
 	drv->capa.enc |= WPA_DRIVER_CAPA_ENC_WEP40 |
 	    WPA_DRIVER_CAPA_ENC_WEP104 |
 	    WPA_DRIVER_CAPA_ENC_TKIP |
@@ -1595,6 +1609,11 @@ static int wpa_driver_bsd_capa(struct bsd_driver_data *drv)
 		WPA_DRIVER_CAPA_KEY_MGMT_WPA_PSK |
 		WPA_DRIVER_CAPA_KEY_MGMT_WPA2 |
 		WPA_DRIVER_CAPA_KEY_MGMT_WPA2_PSK;
+	/*
+	 * Note: this is where other non-FreeBSD platforms would add other
+	 * cipher support
+	 */
+
 	drv->capa.enc = WPA_DRIVER_CAPA_ENC_WEP40 |
 		WPA_DRIVER_CAPA_ENC_WEP104 |
 		WPA_DRIVER_CAPA_ENC_TKIP |
