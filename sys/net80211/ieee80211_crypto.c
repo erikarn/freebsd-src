@@ -156,6 +156,7 @@ ieee80211_crypto_attach(struct ieee80211com *ic)
 	    IEEE80211_CRYPTO_WEP
 	    | IEEE80211_CRYPTO_TKIP
 	    | IEEE80211_CRYPTO_AES_CCM
+	    | IEEE80211_CRYPTO_AES_CCM_256
 	;
 }
 
