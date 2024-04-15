@@ -452,6 +452,7 @@ bsd_configure_wpa(void *priv, struct wpa_bss_params *params)
 {
 #ifndef IEEE80211_IOC_APPIE
 
+#error nothere
 	/* TODO: what do we do for earlier platforms where ciphername "NONE" has changed? */
 	/* TODO: is this used for freebsd? I don't think so */
 	static const char *ciphernames[] =
@@ -1601,12 +1602,19 @@ static int wpa_driver_bsd_capa(struct bsd_driver_data *drv)
 	wpa_printf(MSG_DEBUG, "%s: drivercaps=0x%08x,cryptocaps=0x%08x",
 		   __func__, devcaps.dc_drivercaps, devcaps.dc_cryptocaps);
 
+	wpa_printf(MSG_ERROR, "%s: drivercaps=0x%08x,cryptocaps=0x%08x",
+		   __func__, devcaps.dc_drivercaps, devcaps.dc_cryptocaps);
+
 	if (devcaps.dc_drivercaps & IEEE80211_C_WPA1)
 		drv->capa.key_mgmt = WPA_DRIVER_CAPA_KEY_MGMT_WPA |
 			WPA_DRIVER_CAPA_KEY_MGMT_WPA_PSK;
 	if (devcaps.dc_drivercaps & IEEE80211_C_WPA2)
 		drv->capa.key_mgmt = WPA_DRIVER_CAPA_KEY_MGMT_WPA2 |
 			WPA_DRIVER_CAPA_KEY_MGMT_WPA2_PSK;
+
+	/* XXX TODO WPA3 */
+	/* XXX TODO: WPA_DRIVER_CAPA_KEY_MGMT_PSK_SHA256 */
+	/* XXX TODO: WPA_DRIVER_CAPA_KEY_MGMT_802_1X_SHA256 */
 
 	if (devcaps.dc_cryptocaps & IEEE80211_CRYPTO_WEP)
 		drv->capa.enc |= WPA_DRIVER_CAPA_ENC_WEP40 |
