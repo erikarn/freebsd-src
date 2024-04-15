@@ -1399,8 +1399,7 @@ rsn_cipher(const uint8_t *sel, uint8_t *keylen, uint8_t *cipher)
 			*keylen = 256 / NBBY;
 		break;
 	case RSN_SEL(RSN_CSE_WRAP):
-		if (keylen)
-			*cipher = IEEE80211_CIPHER_AES_OCB;
+		*cipher = IEEE80211_CIPHER_AES_OCB;
 		break;
 	case RSN_SEL(RSN_CSE_BIP_CMAC_128):
 		*cipher = IEEE80211_CIPHER_BIP_CMAC_128;
