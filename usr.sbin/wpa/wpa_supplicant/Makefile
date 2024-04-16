@@ -41,6 +41,8 @@ SRCS+=	pasn_supplicant.c
 
 MAN=	wpa_supplicant.8 wpa_supplicant.conf.5
 
+CFLAGS+= -DCONFIG_SAE -DCONFIG_SAE_PK
+
 .if ${MK_EXAMPLES} != "no"
 FILESDIR= ${SHAREDIR}/examples/etc
 .PATH:	${WPA_SUPPLICANT_DISTDIR}

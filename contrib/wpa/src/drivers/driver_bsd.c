@@ -1612,7 +1612,14 @@ static int wpa_driver_bsd_capa(struct bsd_driver_data *drv)
 		drv->capa.key_mgmt = WPA_DRIVER_CAPA_KEY_MGMT_WPA2 |
 			WPA_DRIVER_CAPA_KEY_MGMT_WPA2_PSK;
 
+	drv->capa.flags |= WPA_DRIVER_CAPA_KEY_MGMT_SUITE_B;
+	/* For CCMP/GMCP256 from nl80211_capa.c ? */
+	drv->capa.flags |= WPA_DRIVER_CAPA_KEY_MGMT_SUITE_B_192;
+
 	/* XXX TODO WPA3 */
+	drv->capa.flags |= WPA_DRIVER_FLAGS_SAE;
+	drv->capa.key_mgmt |= WPA_DRIVER_CAPA_KEY_MGMT_SAE;
+	drv->capa.key_mgmt |= WPA_DRIVER_CAPA_KEY_MGMT_PSK_SHA256;
 	/* XXX TODO: WPA_DRIVER_CAPA_KEY_MGMT_PSK_SHA256 */
 	/* XXX TODO: WPA_DRIVER_CAPA_KEY_MGMT_802_1X_SHA256 */
 
@@ -1672,6 +1679,7 @@ static int wpa_driver_bsd_capa(struct bsd_driver_data *drv)
 #undef IEEE80211_C_WPA1
 #undef IEEE80211_C_WPA2
 #else /* IEEE80211_IOC_DEVCAPS */
+#error foo
 	/* For now, assume TKIP, CCMP, WPA, WPA2 are supported */
 	drv->capa.key_mgmt = WPA_DRIVER_CAPA_KEY_MGMT_WPA |
 		WPA_DRIVER_CAPA_KEY_MGMT_WPA_PSK |
