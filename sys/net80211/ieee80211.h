@@ -1294,9 +1294,21 @@ struct ieee80211_csa_ie {
 #define	RSN_CSE_BIP_GMAC_256	0x0c
 #define	RSN_CSE_BIP_CMAC_256	0x0d
 
+/* 802.11-2016 Table 9-133 (AKM suite selectors) */
 #define	RSN_ASE_NONE		0x00
 #define	RSN_ASE_8021X_UNSPEC	0x01
 #define	RSN_ASE_8021X_PSK	0x02
+#define	RSN_ASE_FT_8021X	0x03		/* SHA-256 */
+#define	RSN_ASE_FT_PSK		0x04		/* SHA-256 */
+#define	RSN_ASE_8021X_UNSPEC_256	0x05
+#define	RSN_ASE_8021X_PSK_256	0x06
+#define	RSN_ASE_8021X_TDLS	0x07
+#define	RSN_ASE_SAE_UNSPEC_256	0x08
+#define	RSN_ASE_FT_SAE_256	0x09
+#define	RSN_ASE_APPEERKEY_256	0x0a
+#define	RSN_ASE_EAP_256		0x0b
+#define	RSN_ASE_EAP_384		0x0c		/* SHA-384 */
+#define	RSN_ASE_FT_8021X_384	0x0d		/* SHA-384 */
 
 #define	RSN_CAP_PREAUTH		0x01
 
