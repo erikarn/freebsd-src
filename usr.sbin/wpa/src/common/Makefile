@@ -11,6 +11,8 @@ INTERNALLIB=
 
 SRCS=	cli.c \
 	ctrl_iface_common.c \
+	sae.c \
+	sae_pk.c \
 	dragonfly.c \
 	dpp_tcp.c \
 	gas.c \
@@ -21,6 +23,7 @@ SRCS=	cli.c \
 	wpa_ctrl.c
 
 CFLAGS+=-DCONFIG_SAE \
+	-DCONFIG_SAE_PK \
 	-DCONFIG_SUITE \
 	-DCONFIG_SUITEB
 

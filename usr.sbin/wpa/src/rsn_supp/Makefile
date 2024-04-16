@@ -4,6 +4,8 @@
 
 .include "../../Makefile.crypto"
 
+CFLAGS+= -DCONFIG_SAE -DCONFIG_SAE_PK
+
 LIB=	wparsn_supp
 INTERNALLIB=
 

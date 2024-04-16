@@ -14,6 +14,7 @@ SRCS=	crypto_openssl.c \
 	random.c \
 	sha1-prf.c \
 	sha256-prf.c \
+	sha256-kdf.c \
 	sha256-tlsprf.c \
 	sha384-prf.c \
 	sha384-tlsprf.c \
@@ -41,6 +42,7 @@ SRCS+=  aes-unwrap.c aes-wrap.c \
         aes-internal-dec.c \
         aes-internal-enc.c
 .else
+SRCS+=	aes-siv.c
 .endif
 
 .if defined(NEED_AES_CBC)

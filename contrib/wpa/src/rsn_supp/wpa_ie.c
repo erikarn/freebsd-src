@@ -89,7 +89,8 @@ static int wpa_gen_wpa_ie_wpa(u8 *wpa_ie, size_t wpa_ie_len,
 	} else if (key_mgmt == WPA_KEY_MGMT_CCKM) {
 		RSN_SELECTOR_PUT(pos, WPA_AUTH_KEY_MGMT_CCKM);
 	} else {
-		wpa_printf(MSG_WARNING, "Invalid key management type (%d).",
+		wpa_printf(MSG_WARNING, "%s:%d: Invalid key management type (%d).",
+			__FILE__, __LINE__,
 			   key_mgmt);
 		return -1;
 	}
@@ -223,7 +224,8 @@ static int wpa_gen_wpa_ie_rsn(u8 *rsn_ie, size_t rsn_ie_len,
 		RSN_SELECTOR_PUT(pos, RSN_AUTH_KEY_MGMT_OSEN);
 #endif /* CONFIG_HS20 */
 	} else {
-		wpa_printf(MSG_WARNING, "Invalid key management type (%d).",
+		wpa_printf(MSG_WARNING, "%s:%d: Invalid key management type (0x%x).",
+			   __FILE__, __LINE__,
 			   key_mgmt);
 		return -1;
 	}

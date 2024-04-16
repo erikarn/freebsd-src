@@ -74,7 +74,9 @@ static int wpa_write_wpa_ie(struct wpa_auth_config *conf, u8 *buf, size_t len)
 	}
 
 	if (num_suites == 0) {
-		wpa_printf(MSG_DEBUG, "Invalid key management type (%d).",
+		wpa_printf(MSG_DEBUG,
+			   "%s:%d: Invalid key management type (%d).",
+			   __FILE__, __LINE__,
 			   conf->wpa_key_mgmt);
 		return -1;
 	}
@@ -306,7 +308,9 @@ int wpa_write_rsn_ie(struct wpa_auth_config *conf, u8 *buf, size_t len,
 #endif /* CONFIG_RSN_TESTING */
 
 	if (num_suites == 0) {
-		wpa_printf(MSG_DEBUG, "Invalid key management type (%d).",
+		wpa_printf(MSG_DEBUG,
+		    "%s:%d: Invalid key management type (%d).",
+		    __FILE__, __LINE__, 
 			   conf->wpa_key_mgmt);
 		return -1;
 	}
