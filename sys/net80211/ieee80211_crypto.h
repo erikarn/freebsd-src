@@ -31,7 +31,8 @@
 /*
  * 802.11 protocol crypto-related definitions.
  */
-#define	IEEE80211_KEYBUF_SIZE	32
+/* TODO: maybe bump this to be big enough to store 384 bit keys? */
+#define	IEEE80211_KEYBUF_SIZE	48	/* 384 bit key space */
 #define	IEEE80211_MICBUF_SIZE	(8+8)	/* space for both tx+rx keys */
 
 /*
