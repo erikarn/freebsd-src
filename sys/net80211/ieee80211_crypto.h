@@ -31,7 +31,7 @@
 /*
  * 802.11 protocol crypto-related definitions.
  */
-#define	IEEE80211_KEYBUF_SIZE	16
+#define	IEEE80211_KEYBUF_SIZE	48	/* Enough space for 384 bit keys */
 #define	IEEE80211_MICBUF_SIZE	(8+8)	/* space for both tx+rx keys */
 
 /*
