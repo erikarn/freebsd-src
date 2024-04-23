@@ -1385,6 +1385,9 @@ rsn_cipher(const uint8_t *sel, uint8_t *keylen, uint8_t *cipher)
 	case RSN_SEL(RSN_CSE_CCMP):
 		*cipher = IEEE80211_CIPHER_AES_CCM;
 		break;
+	case RSN_SEL(RSN_CSE_CCMP_256):
+		*cipher = IEEE80211_CIPHER_AES_CCM_256;
+		break;
 	case RSN_SEL(RSN_CSE_WRAP):
 		*cipher = IEEE80211_CIPHER_AES_OCB;
 		break;
@@ -1500,8 +1503,10 @@ ieee80211_parse_rsn(struct ieee80211vap *vap, const uint8_t *frm,
 
 		frm += 4, len -= 4;
 	}
-        if (w & (1 << IEEE80211_CIPHER_AES_CCM))
-                rsn->rsn_ucastcipher = IEEE80211_CIPHER_AES_CCM;
+	if (w & (1 << IEEE80211_CIPHER_AES_CCM_256))
+		rsn->rsn_ucastcipher = IEEE80211_CIPHER_AES_CCM_256;
+	else if (w & (1 << IEEE80211_CIPHER_AES_CCM))
+		rsn->rsn_ucastcipher = IEEE80211_CIPHER_AES_CCM;
 	else if (w & (1 << IEEE80211_CIPHER_AES_OCB))
 		rsn->rsn_ucastcipher = IEEE80211_CIPHER_AES_OCB;
 	else if (w & (1 << IEEE80211_CIPHER_TKIP))

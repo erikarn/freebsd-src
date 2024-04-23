@@ -54,6 +54,9 @@
 
 #define AES_BLOCK_LEN 16
 
+#define	CCMP_128_MIC_LEN	8
+#define	CCMP_256_MIC_LEN	16
+
 struct ccmp_ctx {
 	struct ieee80211vap *cc_vap;	/* for diagnostics+statistics */
 	struct ieee80211com *cc_ic;
@@ -63,22 +66,40 @@ struct ccmp_ctx {
 static	void *ccmp_attach(struct ieee80211vap *, struct ieee80211_key *);
 static	void ccmp_detach(struct ieee80211_key *);
 static	int ccmp_setkey(struct ieee80211_key *);
+static	int ccmp_256_setkey(struct ieee80211_key *);
 static	void ccmp_setiv(struct ieee80211_key *, uint8_t *);
 static	int ccmp_encap(struct ieee80211_key *, struct mbuf *);
 static	int ccmp_decap(struct ieee80211_key *, struct mbuf *, int);
 static	int ccmp_enmic(struct ieee80211_key *, struct mbuf *, int);
 static	int ccmp_demic(struct ieee80211_key *, struct mbuf *, int);
 
-static const struct ieee80211_cipher ccmp = {
+static const struct ieee80211_cipher ccmp_128 = {
 	.ic_name	= "AES-CCM",
 	.ic_cipher	= IEEE80211_CIPHER_AES_CCM,
 	.ic_header	= IEEE80211_WEP_IVLEN + IEEE80211_WEP_KIDLEN +
 			  IEEE80211_WEP_EXTIVLEN,
-	.ic_trailer	= IEEE80211_WEP_MICLEN,
+	.ic_trailer	= CCMP_128_MIC_LEN,
 	.ic_miclen	= 0,
 	.ic_attach	= ccmp_attach,
 	.ic_detach	= ccmp_detach,
 	.ic_setkey	= ccmp_setkey,
+	.ic_setiv	= ccmp_setiv,
+	.ic_encap	= ccmp_encap,
+	.ic_decap	= ccmp_decap,
+	.ic_enmic	= ccmp_enmic,
+	.ic_demic	= ccmp_demic,
+};
+
+static const struct ieee80211_cipher ccmp_256 = {
+	.ic_name	= "AES-CCM-256",
+	.ic_cipher	= IEEE80211_CIPHER_AES_CCM_256,
+	.ic_header	= IEEE80211_WEP_IVLEN + IEEE80211_WEP_KIDLEN +
+			  IEEE80211_WEP_EXTIVLEN,
+	.ic_trailer	= CCMP_256_MIC_LEN,
+	.ic_miclen	= 0,
+	.ic_attach	= ccmp_attach,
+	.ic_detach	= ccmp_detach,
+	.ic_setkey	= ccmp_256_setkey,
 	.ic_setiv	= ccmp_setiv,
 	.ic_encap	= ccmp_encap,
 	.ic_decap	= ccmp_decap,
@@ -121,6 +142,28 @@ ccmp_detach(struct ieee80211_key *k)
 }
 
 static int
+ccmp_get_trailer_len(struct ieee80211_key *k)
+{
+	return k->wk_cipher->ic_trailer;
+}
+
+static int
+ccmp_get_header_len(struct ieee80211_key *k)
+{
+	return k->wk_cipher->ic_header;
+}
+
+static int
+ccmp_get_ccm_m(struct ieee80211_key *k)
+{
+	if (k->wk_cipher->ic_cipher == IEEE80211_CIPHER_AES_CCM)
+		return 8;
+	if (k->wk_cipher->ic_cipher == IEEE80211_CIPHER_AES_CCM_256)
+		return 16;
+	return 8; /* XXX default */
+}
+
+static int
 ccmp_setkey(struct ieee80211_key *k)
 {
 	struct ccmp_ctx *ctx = k->wk_private;
@@ -129,6 +172,22 @@ ccmp_setkey(struct ieee80211_key *k)
 		IEEE80211_DPRINTF(ctx->cc_vap, IEEE80211_MSG_CRYPTO,
 			"%s: Invalid key length %u, expecting %u\n",
 			__func__, k->wk_keylen, 128/NBBY);
+		return 0;
+	}
+	if (k->wk_flags & IEEE80211_KEY_SWENCRYPT)
+		rijndael_set_key(&ctx->cc_aes, k->wk_key, k->wk_keylen*NBBY);
+	return 1;
+}
+
+static int
+ccmp_256_setkey(struct ieee80211_key *k)
+{
+	struct ccmp_ctx *ctx = k->wk_private;
+
+	if (k->wk_keylen != (256/NBBY)) {
+		IEEE80211_DPRINTF(ctx->cc_vap, IEEE80211_MSG_CRYPTO,
+			"%s: Invalid key length %u, expecting %u\n",
+			__func__, k->wk_keylen, 256/NBBY);
 		return 0;
 	}
 	if (k->wk_flags & IEEE80211_KEY_SWENCRYPT)
@@ -187,11 +246,11 @@ ccmp_encap(struct ieee80211_key *k, struct mbuf *m)
 	/*
 	 * Copy down 802.11 header and add the IV, KeyID, and ExtIV.
 	 */
-	M_PREPEND(m, ccmp.ic_header, IEEE80211_M_NOWAIT);
+	M_PREPEND(m, ccmp_get_header_len(k), IEEE80211_M_NOWAIT);
 	if (m == NULL)
 		return 0;
 	ivp = mtod(m, uint8_t *);
-	ovbcopy(ivp + ccmp.ic_header, ivp, hdrlen);
+	ovbcopy(ivp + ccmp_get_header_len(k), ivp, hdrlen);
 	ivp += hdrlen;
 
 	ccmp_setiv(k, ivp);
@@ -287,16 +346,16 @@ finish:
 	 * Copy up 802.11 header and strip crypto bits.
 	 */
 	if (! ((rxs != NULL) && (rxs->c_pktflags & IEEE80211_RX_F_IV_STRIP))) {
-		ovbcopy(mtod(m, void *), mtod(m, uint8_t *) + ccmp.ic_header,
+		ovbcopy(mtod(m, void *), mtod(m, uint8_t *) + ccmp_get_header_len(k),
 		    hdrlen);
-		m_adj(m, ccmp.ic_header);
+		m_adj(m, ccmp_get_header_len(k));
 	}
 
 	/*
 	 * XXX TODO: see if MMIC_STRIP also covers CCMP MIC trailer.
 	 */
 	if (! ((rxs != NULL) && (rxs->c_pktflags & IEEE80211_RX_F_MMIC_STRIP)))
-		m_adj(m, -ccmp.ic_trailer);
+		m_adj(m, -ccmp_get_trailer_len(k));
 
 	/*
 	 * Ok to update rsc now.
@@ -341,18 +400,27 @@ xor_block(uint8_t *b, const uint8_t *a, size_t len)
 
 static void
 ccmp_init_blocks(rijndael_ctx *ctx, struct ieee80211_frame *wh,
+	uint32_t m,
 	u_int64_t pn, size_t dlen,
 	uint8_t b0[AES_BLOCK_LEN], uint8_t aad[2 * AES_BLOCK_LEN],
 	uint8_t auth[AES_BLOCK_LEN], uint8_t s0[AES_BLOCK_LEN])
 {
 #define	IS_QOS_DATA(wh)	IEEE80211_QOS_HAS_SEQ(wh)
 
+	/*
+	 * Map M parameter to encoding
+	 * (RFC3610, Section 2 (CCM Mode Specification)
+	 */
+	m = (m - 2) / 2;
+
 	/* CCM Initial Block:
-	 * Flag (Include authentication header, M=3 (8-octet MIC),
-	 *       L=1 (2-octet Dlen))
+	 * Flag (Include authentication header, M=8 (8-octet MIC),
+	 *       L=2 (2-octet Dlen))
 	 * Nonce: 0x00 | A2 | PN
 	 * Dlen */
-	b0[0] = 0x59;
+	/* XXX 0x40 = Adata, 0x01 = L=2, 0x18 = M=8 */
+	/* M=3, L=2, ADATA = 0x59 */
+	b0[0] = 0x40 | 0x01 | (m << 3);
 	/* NB: b0[1] set below */
 	IEEE80211_ADDR_COPY(b0 + 2, wh->i_addr2);
 	b0[8] = pn >> 40;
@@ -458,14 +526,16 @@ ccmp_encrypt(struct ieee80211_key *key, struct mbuf *m0, int hdrlen)
 	ctx->cc_vap->iv_stats.is_crypto_ccmp++;
 
 	wh = mtod(m, struct ieee80211_frame *);
-	data_len = m->m_pkthdr.len - (hdrlen + ccmp.ic_header);
-	ccmp_init_blocks(&ctx->cc_aes, wh, key->wk_keytsc,
-		data_len, b0, aad, b, s0);
+	data_len = m->m_pkthdr.len - (hdrlen + ccmp_get_header_len(key));
+	ccmp_init_blocks(&ctx->cc_aes, wh,
+	    ccmp_get_ccm_m(key),
+	    key->wk_keytsc,
+	    data_len, b0, aad, b, s0);
 
 	i = 1;
-	pos = mtod(m, uint8_t *) + hdrlen + ccmp.ic_header;
+	pos = mtod(m, uint8_t *) + hdrlen + ccmp_get_header_len(key);
 	/* NB: assumes header is entirely in first mbuf */
-	space = m->m_len - (hdrlen + ccmp.ic_header);
+	space = m->m_len - (hdrlen + ccmp_get_header_len(key));
 	for (;;) {
 		if (space > data_len)
 			space = data_len;
@@ -573,8 +643,8 @@ ccmp_encrypt(struct ieee80211_key *key, struct mbuf *m0, int hdrlen)
 	}
 done:
 	/* tack on MIC */
-	xor_block(b, s0, ccmp.ic_trailer);
-	return m_append(m0, ccmp.ic_trailer, b);
+	xor_block(b, s0, ccmp_get_trailer_len(key));
+	return m_append(m0, ccmp_get_trailer_len(key), b);
 }
 #undef CCMP_ENCRYPT
 
@@ -606,14 +676,18 @@ ccmp_decrypt(struct ieee80211_key *key, u_int64_t pn, struct mbuf *m, int hdrlen
 	ctx->cc_vap->iv_stats.is_crypto_ccmp++;
 
 	wh = mtod(m, struct ieee80211_frame *);
-	data_len = m->m_pkthdr.len - (hdrlen + ccmp.ic_header + ccmp.ic_trailer);
-	ccmp_init_blocks(&ctx->cc_aes, wh, pn, data_len, b0, aad, a, b);
-	m_copydata(m, m->m_pkthdr.len - ccmp.ic_trailer, ccmp.ic_trailer, mic);
-	xor_block(mic, b, ccmp.ic_trailer);
+	data_len = m->m_pkthdr.len - (hdrlen + ccmp_get_header_len(key)
+	    + ccmp_get_trailer_len(key));
+	ccmp_init_blocks(&ctx->cc_aes, wh,
+	    ccmp_get_ccm_m(key),
+	    pn, data_len, b0, aad, a, b);
+	m_copydata(m, m->m_pkthdr.len - ccmp_get_trailer_len(key),
+	    ccmp_get_trailer_len(key), mic);
+	xor_block(mic, b, ccmp_get_trailer_len(key));
 
 	i = 1;
-	pos = mtod(m, uint8_t *) + hdrlen + ccmp.ic_header;
-	space = m->m_len - (hdrlen + ccmp.ic_header);
+	pos = mtod(m, uint8_t *) + hdrlen + ccmp_get_header_len(key);
+	space = m->m_len - (hdrlen + ccmp_get_header_len(key));
 	for (;;) {
 		if (space > data_len)
 			space = data_len;
@@ -665,7 +739,7 @@ ccmp_decrypt(struct ieee80211_key *key, u_int64_t pn, struct mbuf *m, int hdrlen
 			space = m->m_len;
 		}
 	}
-	if (memcmp(mic, a, ccmp.ic_trailer) != 0) {
+	if (memcmp(mic, a, ccmp_get_trailer_len(key)) != 0) {
 		IEEE80211_NOTE_MAC(vap, IEEE80211_MSG_CRYPTO, wh->i_addr2,
 		    "%s", "AES-CCM decrypt failed; MIC mismatch");
 		vap->iv_stats.is_rx_ccmpmic++;
@@ -678,4 +752,5 @@ ccmp_decrypt(struct ieee80211_key *key, u_int64_t pn, struct mbuf *m, int hdrlen
 /*
  * Module glue.
  */
-IEEE80211_CRYPTO_MODULE(ccmp, 1);
+IEEE80211_CRYPTO_MODULE(ccmp_128, 1);
+IEEE80211_CRYPTO_MODULE_ADD(ccmp_256);
