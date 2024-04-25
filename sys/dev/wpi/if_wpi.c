@@ -468,8 +468,7 @@ wpi_attach(device_t dev)
 		| IEEE80211_C_PMGT		/* Station-side power mgmt */
 		;
 
-	ic->ic_cryptocaps =
-		  IEEE80211_CRYPTO_AES_CCM;
+	ieee80211_set_hardware_ciphers(ic, IEEE80211_CRYPTO_AES_CCM);
 
 	/*
 	 * Read in the eeprom and also setup the channels for

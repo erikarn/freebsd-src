@@ -234,11 +234,18 @@ rtwn_attach(struct rtwn_softc *sc)
 		| IEEE80211_C_FF		/* Atheros fast-frames */
 		;
 
+	/*
+	 * Note: rtwn supports all of the software ciphers
+	 * net80211 supports, so a call to
+	 * ieee80211_set_software_ciphers() is not needed.
+	 */
+
 	if (sc->sc_hwcrypto != RTWN_CRYPTO_SW) {
-		ic->ic_cryptocaps =
+		/* Hardware supported ciphers */
+		ieee80211_set_hardware_ciphers(ic,
 		    IEEE80211_CRYPTO_WEP |
 		    IEEE80211_CRYPTO_TKIP |
-		    IEEE80211_CRYPTO_AES_CCM;
+		    IEEE80211_CRYPTO_AES_CCM);
 	}
 
 	ic->ic_htcaps =

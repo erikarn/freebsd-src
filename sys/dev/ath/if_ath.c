@@ -605,6 +605,7 @@ ath_attach(u_int16_t devid, struct ath_softc *sc)
 	u_int wmodes;
 	int rx_chainmask, tx_chainmask;
 	HAL_OPS_CONFIG ah_config;
+	uint32_t cryptocaps;
 
 	DPRINTF(sc, ATH_DEBUG_ANY, "%s: devid 0x%x\n", __func__, devid);
 
@@ -927,23 +928,24 @@ ath_attach(u_int16_t devid, struct ath_softc *sc)
 	/*
 	 * Query the hal to figure out h/w crypto support.
 	 */
+	cryptocaps = 0;
 	if (ath_hal_ciphersupported(ah, HAL_CIPHER_WEP))
-		ic->ic_cryptocaps |= IEEE80211_CRYPTO_WEP;
+		cryptocaps |= IEEE80211_CRYPTO_WEP;
 	if (ath_hal_ciphersupported(ah, HAL_CIPHER_AES_OCB))
-		ic->ic_cryptocaps |= IEEE80211_CRYPTO_AES_OCB;
+		cryptocaps |= IEEE80211_CRYPTO_AES_OCB;
 	if (ath_hal_ciphersupported(ah, HAL_CIPHER_AES_CCM))
-		ic->ic_cryptocaps |= IEEE80211_CRYPTO_AES_CCM;
+		cryptocaps |= IEEE80211_CRYPTO_AES_CCM;
 	if (ath_hal_ciphersupported(ah, HAL_CIPHER_CKIP))
-		ic->ic_cryptocaps |= IEEE80211_CRYPTO_CKIP;
+		cryptocaps |= IEEE80211_CRYPTO_CKIP;
 	if (ath_hal_ciphersupported(ah, HAL_CIPHER_TKIP)) {
-		ic->ic_cryptocaps |= IEEE80211_CRYPTO_TKIP;
+		cryptocaps |= IEEE80211_CRYPTO_TKIP;
 		/*
 		 * Check if h/w does the MIC and/or whether the
 		 * separate key cache entries are required to
 		 * handle both tx+rx MIC keys.
 		 */
 		if (ath_hal_ciphersupported(ah, HAL_CIPHER_MIC))
-			ic->ic_cryptocaps |= IEEE80211_CRYPTO_TKIPMIC;
+			cryptocaps |= IEEE80211_CRYPTO_TKIPMIC;
 		/*
 		 * If the h/w supports storing tx+rx MIC keys
 		 * in one cache slot automatically enable use.
@@ -959,6 +961,10 @@ ath_attach(u_int16_t devid, struct ath_softc *sc)
 		if (ath_hal_haswmetkipmic(ah))
 			sc->sc_wmetkipmic = 1;
 	}
+
+	/* Hardware supported ciphers; including the TKIP MIC HW support */
+	ieee80211_set_hardware_ciphers(ic, cryptocaps);
+
 	sc->sc_hasclrkey = ath_hal_ciphersupported(ah, HAL_CIPHER_CLR);
 	/*
 	 * Check for multicast key search support.
@@ -2563,6 +2569,14 @@ ath_settkipmic(struct ath_softc *sc)
 {
 	struct ieee80211com *ic = &sc->sc_ic;
 
+	/*
+	 * This is done at NIC init/reset based on the state of the device
+	 * global WME enable flag as well as sc_wmetkipmic.  It looks like
+	 * this started being supported in later versions of the AR5212 HW.
+	 *
+	 * Thus, the TKIPMIC config depends if WME is enabled or disabled
+	 * for NICs with sc_wmetkipmic == 0.
+	 */
 	if ((ic->ic_cryptocaps & IEEE80211_CRYPTO_TKIP) && !sc->sc_wmetkipmic) {
 		if (ic->ic_flags & IEEE80211_F_WME) {
 			ath_hal_settkipmic(sc->sc_ah, AH_FALSE);

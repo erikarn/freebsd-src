@@ -584,6 +584,9 @@ iwn_attach(device_t dev)
 		| IEEE80211_C_PMGT		/* Station-side power mgmt */
 		;
 
+	/* No hardware cipher support in this driver */
+	ieee80211_set_hardware_ciphers(ic, 0);
+
 	/* Read MAC address, channels, etc from EEPROM. */
 	if ((error = iwn_read_eeprom(sc, ic->ic_macaddr)) != 0) {
 		device_printf(dev, "could not read EEPROM, error %d\n",

@@ -546,11 +546,9 @@ rum_attach(device_t self)
 	    | IEEE80211_C_SWSLEEP	/* net80211 managed power mgmt */
 	    ;
 
-	ic->ic_cryptocaps =
-	    IEEE80211_CRYPTO_WEP |
-	    IEEE80211_CRYPTO_AES_CCM |
-	    IEEE80211_CRYPTO_TKIPMIC |
-	    IEEE80211_CRYPTO_TKIP;
+	ieee80211_set_hardware_ciphers(ic, IEEE80211_CRYPTO_WEP |
+	    IEEE80211_CRYPTO_AES_CCM | IEEE80211_CRYPTO_TKIPMIC |
+	    IEEE80211_CRYPTO_TKIP);
 
 	rum_getradiocaps(ic, IEEE80211_CHAN_MAX, &ic->ic_nchans,
 	    ic->ic_channels);

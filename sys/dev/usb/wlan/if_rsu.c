@@ -552,10 +552,8 @@ rsu_attach(device_t self)
 	    IEEE80211_C_SHSLOT |	/* Short slot time supported. */
 	    IEEE80211_C_WPA;		/* WPA/RSN. */
 
-	ic->ic_cryptocaps =
-	    IEEE80211_CRYPTO_WEP |
-	    IEEE80211_CRYPTO_TKIP |
-	    IEEE80211_CRYPTO_AES_CCM;
+	ieee80211_set_hardware_ciphers(ic, IEEE80211_CRYPTO_WEP |
+	    IEEE80211_CRYPTO_TKIP | IEEE80211_CRYPTO_AES_CCM);
 
 	/* Check if HT support is present. */
 	if (sc->sc_ht) {

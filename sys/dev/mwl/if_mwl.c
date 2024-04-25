@@ -440,11 +440,10 @@ mwl_attach(uint16_t devid, struct mwl_softc *sc)
 	 * Mark h/w crypto support.
 	 * XXX no way to query h/w support.
 	 */
-	ic->ic_cryptocaps |= IEEE80211_CRYPTO_WEP
-			  |  IEEE80211_CRYPTO_AES_CCM
-			  |  IEEE80211_CRYPTO_TKIP
-			  |  IEEE80211_CRYPTO_TKIPMIC
-			  ;
+	ieee80211_set_hardware_ciphers(ic, IEEE80211_CRYPTO_WEP |
+	    IEEE80211_CRYPTO_AES_CCM | IEEE80211_CRYPTO_TKIP |
+	    IEEE80211_CRYPTO_TKIPMIC);
+
 	/*
 	 * Transmit requires space in the packet for a special
 	 * format transmit record and optional padding between

@@ -874,11 +874,9 @@ run_attach(device_t self)
 		ic->ic_txstream = sc->ntxchains;
 	}
 
-	ic->ic_cryptocaps =
-	    IEEE80211_CRYPTO_WEP |
-	    IEEE80211_CRYPTO_AES_CCM |
-	    IEEE80211_CRYPTO_TKIPMIC |
-	    IEEE80211_CRYPTO_TKIP;
+	ieee80211_set_hardware_ciphers(ic, IEEE80211_CRYPTO_WEP |
+	    IEEE80211_CRYPTO_AES_CCM | IEEE80211_CRYPTO_TKIPMIC |
+	    IEEE80211_CRYPTO_TKIP);
 
 	ic->ic_flags |= IEEE80211_F_DATAPAD;
 	ic->ic_flags_ext |= IEEE80211_FEXT_SWBMISS;
