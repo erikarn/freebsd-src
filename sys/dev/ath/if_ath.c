@@ -965,6 +965,13 @@ ath_attach(u_int16_t devid, struct ath_softc *sc)
 	/* Hardware supported ciphers; including the TKIP MIC HW support */
 	ieee80211_set_hardware_ciphers(ic, cryptocaps);
 
+	/* Supported key management suites */
+	ieee80211_set_driver_keymgmt_suites(ic,
+	    IEEE80211_KEYMGMT_RSN_UNSPEC_802_1X |
+	    IEEE80211_KEYMGMT_RSN_PSK_OVER_802_1X |
+	    IEEE80211_KEYMGMT_RSN_802_1X_SHA256 |
+	    IEEE80211_KEYMGMT_RSN_PSK_SHA256);
+
 	sc->sc_hasclrkey = ath_hal_ciphersupported(ah, HAL_CIPHER_CLR);
 	/*
 	 * Check for multicast key search support.

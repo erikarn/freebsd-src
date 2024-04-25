@@ -248,6 +248,13 @@ rtwn_attach(struct rtwn_softc *sc)
 		    IEEE80211_CRYPTO_AES_CCM);
 	}
 
+	/* Supported key management suites */
+	ieee80211_set_driver_keymgmt_suites(ic,
+	    IEEE80211_KEYMGMT_RSN_UNSPEC_802_1X |
+	    IEEE80211_KEYMGMT_RSN_PSK_OVER_802_1X |
+	    IEEE80211_KEYMGMT_RSN_802_1X_SHA256 |
+	    IEEE80211_KEYMGMT_RSN_PSK_SHA256);
+
 	ic->ic_htcaps =
 	      IEEE80211_HTCAP_SHORTGI20		/* short GI in 20MHz */
 	    | IEEE80211_HTCAP_MAXAMSDU_3839	/* max A-MSDU length */

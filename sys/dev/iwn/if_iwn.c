@@ -587,6 +587,13 @@ iwn_attach(device_t dev)
 	/* No hardware cipher support in this driver */
 	ieee80211_set_hardware_ciphers(ic, 0);
 
+	/* Supported key management suites */
+	ieee80211_set_driver_keymgmt_suites(ic,
+	    IEEE80211_KEYMGMT_RSN_UNSPEC_802_1X |
+	    IEEE80211_KEYMGMT_RSN_PSK_OVER_802_1X |
+	    IEEE80211_KEYMGMT_RSN_802_1X_SHA256 |
+	    IEEE80211_KEYMGMT_RSN_PSK_SHA256);
+
 	/* Read MAC address, channels, etc from EEPROM. */
 	if ((error = iwn_read_eeprom(sc, ic->ic_macaddr)) != 0) {
 		device_printf(dev, "could not read EEPROM, error %d\n",
