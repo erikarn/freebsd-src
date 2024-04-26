@@ -128,14 +128,15 @@ bsd_set80211(void *priv, int op, int val, const void *arg, int arg_len)
 }
 
 static int
-bsd_get80211(void *priv, struct ieee80211req *ireq, int op, void *arg,
-	     int arg_len)
+bsd_get80211(void *priv, struct ieee80211req *ireq, int op, int val,
+    int *val_out, void *arg, int arg_len)
 {
 	struct bsd_driver_data *drv = priv;
 
 	os_memset(ireq, 0, sizeof(*ireq));
 	os_strlcpy(ireq->i_name, drv->ifname, sizeof(ireq->i_name));
 	ireq->i_type = op;
+	ireq->i_val = val;
 	ireq->i_len = arg_len;
 	ireq->i_data = arg;
 
@@ -146,15 +147,19 @@ bsd_get80211(void *priv, struct ieee80211req *ireq, int op, void *arg,
 			   "arg_len=%u]: %s", op, arg_len, strerror(errno));
 		return -1;
 	}
+
+	if (val_out != NULL)
+		*val_out = ireq->i_val;
 	return 0;
 }
 
 static int
-get80211var(struct bsd_driver_data *drv, int op, void *arg, int arg_len)
+get80211var(struct bsd_driver_data *drv, int op, int val, int *val_out,
+    void *arg, int arg_len)
 {
 	struct ieee80211req ireq;
 
-	if (bsd_get80211(drv, &ireq, op, arg, arg_len) < 0)
+	if (bsd_get80211(drv, &ireq, op, val, val_out, arg, arg_len) < 0)
 		return -1;
 	return ireq.i_len;
 }
@@ -188,7 +193,8 @@ bsd_get_ssid(void *priv, u8 *ssid, int len)
 	os_memcpy(ssid, nwid.i_nwid, nwid.i_len);
 	return nwid.i_len;
 #else
-	return get80211var(drv, IEEE80211_IOC_SSID, ssid, IEEE80211_NWID_LEN);
+	return get80211var(drv, IEEE80211_IOC_SSID, 0, NULL, ssid,
+	    IEEE80211_NWID_LEN);
 #endif
 }
 
@@ -604,7 +610,8 @@ bsd_new_sta(void *priv, void *ctx, u8 addr[IEEE80211_ADDR_LEN])
 	 */
 	memset(&ie, 0, sizeof(ie));
 	memcpy(ie.wpa_macaddr, addr, IEEE80211_ADDR_LEN);
-	if (get80211var(priv, IEEE80211_IOC_WPAIE, &ie, sizeof(ie)) < 0) {
+	if (get80211var(priv, IEEE80211_IOC_WPAIE, 0, NULL, &ie,
+	    sizeof(ie)) < 0) {
 		wpa_printf(MSG_INFO,
 			   "Failed to get WPA/RSN information element");
 		goto no_ie;
@@ -988,7 +995,8 @@ bsd_get_seqnum(const char *ifname, void *priv, const u8 *addr, int idx,
 		memcpy(wk.ik_macaddr, addr, IEEE80211_ADDR_LEN);
 	wk.ik_keyix = idx;
 
-	if (get80211var(priv, IEEE80211_IOC_WPAKEY, &wk, sizeof(wk)) < 0) {
+	if (get80211var(priv, IEEE80211_IOC_WPAKEY, 0, NULL, &wk,
+	    sizeof(wk)) < 0) {
 		wpa_printf(MSG_INFO, "Failed to get encryption");
 		return -1;
 	}
@@ -1030,7 +1038,8 @@ bsd_read_sta_driver_data(void *priv, struct hostap_sta_driver_data *data,
 	struct ieee80211req_sta_stats stats;
 
 	memcpy(stats.is_u.macaddr, addr, IEEE80211_ADDR_LEN);
-	if (get80211var(priv, IEEE80211_IOC_STA_STATS, &stats, sizeof(stats))
+	if (get80211var(priv, IEEE80211_IOC_STA_STATS, 0, NULL, &stats,
+	    sizeof(stats))
 	    > 0) {
 		/* XXX? do packets counts include non-data frames? */
 		data->rx_packets = stats.is_stats.ns_rx_data;
@@ -1153,7 +1162,7 @@ get80211param(struct bsd_driver_data *drv, int op)
 {
 	struct ieee80211req ireq;
 
-	if (bsd_get80211(drv, &ireq, op, NULL, 0) < 0)
+	if (bsd_get80211(drv, &ireq, op, 0, NULL, NULL, 0) < 0)
 		return -1;
 	return ireq.i_val;
 }
@@ -1171,7 +1180,7 @@ wpa_driver_bsd_get_bssid(void *priv, u8 *bssid)
 	os_memcpy(bssid, bs.i_bssid, sizeof(bs.i_bssid));
 	return 0;
 #else
-	return get80211var(drv, IEEE80211_IOC_BSSID,
+	return get80211var(drv, IEEE80211_IOC_BSSID, 0, NULL,
 		bssid, IEEE80211_ADDR_LEN) < 0 ? -1 : 0;
 #endif
 }
@@ -1538,7 +1547,8 @@ wpa_driver_bsd_get_scan_results2(void *priv)
 	int len, rest;
 	uint8_t buf[24*1024], *pos;
 
-	len = get80211var(priv, IEEE80211_IOC_SCAN_RESULTS, buf, 24*1024);
+	len = get80211var(priv, IEEE80211_IOC_SCAN_RESULTS, 0, NULL,
+	    buf, 24*1024);
 	if (len < 0)
 		return NULL;
 
@@ -1561,12 +1571,12 @@ wpa_driver_bsd_get_scan_results2(void *priv)
 	return res;
 }
 
-static int wpa_driver_bsd_capa(struct bsd_driver_data *drv)
-{
 #ifdef	IEEE80211_IOC_DEVCAPS
+static int wpa_driver_bsd_capa_devcaps(struct bsd_driver_data *drv)
+{
 	struct ieee80211_devcaps_req devcaps;
 
-	if (get80211var(drv, IEEE80211_IOC_DEVCAPS, &devcaps,
+	if (get80211var(drv, IEEE80211_IOC_DEVCAPS, 0, NULL, &devcaps,
 			sizeof(devcaps)) < 0) {
 		wpa_printf(MSG_ERROR, "failed to IEEE80211_IOC_DEVCAPS: %s",
 			   strerror(errno));
@@ -1606,11 +1616,107 @@ static int wpa_driver_bsd_capa(struct bsd_driver_data *drv)
 	if (devcaps.dc_cryptocaps & IEEE80211_CRYPTO_BIP_GMAC_256)
 		drv->capa.enc |= WPA_DRIVER_CAPA_ENC_BIP_GMAC_256;
 
-	/* TODO: NO_GROUP_ADDRESSED (WPA_DRIVER_CAPA_ENC_GTK_NOT_USED) support */
+	if (devcaps.dc_drivercaps & IEEE80211_C_HOSTAP)
+		drv->capa.flags |= WPA_DRIVER_FLAGS_AP;
+	return 0;
+}
+#endif
+
+#if defined(IEEE80211_IOC_DEVCAPS) && defined(IEEE80211_DEVCAPS2_VERSION_1)
+static int wpa_driver_bsd_capa_devcaps_version_1(struct bsd_driver_data *drv)
+{
+	struct ieee80211_devcaps2_req_version_1 devcaps;
+	int val;
+
+	if (get80211var(drv, IEEE80211_IOC_DEVCAPS2,
+	    IEEE80211_DEVCAPS2_VERSION_1, &val, &devcaps,
+	    sizeof(devcaps)) < 0) {
+		wpa_printf(MSG_ERROR,
+			   "failed to IEEE80211_IOC_DEVCAPS2 (version 1): %s",
+			   strerror(errno));
+		return -1;
+	}
+	if (val != IEEE80211_DEVCAPS2_VERSION_1) {
+		wpa_printf(MSG_ERROR,
+		    "IEEE80211_IOC_DEVCAPS2 (version 1): %s",
+		    "wrong response version");
+		return -1;
+	}
+
+	if (devcaps.dc_version != IEEE80211_DEVCAPS2_VERSION_1) {
+		wpa_printf(MSG_ERROR,
+		    "failed to parse IEEE80211_IOC_DEVCAPS2 (version 1): %s",
+		    "wrong payload version");
+		return -1;
+	}
+
+	if (devcaps.dc_size != IEEE80211_DEVCAPS2_VERSION_1_SIZE) {
+		wpa_printf(MSG_ERROR,
+		    "failed to parse IEEE80211_IOC_DEVCAPS2 (version 1): %s",
+		    "invalid size");
+		return -1;
+	}
+
+	/* TODO: why not WPA + WPA2 here? */
+
+	/* Legacy WPA/WPA2 driver key management flags */
+	if (devcaps.dc_drivercaps & IEEE80211_C_WPA1)
+		drv->capa.key_mgmt = WPA_DRIVER_CAPA_KEY_MGMT_WPA |
+			WPA_DRIVER_CAPA_KEY_MGMT_WPA_PSK;
+	if (devcaps.dc_drivercaps & IEEE80211_C_WPA2)
+		drv->capa.key_mgmt = WPA_DRIVER_CAPA_KEY_MGMT_WPA2 |
+			WPA_DRIVER_CAPA_KEY_MGMT_WPA2_PSK;
+
+	/* Newer key management capability flags */
+	if (devcaps.dc_keymgmtcaps & IEEE80211_KEYMGMT_RSN_802_1X_SHA256)
+		drv->capa.key_mgmt |= WPA_DRIVER_CAPA_KEY_MGMT_802_1X_SHA256;
+	if (devcaps.dc_keymgmtcaps & IEEE80211_KEYMGMT_RSN_PSK_SHA256)
+		drv->capa.key_mgmt |= WPA_DRIVER_CAPA_KEY_MGMT_PSK_SHA256;
+
+	if (devcaps.dc_ciphercaps & IEEE80211_CRYPTO_WEP)
+		drv->capa.enc |= WPA_DRIVER_CAPA_ENC_WEP40 |
+			WPA_DRIVER_CAPA_ENC_WEP104;
+	if (devcaps.dc_ciphercaps & IEEE80211_CRYPTO_TKIP)
+		drv->capa.enc |= WPA_DRIVER_CAPA_ENC_TKIP;
+
+	if (devcaps.dc_ciphercaps & IEEE80211_CRYPTO_AES_CCM)
+		drv->capa.enc |= WPA_DRIVER_CAPA_ENC_CCMP;
+	if (devcaps.dc_ciphercaps & IEEE80211_CRYPTO_AES_CCM_256)
+		drv->capa.enc |= WPA_DRIVER_CAPA_ENC_CCMP_256;
+
+	if (devcaps.dc_ciphercaps & IEEE80211_CRYPTO_AES_GCM_128)
+		drv->capa.enc |= WPA_DRIVER_CAPA_ENC_GCMP;
+	if (devcaps.dc_ciphercaps & IEEE80211_CRYPTO_AES_GCM_256)
+		drv->capa.enc |= WPA_DRIVER_CAPA_ENC_GCMP_256;
+
+	if (devcaps.dc_ciphercaps & IEEE80211_CRYPTO_BIP_CMAC_128)
+		drv->capa.enc |= WPA_DRIVER_CAPA_ENC_BIP;
+	if (devcaps.dc_ciphercaps & IEEE80211_CRYPTO_BIP_CMAC_256)
+		drv->capa.enc |= WPA_DRIVER_CAPA_ENC_BIP_CMAC_256;
+
+	if (devcaps.dc_ciphercaps & IEEE80211_CRYPTO_BIP_GMAC_128)
+		drv->capa.enc |= WPA_DRIVER_CAPA_ENC_BIP_GMAC_128;
+	if (devcaps.dc_ciphercaps & IEEE80211_CRYPTO_BIP_GMAC_256)
+		drv->capa.enc |= WPA_DRIVER_CAPA_ENC_BIP_GMAC_256;
+
+	/*
+	 * Note: There's currently no NO_GROUP_ADDRESSED
+	 * (WPA_DRIVER_CAPA_ENC_GTK_NOT_USED) support.
+	 */
 
 	if (devcaps.dc_drivercaps & IEEE80211_C_HOSTAP)
 		drv->capa.flags |= WPA_DRIVER_FLAGS_AP;
-#else /* IEEE80211_IOC_DEVCAPS */
+	return 0;
+}
+
+#endif
+
+/*
+ * Default BSD capabilities if the ioctl calls fail.
+ */
+static void
+wpa_driver_bsd_capa_default(struct bsd_driver_data *drv)
+{
 	/* For now, assume TKIP, CCMP, WPA, WPA2 are supported */
 	drv->capa.key_mgmt = WPA_DRIVER_CAPA_KEY_MGMT_WPA |
 		WPA_DRIVER_CAPA_KEY_MGMT_WPA_PSK |
@@ -1621,7 +1727,32 @@ static int wpa_driver_bsd_capa(struct bsd_driver_data *drv)
 		WPA_DRIVER_CAPA_ENC_TKIP |
 		WPA_DRIVER_CAPA_ENC_CCMP;
 	drv->capa.flags |= WPA_DRIVER_FLAGS_AP;
-#endif /* IEEE80211_IOC_DEVCAPS */
+}
+
+static int wpa_driver_bsd_capa(struct bsd_driver_data *drv)
+{
+	int error;
+
+
+#if defined(IEEE80211_IOC_DEVCAPS) && defined(IEEE80211_DEVCAPS2_VERSION_1)
+	/* Check version 1 if it was compiled in */
+	error = wpa_driver_bsd_capa_devcaps_version_1(drv);
+	if (error == 0)
+		goto done;
+#endif
+
+	/* Check devcaps if it's compiled in */
+#ifdef	IEEE80211_IOC_DEVCAPS
+	error = wpa_driver_bsd_capa_devcaps(drv);
+	if (error == 0)
+		goto done;
+#endif
+
+	/* Default */
+	wpa_driver_bsd_capa_default(drv);
+
+done:
+
 #ifdef IEEE80211_IOC_SCAN_MAX_SSID
 	drv->capa.max_scan_ssids = IEEE80211_IOC_SCAN_MAX_SSID;
 #else /* IEEE80211_IOC_SCAN_MAX_SSID */
