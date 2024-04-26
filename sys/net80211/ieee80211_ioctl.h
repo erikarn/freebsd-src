@@ -568,6 +568,34 @@ struct ieee80211_devcaps_req {
 #define	IEEE80211_DEVCAPS_SPACE(_dc) \
 	IEEE80211_DEVCAPS_SIZE((_dc)->dc_chaninfo.ic_nchans)
 
+/*
+ * Get driver capabilities (new).
+ * Driver, hardware/software crypto, radio capabilities
+ * in various modes.
+ */
+
+#define	IEEE80211_DEVCAPS2_VERSION_1		0x00000001
+
+struct ieee80211_devcaps2_req_version_1 {
+	uint32_t	dc_version;	/* Must be IEEE80211_DEVCAPS2_VERSION_1 */
+	uint32_t	dc_size;	/* Must be IEEE80211_DEVCAPS2_SIZE_VERSION_1 */
+
+	uint32_t	dc_nchans;	/* Number of channels in full list */
+	uint32_t	dc_padding0;
+
+	uint64_t	dc_ciphercaps;		/* hardware/software cipher support */
+	uint64_t	dc_keymgmtcaps;		/* supported key management suites */
+	uint64_t	dc_drivercaps;		/* driver capabilities */
+
+	uint64_t	dc_htcaps;		/* 11n capabilities */
+	uint64_t	dc_vhtcaps;		/* 11ac capabilities */
+	uint64_t	dc_ehtcaps;		/* 11be capabilities */
+	uint64_t	dc_hecaps;		/* 11ax capabilities */
+	uint64_t	dc_uhrcaps;		/* 11bn capabilities */
+};
+#define	IEEE80211_DEVCAPS2_VERSION_1_SIZE \
+	(sizeof(struct ieee80211_devcaps2_req_version_1))
+
 struct ieee80211_chanswitch_req {
 	struct ieee80211_channel csa_chan;	/* new channel */
 	int		csa_mode;		/* CSA mode */
@@ -690,7 +718,7 @@ struct ieee80211req {
 #define	IEEE80211_IOC_APPIE		95	/* application IE's */
 #define	IEEE80211_IOC_WPS		96	/* WPS operation */
 #define	IEEE80211_IOC_TSN		97	/* TSN operation */
-#define	IEEE80211_IOC_DEVCAPS		98	/* driver+device capabilities */
+#define	IEEE80211_IOC_DEVCAPS		98	/* old driver+device capabilities */
 #define	IEEE80211_IOC_CHANSWITCH	99	/* start 11h channel switch */
 #define	IEEE80211_IOC_DFS		100	/* DFS (on, off) */
 #define	IEEE80211_IOC_DOTD		101	/* 802.11d (on, off) */
@@ -709,6 +737,7 @@ struct ieee80211req {
 #define	IEEE80211_IOC_LDPC		114	/* LDPC Tx/RX (on, off) */
 #define	IEEE80211_IOC_UAPSD		115	/* UAPSD (on, off) */
 #define	IEEE80211_IOC_UAPSD_INFO	116	/* UAPSD (SP, per-AC enable) */
+#define	IEEE80211_IOC_DEVCAPS2		117	/* new driver+device capabilities */
 
 /* VHT */
 #define	IEEE80211_IOC_VHTCONF		130	/* VHT config (off, on; widths) */

@@ -727,6 +727,57 @@ ieee80211_ioctl_getdevcaps(struct ieee80211com *ic,
 }
 
 static int
+ieee80211_ioctl_getdevcaps2_version_1(struct ieee80211com *ic,
+	struct ieee80211req *ireq)
+{
+	struct ieee80211_devcaps2_req_version_1 *dc;
+	int error;
+
+	if (ireq->i_len < IEEE80211_DEVCAPS2_VERSION_1_SIZE)
+		return EINVAL;
+
+	dc = (struct ieee80211_devcaps2_req_version_1 *)
+	    IEEE80211_MALLOC(IEEE80211_DEVCAPS2_VERSION_1_SIZE, M_TEMP,
+	    IEEE80211_M_NOWAIT | IEEE80211_M_ZERO);
+	if (dc == NULL)
+		return ENOMEM;
+
+	/* ioctl reply i_val is also a version value */
+	ireq->i_val = IEEE80211_DEVCAPS2_VERSION_1;
+
+	/* Version */
+	dc->dc_version = IEEE80211_DEVCAPS2_VERSION_1;
+	/* Size of entire reply */
+	dc->dc_size = IEEE80211_DEVCAPS2_VERSION_1_SIZE;
+	/* Number of channels in full list */
+	dc->dc_nchans = ic->ic_nchans;
+
+	/* Base driver capabilities */
+	dc->dc_drivercaps = ic->ic_caps;
+
+	/* Announce the set of both hardware and software ciphers */
+	dc->dc_ciphercaps = ic->ic_cryptocaps | ic->ic_sw_cryptocaps;
+
+	/* Announce the supported software key management */
+	dc->dc_keymgmtcaps = ic->ic_sw_keymgmtcaps;
+
+	/* 11n capabilities */
+	dc->dc_htcaps = ic->ic_htcaps;
+	/* 11ac capabilities */
+	dc->dc_vhtcaps = ic->ic_vht_cap.vht_cap_info;
+	/* 11be capabilities */
+	dc->dc_ehtcaps = 0;
+	/* 11ax capabilities */
+	dc->dc_hecaps = 0;
+	/* 11bn capabilities */
+	dc->dc_uhrcaps = 0;
+
+	error = copyout(dc, ireq->i_data, IEEE80211_DEVCAPS2_VERSION_1_SIZE);
+	IEEE80211_FREE(dc, M_TEMP);
+	return error;
+}
+
+static int
 ieee80211_ioctl_getstavlan(struct ieee80211vap *vap, struct ieee80211req *ireq)
 {
 	struct ieee80211_node *ni;
@@ -1159,6 +1210,16 @@ ieee80211_ioctl_get80211(struct ieee80211vap *vap, u_long cmd,
 		if (vap->iv_flags_ext & IEEE80211_FEXT_UAPSD)
 			ireq->i_val = 1;
 		break;
+	case IEEE80211_IOC_DEVCAPS2:
+		if (ireq->i_val == IEEE80211_DEVCAPS2_VERSION_1) {
+			/* Version 1 devcaps responses */
+			error = ieee80211_ioctl_getdevcaps2_version_1(ic,
+			    ireq);
+		} else {
+			error = EOPNOTSUPP; /* Not supported */
+		}
+		break;
+
 	case IEEE80211_IOC_VHTCONF:
 		ireq->i_val = vap->iv_vht_flags & IEEE80211_FVHT_MASK;
 		break;
