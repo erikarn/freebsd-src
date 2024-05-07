@@ -422,6 +422,7 @@ ccmp_init_blocks(rijndael_ctx *ctx, struct ieee80211_frame *wh,
 	/* M=3, L=2, ADATA = 0x59 */
 	b0[0] = 0x40 | 0x01 | (m << 3);
 	/* NB: b0[1] set below */
+	/* b0[1] needs updating - 12.5.3.3.1 and 12.5.3.3.3 802.11-2016 */
 	IEEE80211_ADDR_COPY(b0 + 2, wh->i_addr2);
 	b0[8] = pn >> 40;
 	b0[9] = pn >> 32;
@@ -442,11 +443,16 @@ ccmp_init_blocks(rijndael_ctx *ctx, struct ieee80211_frame *wh,
 	aad[0] = 0;	/* AAD length >> 8 */
 	/* NB: aad[1] set below */
 	aad[2] = wh->i_fc[0] & 0x8f;	/* XXX magic #s */
+	/* TODO: update against 12.5.3.3.3 - bit 15 masked to 0 for data frames + QoS control field, unmasked otherwise */
 	aad[3] = wh->i_fc[1] & 0xc7;	/* XXX magic #s */
 	/* NB: we know 3 addresses are contiguous */
 	memcpy(aad + 4, wh->i_addr1, 3 * IEEE80211_ADDR_LEN);
 	aad[22] = wh->i_seq[0] & IEEE80211_SEQ_FRAG_MASK;
 	aad[23] = 0; /* all bits masked */
+
+	/* TODO:  QC control field needs to take AMSDU SPP into account */
+	/* See: 802.11-2016 12.5.3.3.3 */
+
 	/*
 	 * Construct variable-length portion of AAD based
 	 * on whether this is a 4-address frame/QOS frame.
@@ -465,10 +471,12 @@ ccmp_init_blocks(rijndael_ctx *ctx, struct ieee80211_frame *wh,
 				(struct ieee80211_qosframe_addr4 *) wh;
 			aad[30] = qwh4->i_qos[0] & 0x0f;/* just priority bits */
 			aad[31] = 0;
+			/* TODO: update b0[1] to include if MFP is negotiated and it's a management frame */
 			b0[1] = aad[30];
 			aad[1] = 22 + IEEE80211_ADDR_LEN + 2;
 		} else {
 			*(uint16_t *)&aad[30] = 0;
+			/* TODO: update b0[1] to include if MFP is negotiated and it's a management frame */
 			b0[1] = 0;
 			aad[1] = 22 + IEEE80211_ADDR_LEN;
 		}
@@ -478,10 +486,12 @@ ccmp_init_blocks(rijndael_ctx *ctx, struct ieee80211_frame *wh,
 				(struct ieee80211_qosframe*) wh;
 			aad[24] = qwh->i_qos[0] & 0x0f;	/* just priority bits */
 			aad[25] = 0;
+			/* TODO: update b0[1] to include if MFP is negotiated and it's a management frame */
 			b0[1] = aad[24];
 			aad[1] = 22 + 2;
 		} else {
 			*(uint16_t *)&aad[24] = 0;
+			/* TODO: update b0[1] to include if MFP is negotiated and it's a management frame */
 			b0[1] = 0;
 			aad[1] = 22;
 		}

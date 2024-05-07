@@ -154,7 +154,8 @@ ieee80211_crypto_attach(struct ieee80211com *ic)
 	 */
 	ic->ic_sw_cryptocaps = IEEE80211_CRYPTO_WEP |
 	    IEEE80211_CRYPTO_TKIP | IEEE80211_CRYPTO_AES_CCM |
-	    IEEE80211_CRYPTO_AES_CCM_256;
+	    IEEE80211_CRYPTO_AES_CCM_256 | IEEE80211_CRYPTO_AES_GCM_128 |
+	    IEEE80211_CRYPTO_AES_GCM_256;
 
 	/*
 	 * Default set of key management types supported by net80211.
