@@ -1548,6 +1548,8 @@ ieee80211_parse_rsn(struct ieee80211vap *vap, const uint8_t *frm,
 		rsn->rsn_caps = le16dec(frm);
 	/* XXXPMKID */
 
+	/* XXX TODO: MFP? */
+
 	return 0;
 }
 
@@ -1629,6 +1631,8 @@ wpa_assocreq(struct ieee80211_node *ni, struct ieee80211_rsnparms *rsnparms,
 	    rsnparms->rsn_mcastcipher, rsnparms->rsn_mcastkeylen,
 	    rsnparms->rsn_ucastcipher, rsnparms->rsn_ucastkeylen,
 	    rsnparms->rsn_keymgmt, rsnparms->rsn_caps);
+
+	/* XXX: MFP */
 
 	return 1;
 bad:

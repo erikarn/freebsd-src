@@ -601,6 +601,23 @@ struct ieee80211_devcaps2_req_version_1 {
 #define	IEEE80211_DEVCAPS2_VERSION_1_SIZE \
 	(sizeof(struct ieee80211_devcaps2_req_version_1))
 
+#define	IEEE80211_MFPCAP_VERSION_1		0x00000001
+
+#define	IEEE80211_MFPCAP_UNICAST_DISABLED	0
+#define	IEEE80211_MFPCAP_UNICAST_OPTIONAL	1
+#define	IEEE80211_MFPCAP_UNICAST_REQUIRED	2
+
+struct ieee80211_mfpcaps_req_version_1 {
+	uint32_t	mc_version;
+	uint32_t	mc_size;
+
+	uint32_t	mc_unicast_mode;
+	uint32_t	mc_group_mode;
+};
+
+#define	IEEE80211_MFPCAP_VERSION_1_SIZE \
+	(sizeof(struct ieee80211_mfpcaps_req_version_1))
+
 struct ieee80211_chanswitch_req {
 	struct ieee80211_channel csa_chan;	/* new channel */
 	int		csa_mode;		/* CSA mode */
@@ -743,6 +760,7 @@ struct ieee80211req {
 #define	IEEE80211_IOC_UAPSD		115	/* UAPSD (on, off) */
 #define	IEEE80211_IOC_UAPSD_INFO	116	/* UAPSD (SP, per-AC enable) */
 #define	IEEE80211_IOC_DEVCAPS2		117	/* new driver+device capabilities */
+#define	IEEE80211_IOC_MFP		118	/* get/set MFP operation */
 
 /* VHT */
 #define	IEEE80211_IOC_VHTCONF		130	/* VHT config (off, on; widths) */

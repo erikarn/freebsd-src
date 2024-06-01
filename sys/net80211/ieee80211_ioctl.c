@@ -778,6 +778,22 @@ ieee80211_ioctl_getdevcaps2_version_1(struct ieee80211com *ic,
 }
 
 static int
+ieee80211_ioctl_mfpcap_get_version_1(struct ieee80211vap *vap,
+    struct ieee80211req *ireq)
+{
+	/* XXX TODO */
+	return EINVAL;
+}
+
+static int
+ieee80211_ioctl_mfpcap_set_version_1(struct ieee80211vap *vap,
+    struct ieee80211req *ireq)
+{
+	/* XXX TODO */
+	return EINVAL;
+}
+
+static int
 ieee80211_ioctl_getstavlan(struct ieee80211vap *vap, struct ieee80211req *ireq)
 {
 	struct ieee80211_node *ni;
@@ -1219,7 +1235,14 @@ ieee80211_ioctl_get80211(struct ieee80211vap *vap, u_long cmd,
 			error = EOPNOTSUPP; /* Not supported */
 		}
 		break;
-
+	case IEEE80211_IOC_MFP:
+		if (ireq->i_val == IEEE80211_MFPCAP_VERSION_1) {
+			error = ieee80211_ioctl_mfpcap_get_version_1(vap,
+			    ireq);
+		} else {
+			error = EOPNOTSUPP; /* Not supported */
+		}
+		break;
 	case IEEE80211_IOC_VHTCONF:
 		ireq->i_val = vap->iv_vht_flags & IEEE80211_FVHT_MASK;
 		break;
@@ -3569,6 +3592,16 @@ ieee80211_ioctl_set80211(struct ieee80211vap *vap, u_long cmd, struct ieee80211r
 
 		error = ENETRESET;
 		break;
+
+	case IEEE80211_IOC_MFP:
+		if (ireq->i_val == IEEE80211_MFPCAP_VERSION_1) {
+			error = ieee80211_ioctl_mfpcap_set_version_1(vap,
+			    ireq);
+		} else {
+			error = EOPNOTSUPP; /* Not supported */
+		}
+		break;
+
 
 	default:
 		error = ieee80211_ioctl_setdefault(vap, ireq);
