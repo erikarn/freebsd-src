@@ -1360,6 +1360,18 @@ wpa_driver_bsd_associate(void *priv, struct wpa_driver_associate_params *params)
 	if (wpa_driver_bsd_set_auth_alg(drv, params->auth_alg) < 0)
 		ret = -1;
 
+	switch (params->mgmt_frame_protection) {
+	case NO_MGMT_FRAME_PROTECTION:
+		wpa_printf(MSG_ERROR, "%s: MFP: none", __func__);
+		break;
+	case MGMT_FRAME_PROTECTION_OPTIONAL:
+		wpa_printf(MSG_ERROR, "%s: MFP: optional", __func__);
+		break;
+	case MGMT_FRAME_PROTECTION_REQUIRED:
+		wpa_printf(MSG_ERROR, "%s: MFP: required", __func__);
+		break;
+	};
+
 	if (params->wpa_ie_len) {
 		rsn_ie = get_ie(params->wpa_ie, params->wpa_ie_len,
 		    WLAN_EID_RSN);
@@ -1703,6 +1715,20 @@ static int wpa_driver_bsd_capa_devcaps_version_1(struct bsd_driver_data *drv)
 	 * Note: There's currently no NO_GROUP_ADDRESSED
 	 * (WPA_DRIVER_CAPA_ENC_GTK_NOT_USED) support.
 	 */
+
+	/* WPA3 */
+	if (devcaps.dc_ciphercaps & IEEE80211_KEYMGMT_RSN_SAE) {
+		/* XXX should be driver capability? */
+		drv->capa.flags |= WPA_DRIVER_FLAGS_SAE;
+		drv->capa.key_mgmt |= WPA_DRIVER_CAPA_KEY_MGMT_SAE;
+	}
+
+	/* XXX TODO: need an MFP optional driver cap flag? */
+	drv->capa.flags |= WPA_DRIVER_FLAGS_MFP_OPTIONAL;
+	drv->capa.enc |= WPA_DRIVER_CAPA_ENC_BIP;
+	drv->capa.enc |= WPA_DRIVER_CAPA_ENC_BIP_CMAC_256;
+	drv->capa.enc |= WPA_DRIVER_CAPA_ENC_BIP_GMAC_128;
+	drv->capa.enc |= WPA_DRIVER_CAPA_ENC_BIP_GMAC_256;
 
 	if (devcaps.dc_drivercaps & IEEE80211_C_HOSTAP)
 		drv->capa.flags |= WPA_DRIVER_FLAGS_AP;
