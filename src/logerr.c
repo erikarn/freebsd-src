@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
 /*
  * logerr: errx with logging
- * Copyright (c) 2006-2021 Roy Marples <roy@marples.name>
+ * Copyright (c) 2006-2023 Roy Marples <roy@marples.name>
  * All rights reserved
 
  * Redistribution and use in source and binary forms, with or without
@@ -376,6 +376,8 @@ logsetfd(int fd)
 	struct logctx *ctx = &_logctx;
 
 	ctx->log_fd = fd;
+	if (fd != -1)
+		closelog();
 #ifndef SMALL
 	if (fd != -1 && ctx->log_file != NULL) {
 		fclose(ctx->log_file);

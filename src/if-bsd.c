@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
 /*
  * BSD interface driver for dhcpcd
- * Copyright (c) 2006-2021 Roy Marples <roy@marples.name>
+ * Copyright (c) 2006-2023 Roy Marples <roy@marples.name>
  * All rights reserved
 
  * Redistribution and use in source and binary forms, with or without
@@ -104,16 +104,13 @@
  * just won't work without explicit configuration. */
 static const char * const ifnames_ignore[] = {
 	"bridge",
+	"epair",	/* Virtual patch cable */
 	"fwe",		/* Firewire */
 	"fwip",		/* Firewire */
 	"tap",
 	"vether",
 	"xvif",		/* XEN DOM0 -> guest interface */
 	NULL
-};
-
-struct priv {
-	int pf_inet6_fd;
 };
 
 struct rtm
@@ -157,6 +154,9 @@ if_opensockets_os(struct dhcpcd_ctx *ctx)
 #ifdef RTM_CHGADDR
 	    RTM_CHGADDR,
 #endif
+#ifdef RTM_DESYNC
+	    RTM_DESYNC,
+#endif
 	    RTM_NEWADDR, RTM_DELADDR
 	};
 #ifdef ROUTE_MSGFILTER
@@ -170,15 +170,13 @@ if_opensockets_os(struct dhcpcd_ctx *ctx)
 
 #ifdef INET6
 	priv->pf_inet6_fd = xsocket(PF_INET6, SOCK_DGRAM | SOCK_CLOEXEC, 0);
-#ifdef PRIVSEP_RIGHTS
-	if (IN_PRIVSEP(ctx))
-		ps_rights_limit_ioctl(priv->pf_inet6_fd);
-#endif
 	/* Don't return an error so we at least work on kernels witout INET6
 	 * even though we expect INET6 support.
 	 * We will fail noisily elsewhere anyway. */
-#else
-	priv->pf_inet6_fd = -1;
+#ifdef PRIVSEP_RIGHTS
+	if (priv->pf_inet6_fd != -1 && IN_PRIVSEP(ctx))
+		ps_rights_limit_ioctl(priv->pf_inet6_fd);
+#endif
 #endif
 
 	ctx->link_fd = xsocket(PF_ROUTE, SOCK_RAW | SOCK_CXNB, AF_UNSPEC);
@@ -198,6 +196,18 @@ if_opensockets_os(struct dhcpcd_ctx *ctx)
 	if (setsockopt(ctx->link_fd, SOL_SOCKET, SO_USELOOPBACK,
 	    &n, sizeof(n)) == -1)
 		logerr("%s: SO_USELOOPBACK", __func__);
+
+#ifdef PRIVSEP
+	if (ctx->options & DHCPCD_PRIVSEPROOT) {
+		/* We only want to write to this socket, so set
+		 * a small as possible buffer size. */
+		socklen_t smallbuf = 1;
+
+		if (setsockopt(ctx->link_fd, SOL_SOCKET, SO_RCVBUF,
+		    &smallbuf, (socklen_t)sizeof(smallbuf)) == -1)
+			logerr("%s: setsockopt(SO_RCVBUF)", __func__);
+	}
+#endif
 
 #if defined(RO_MSGFILTER)
 	if (setsockopt(ctx->link_fd, PF_ROUTE, RO_MSGFILTER,
@@ -222,6 +232,11 @@ if_opensockets_os(struct dhcpcd_ctx *ctx)
 		ps_rights_limit_fd_sockopt(ctx->link_fd);
 #endif
 
+#if defined(SIOCALIFADDR) && defined(IFLR_ACTIVE) /*NetBSD */
+	priv->pf_link_fd = xsocket(PF_LINK, SOCK_DGRAM, 0);
+	if (priv->pf_link_fd == -1)
+		logerr("%s: socket(PF_LINK)", __func__);
+#endif
 	return 0;
 }
 
@@ -231,8 +246,21 @@ if_closesockets_os(struct dhcpcd_ctx *ctx)
 	struct priv *priv;
 
 	priv = (struct priv *)ctx->priv;
-	if (priv->pf_inet6_fd != -1)
+	if (priv == NULL)
+		return;
+
+#ifdef INET6
+	if (priv->pf_inet6_fd != -1) {
 		close(priv->pf_inet6_fd);
+		priv->pf_inet6_fd = -1;
+	}
+#endif
+#if defined(SIOCALIFADDR) && defined(IFLR_ACTIVE) /*NetBSD */
+	if (priv->pf_link_fd != -1) {
+		close(priv->pf_link_fd);
+		priv->pf_link_fd = -1;
+	}
+#endif
 	free(priv);
 	ctx->priv = NULL;
 	free(ctx->rt_missfilter);
@@ -242,22 +270,14 @@ if_closesockets_os(struct dhcpcd_ctx *ctx)
 static int
 if_ioctllink(struct dhcpcd_ctx *ctx, unsigned long req, void *data, size_t len)
 {
-	int s;
-	int retval;
+	struct priv *priv = (struct priv *)ctx->priv;
 
 #ifdef PRIVSEP
 	if (ctx->options & DHCPCD_PRIVSEP)
 		return (int)ps_root_ioctllink(ctx, req, data, len);
-#else
-	UNUSED(ctx);
 #endif
 
-	s = socket(PF_LINK, SOCK_DGRAM, 0);
-	if (s == -1)
-		return -1;
-	retval = ioctl(s, req, data, len);
-	close(s);
-	return retval;
+	return ioctl(priv->pf_link_fd, req, data, len);
 }
 #endif
 
@@ -914,37 +934,47 @@ if_copyrt(struct dhcpcd_ctx *ctx, struct rt *rt, const struct rt_msghdr *rtm)
 	return 0;
 }
 
+static int
+if_sysctl(struct dhcpcd_ctx *ctx,
+    const int *name, u_int namelen,
+    void *oldp, size_t *oldlenp, void *newp, size_t newlen)
+{
+#if defined(PRIVSEP) && defined(HAVE_CAPSICUM)
+	if (IN_PRIVSEP(ctx))
+		return (int)ps_root_sysctl(ctx, name, namelen,
+		    oldp, oldlenp, newp, newlen);
+#else
+	UNUSED(ctx);
+#endif
+
+	return sysctl(name, namelen, oldp, oldlenp, newp, newlen);
+}
+
 int
 if_initrt(struct dhcpcd_ctx *ctx, rb_tree_t *kroutes, int af)
 {
 	struct rt_msghdr *rtm;
-	int mib[6];
-	size_t needed;
+	int mib[6] = { CTL_NET, PF_ROUTE, 0, af, NET_RT_DUMP, 0 };
+	size_t bufl;
 	char *buf, *p, *end;
 	struct rt rt, *rtn;
 
-	mib[0] = CTL_NET;
-	mib[1] = PF_ROUTE;
-	mib[2] = 0;
-	mib[3] = af;
-	mib[4] = NET_RT_DUMP;
-	mib[5] = 0;
-
-	if (sysctl(mib, 6, NULL, &needed, NULL, 0) == -1)
+	if (if_sysctl(ctx, mib, __arraycount(mib), NULL, &bufl, NULL, 0) == -1)
 		return -1;
-	if (needed == 0)
+	if (bufl == 0)
 		return 0;
-	if ((buf = malloc(needed)) == NULL)
+	if ((buf = malloc(bufl)) == NULL)
 		return -1;
-	if (sysctl(mib, 6, buf, &needed, NULL, 0) == -1) {
+	if (if_sysctl(ctx, mib, __arraycount(mib), buf, &bufl, NULL, 0) == -1)
+	{
 		free(buf);
 		return -1;
 	}
 
-	end = buf + needed;
+	end = buf + bufl;
 	for (p = buf; p < end; p += rtm->rtm_msglen) {
 		rtm = (void *)p;
-		if (p + rtm->rtm_msglen >= end) {
+		if (p + sizeof(*rtm) > end || p + rtm->rtm_msglen > end) {
 			errno = EINVAL;
 			break;
 		}
@@ -1246,8 +1276,8 @@ if_rtm(struct dhcpcd_ctx *ctx, const struct rt_msghdr *rtm)
 
 	/* Ignore messages from ourself. */
 #ifdef PRIVSEP
-	if (ctx->ps_root_pid != 0) {
-		if (rtm->rtm_pid == ctx->ps_root_pid)
+	if (ctx->ps_root != NULL) {
+		if (rtm->rtm_pid == ctx->ps_root->psp_pid)
 			return 0;
 	}
 #endif
@@ -1298,8 +1328,8 @@ if_ifa(struct dhcpcd_ctx *ctx, const struct ifa_msghdr *ifam)
 	 * We need to process address flag changes though. */
 	if (ifam->ifam_type == RTM_DELADDR) {
 #ifdef PRIVSEP
-		if (ctx->ps_root_pid != 0) {
-			if (ifam->ifam_pid == ctx->ps_root_pid)
+		if (ctx->ps_root != NULL) {
+			if (ifam->ifam_pid == ctx->ps_root->psp_pid)
 				return 0;
 		} else
 #endif
@@ -1322,6 +1352,11 @@ if_ifa(struct dhcpcd_ctx *ctx, const struct ifa_msghdr *ifam)
 	if (get_addrs(ifam->ifam_addrs, (const char *)ifam + sizeof(*ifam),
 		      ifam->ifam_msglen - sizeof(*ifam), rti_info) == -1)
 		return -1;
+
+	/* All BSD's set IFF_UP on the interface when adding an address.
+	 * But not all BSD's emit this via RTM_IFINFO when they do this ... */
+	if (ifam->ifam_type == RTM_NEWADDR && !(ifp->flags & IFF_UP))
+		dhcpcd_handlecarrier(ifp, ifp->carrier, ifp->flags | IFF_UP);
 
 	switch (rti_info[RTAX_IFA]->sa_family) {
 	case AF_LINK:
@@ -1649,12 +1684,11 @@ inet6_sysctl(int code, int val, int action)
 	mib[3] = code;
 	size = sizeof(val);
 	if (action) {
-		if (sysctl(mib, sizeof(mib)/sizeof(mib[0]),
-		    NULL, 0, &val, size) == -1)
+		if (sysctl(mib, __arraycount(mib), NULL, 0, &val, size) == -1)
 			return -1;
 		return 0;
 	}
-	if (sysctl(mib, sizeof(mib)/sizeof(mib[0]), &val, &size, NULL, 0) == -1)
+	if (sysctl(mib, __arraycount(mib), &val, &size, NULL, 0) == -1)
 		return -1;
 	return val;
 }
@@ -1747,10 +1781,9 @@ ip6_forwarding(__unused const char *ifname)
 static int
 if_af_attach(const struct interface *ifp, int af)
 {
-	struct if_afreq ifar;
+	struct if_afreq ifar = { .ifar_af = af };
 
 	strlcpy(ifar.ifar_name, ifp->name, sizeof(ifar.ifar_name));
-	ifar.ifar_af = af;
 	return if_ioctl6(ifp->ctx, SIOCIFAFATTACH, &ifar, sizeof(ifar));
 }
 #endif
@@ -1824,23 +1857,20 @@ if_disable_rtadv(void)
 void
 if_setup_inet6(const struct interface *ifp)
 {
+#ifdef ND6_NDI_FLAGS
 	struct priv *priv;
 	int s;
-#ifdef ND6_NDI_FLAGS
 	struct in6_ndireq nd;
 	int flags;
-#endif
 
 	priv = (struct priv *)ifp->ctx->priv;
 	s = priv->pf_inet6_fd;
 
-#ifdef ND6_NDI_FLAGS
 	memset(&nd, 0, sizeof(nd));
 	strlcpy(nd.ifname, ifp->name, sizeof(nd.ifname));
 	if (ioctl(s, SIOCGIFINFO_IN6, &nd) == -1)
 		logerr("%s: SIOCGIFINFO_FLAGS", ifp->name);
 	flags = (int)nd.ndi.flags;
-#endif
 
 #ifdef ND6_IFF_AUTO_LINKLOCAL
 	/* Unlike the kernel, dhcpcd make make a stable private address. */
@@ -1870,14 +1900,13 @@ if_setup_inet6(const struct interface *ifp)
 #endif
 #endif
 
-#ifdef ND6_NDI_FLAGS
 	if (nd.ndi.flags != (uint32_t)flags) {
 		nd.ndi.flags = (uint32_t)flags;
 		if (if_ioctl6(ifp->ctx, SIOCSIFINFO_FLAGS,
 		    &nd, sizeof(nd)) == -1)
 			logerr("%s: SIOCSIFINFO_FLAGS", ifp->name);
 	}
-#endif
+#endif /* ND6_NDI_FLAGS */
 
 	/* Enabling IPv6 by whatever means must be the
 	 * last action undertaken to ensure kernel RS and

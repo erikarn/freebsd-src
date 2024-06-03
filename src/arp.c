@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
 /*
  * dhcpcd - ARP handler
- * Copyright (c) 2006-2021 Roy Marples <roy@marples.name>
+ * Copyright (c) 2006-2023 Roy Marples <roy@marples.name>
  * All rights reserved
 
  * Redistribution and use in source and binary forms, with or without
@@ -173,12 +173,24 @@ arp_found(struct arp_state *astate, const struct arp_msg *amsg)
 	 * the other IPv4LL client will receieve two ARP
 	 * messages.
 	 * If another conflict happens within DEFEND_INTERVAL
-	 * then we must drop our address and negotiate a new one. */
+	 * then we must drop our address and negotiate a new one.
+	 * If DHCPCD_ARP_PERSISTDEFENCE is set, that enables
+	 * RFC5227 section 2.4.c behaviour. Upon conflict
+	 * detection, the host records the time that the
+	 * conflicting ARP packet was received, and then
+	 * broadcasts one single ARP Announcement. The host then
+	 * continues to use the address normally. All further
+	 * conflict notifications within the DEFEND_INTERVAL are
+	 * ignored. */
 	clock_gettime(CLOCK_MONOTONIC, &now);
 	if (timespecisset(&astate->defend) &&
 	    eloop_timespec_diff(&now, &astate->defend, NULL) < DEFEND_INTERVAL)
+	{
 		logwarnx("%s: %d second defence failed for %s",
 		    ifp->name, DEFEND_INTERVAL, inet_ntoa(astate->addr));
+		if (ifp->options->options & DHCPCD_ARP_PERSISTDEFENCE)
+			return;
+	}
 	else if (arp_request(astate, &astate->addr) == -1)
 		logerr(__func__);
 	else {
@@ -232,6 +244,9 @@ arp_packet(struct interface *ifp, uint8_t *data, size_t len,
 	const struct iarp_state *state;
 	struct arp_state *astate, *astaten;
 	uint8_t *hw_s, *hw_t;
+#ifndef KERNEL_RFC5227
+	bool is_probe;
+#endif /* KERNEL_RFC5227 */
 
 	/* Copy the frame header source and destination out */
 	memset(&arm, 0, sizeof(arm));
@@ -284,6 +299,23 @@ arp_packet(struct interface *ifp, uint8_t *data, size_t len,
 	memcpy(&arm.tha, hw_t, ar.ar_hln);
 	memcpy(&arm.tip.s_addr, hw_t + ar.ar_hln, ar.ar_pln);
 
+#ifndef KERNEL_RFC5227
+	/* During ARP probe the 'sender hardware address' MUST contain the hardware
+	 * address of the interface sending the packet. RFC5227, 1.1 */
+	is_probe = ar.ar_op == htons(ARPOP_REQUEST) && IN_IS_ADDR_UNSPECIFIED(&arm.sip) &&
+	    bpf_flags & BPF_BCAST;
+	if (is_probe && falen > 0 && (falen != ar.ar_hln ||
+	    memcmp(&arm.sha, &arm.fsha, ar.ar_hln))) {
+		char abuf[HWADDR_LEN * 3];
+		char fbuf[HWADDR_LEN * 3];
+		hwaddr_ntoa(&arm.sha, ar.ar_hln, abuf, sizeof(abuf));
+		hwaddr_ntoa(&arm.fsha, falen, fbuf, sizeof(fbuf));
+		logwarnx("%s: invalid ARP probe, sender hw address mismatch (%s, %s)",
+		    ifp->name, abuf, fbuf);
+		return;
+	}
+#endif /* KERNEL_RFC5227 */
+
 	/* Match the ARP probe to our states.
 	 * Ignore Unicast Poll, RFC1122. */
 	state = ARP_CSTATE(ifp);
@@ -299,7 +331,7 @@ arp_packet(struct interface *ifp, uint8_t *data, size_t len,
 }
 
 static void
-arp_read(void *arg)
+arp_read(void *arg, unsigned short events)
 {
 	struct arp_state *astate = arg;
 	struct bpf *bpf = astate->bpf;
@@ -307,6 +339,9 @@ arp_read(void *arg)
 	uint8_t buf[ARP_LEN];
 	ssize_t bytes;
 	struct in_addr addr = astate->addr;
+
+	if (events != ELE_READ)
+		logerrx("%s: unexpected event 0x%04x", __func__, events);
 
 	/* Some RAW mechanisms are generic file descriptors, not sockets.
 	 * This means we have no kernel call to just get one packet,
@@ -532,7 +567,7 @@ arp_new(struct interface *ifp, const struct in_addr *addr)
 	struct arp_state *astate;
 
 	if ((state = ARP_STATE(ifp)) == NULL) {
-	        ifp->if_data[IF_DATA_ARP] = malloc(sizeof(*state));
+		ifp->if_data[IF_DATA_ARP] = malloc(sizeof(*state));
 		state = ARP_STATE(ifp);
 		if (state == NULL) {
 			logerr(__func__);
@@ -567,8 +602,9 @@ arp_new(struct interface *ifp, const struct in_addr *addr)
 			free(astate);
 			return NULL;
 		}
-		eloop_event_add(ifp->ctx->eloop, astate->bpf->bpf_fd,
-		    arp_read, astate);
+		if (eloop_event_add(ifp->ctx->eloop, astate->bpf->bpf_fd, ELE_READ,
+		    arp_read, astate) == -1)
+			logerr("%s: eloop_event_add", __func__);
 	}
 
 

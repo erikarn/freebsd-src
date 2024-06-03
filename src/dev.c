@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
 /*
  * dhcpcd - DHCP client daemon
- * Copyright (c) 2006-2021 Roy Marples <roy@marples.name>
+ * Copyright (c) 2006-2023 Roy Marples <roy@marples.name>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -150,7 +150,7 @@ dev_start1(struct dhcpcd_ctx *ctx, const struct dev_dhcpcd *dev_dhcpcd)
 	dp = opendir(DEVDIR);
 	if (dp == NULL) {
 		logdebug("dev: %s", DEVDIR);
-		return 0;
+		return -1;
 	}
 
 	r = 0;
@@ -167,9 +167,12 @@ dev_start1(struct dhcpcd_ctx *ctx, const struct dev_dhcpcd *dev_dhcpcd)
 }
 
 static void
-dev_handle_data(void *arg)
+dev_handle_data(void *arg, unsigned short events)
 {
 	struct dhcpcd_ctx *ctx;
+
+	if (events != ELE_READ)
+		logerrx("%s: unexpected event 0x%04x", __func__, events);
 
 	ctx = arg;
 	if (ctx->dev->handle_device(arg) == -1) {
@@ -191,7 +194,7 @@ dev_start(struct dhcpcd_ctx *ctx, int (*handler)(void *, int, const char *))
 
 	ctx->dev_fd = dev_start1(ctx, &dev_dhcpcd);
 	if (ctx->dev_fd != -1) {
-		if (eloop_event_add(ctx->eloop, ctx->dev_fd,
+		if (eloop_event_add(ctx->eloop, ctx->dev_fd, ELE_READ,
 		    dev_handle_data, ctx) == -1)
 		{
 			logerr(__func__);

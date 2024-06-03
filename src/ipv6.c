@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
 /*
  * dhcpcd - DHCP client daemon
- * Copyright (c) 2006-2021 Roy Marples <roy@marples.name>
+ * Copyright (c) 2006-2023 Roy Marples <roy@marples.name>
  * All rights reserved
 
  * Redistribution and use in source and binary forms, with or without
@@ -359,51 +359,6 @@ again:
 }
 #endif
 
-int
-ipv6_makeaddr(struct in6_addr *addr, struct interface *ifp,
-    const struct in6_addr *prefix, int prefix_len, unsigned int flags)
-{
-	const struct ipv6_addr *ap;
-	int dad;
-
-	if (prefix_len < 0 || prefix_len > 120) {
-		errno = EINVAL;
-		return -1;
-	}
-
-#ifdef IPV6_AF_TEMPORARY
-	if (flags & IPV6_AF_TEMPORARY)
-		return ipv6_maketemporaryaddress(addr, prefix, prefix_len, ifp);
-#else
-	UNUSED(flags);
-#endif
-
-	if (ifp->options->options & DHCPCD_SLAACPRIVATE) {
-		dad = 0;
-		if (ipv6_makestableprivate(addr,
-		    prefix, prefix_len, ifp, &dad) == -1)
-			return -1;
-		return dad;
-	}
-
-	if (prefix_len > 64) {
-		errno = EINVAL;
-		return -1;
-	}
-	if ((ap = ipv6_linklocal(ifp)) == NULL) {
-		/* We delay a few functions until we get a local-link address
-		 * so this should never be hit. */
-		errno = ENOENT;
-		return -1;
-	}
-
-	/* Make the address from the first local-link address */
-	memcpy(addr, prefix, sizeof(*prefix));
-	addr->s6_addr32[2] = ap->addr.s6_addr32[2];
-	addr->s6_addr32[3] = ap->addr.s6_addr32[3];
-	return 0;
-}
-
 static int
 ipv6_makeprefix(struct in6_addr *prefix, const struct in6_addr *addr, int len)
 {
@@ -476,6 +431,68 @@ ipv6_prefixlen(const struct in6_addr *mask)
 	}
 
 	return (uint8_t)(x * NBBY + y);
+}
+
+int
+ipv6_makeaddr(struct in6_addr *addr, struct interface *ifp,
+    const struct in6_addr *prefix, int prefix_len, unsigned int flags)
+{
+	const struct ipv6_addr *ap;
+	const struct if_options *ifo = ifp->options;
+	int dad;
+
+	if (prefix_len < 0 || prefix_len > 120) {
+		errno = EINVAL;
+		return -1;
+	}
+
+#ifdef IPV6_AF_TEMPORARY
+	if (flags & IPV6_AF_TEMPORARY)
+		return ipv6_maketemporaryaddress(addr, prefix, prefix_len, ifp);
+#else
+	UNUSED(flags);
+#endif
+
+	if (ifo->options & DHCPCD_SLAACPRIVATE) {
+		dad = 0;
+		if (ipv6_makestableprivate(addr,
+		    prefix, prefix_len, ifp, &dad) == -1)
+			return -1;
+		return dad;
+	} else if (!IN6_IS_ADDR_UNSPECIFIED(&ifo->token)) {
+		int bytes = prefix_len / NBBY;
+		int bits = prefix_len % NBBY;
+
+		// Copy the token into the address.
+		*addr = ifo->token;
+
+		// If we have any dangling bits, just copy that in also.
+		// XXX Can we preserve part of the token still?
+		if (bits != 0)
+			bytes++;
+
+		// Copy the prefix in.
+		if (bytes > 0)
+			memcpy(addr->s6_addr, prefix->s6_addr, (size_t)bytes);
+		return 0;
+	}
+
+	if (prefix_len > 64) {
+		errno = EINVAL;
+		return -1;
+	}
+	if ((ap = ipv6_linklocal(ifp)) == NULL) {
+		/* We delay a few functions until we get a local-link address
+		 * so this should never be hit. */
+		errno = ENOENT;
+		return -1;
+	}
+
+	/* Make the address from the first local-link address */
+	memcpy(addr, prefix, sizeof(*prefix));
+	addr->s6_addr32[2] = ap->addr.s6_addr32[2];
+	addr->s6_addr32[3] = ap->addr.s6_addr32[3];
+	return 0;
 }
 
 static void
@@ -2301,7 +2318,9 @@ inet6_raroutes(rb_tree_t *routes, struct dhcpcd_ctx *ctx)
 {
 	struct rt *rt;
 	struct ra *rap;
+	const struct routeinfo *rinfo;
 	const struct ipv6_addr *addr;
+	struct in6_addr netmask;
 
 	if (ctx->ra_routers == NULL)
 		return 0;
@@ -2309,6 +2328,27 @@ inet6_raroutes(rb_tree_t *routes, struct dhcpcd_ctx *ctx)
 	TAILQ_FOREACH(rap, ctx->ra_routers, next) {
 		if (rap->expired)
 			continue;
+
+		/* add rfc4191 route information routes */
+		TAILQ_FOREACH (rinfo, &rap->rinfos, next) {
+			if(rinfo->lifetime == 0)
+				continue;
+			if ((rt = inet6_makeroute(rap->iface, rap)) == NULL)
+				continue;
+
+			in6_addr_fromprefix(&netmask, rinfo->prefix_len);
+
+			sa_in6_init(&rt->rt_dest, &rinfo->prefix);
+			sa_in6_init(&rt->rt_netmask, &netmask);
+			sa_in6_init(&rt->rt_gateway, &rap->from);
+#ifdef HAVE_ROUTE_PREF
+			rt->rt_pref = ipv6nd_rtpref(rinfo->flags);
+#endif
+
+			rt_proto_add(routes, rt);
+		}
+
+		/* add subnet routes */
 		TAILQ_FOREACH(addr, &rap->addrs, next) {
 			if (addr->prefix_vltime == 0)
 				continue;
@@ -2316,11 +2356,13 @@ inet6_raroutes(rb_tree_t *routes, struct dhcpcd_ctx *ctx)
 			if (rt) {
 				rt->rt_dflags |= RTDF_RA;
 #ifdef HAVE_ROUTE_PREF
-				rt->rt_pref = ipv6nd_rtpref(rap);
+				rt->rt_pref = ipv6nd_rtpref(rap->flags);
 #endif
 				rt_proto_add(routes, rt);
 			}
 		}
+
+		/* add default route */
 		if (rap->lifetime == 0)
 			continue;
 		if (ipv6_anyglobal(rap->iface) == NULL)
@@ -2330,7 +2372,7 @@ inet6_raroutes(rb_tree_t *routes, struct dhcpcd_ctx *ctx)
 			continue;
 		rt->rt_dflags |= RTDF_RA;
 #ifdef HAVE_ROUTE_PREF
-		rt->rt_pref = ipv6nd_rtpref(rap);
+		rt->rt_pref = ipv6nd_rtpref(rap->flags);
 #endif
 		rt_proto_add(routes, rt);
 	}

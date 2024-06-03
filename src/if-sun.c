@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
 /*
  * Solaris interface driver for dhcpcd
- * Copyright (c) 2016-2021 Roy Marples <roy@marples.name>
+ * Copyright (c) 2016-2023 Roy Marples <roy@marples.name>
  * All rights reserved
 
  * Redistribution and use in source and binary forms, with or without
@@ -94,12 +94,6 @@ extern int getallifaddrs(sa_family_t, struct ifaddrs **, int64_t);
 
 #define COPYSA(dst, src) memcpy((dst), (src), sa_len((src)))
 
-struct priv {
-#ifdef INET6
-	int pf_inet6_fd;
-#endif
-};
-
 struct rtm
 {
 	struct rt_msghdr hdr;
@@ -160,7 +154,7 @@ if_opensockets_os(struct dhcpcd_ctx *ctx)
 	 * We will fail noisily elsewhere anyway. */
 #endif
 
-	ctx->link_fd = socket(PF_ROUTE,
+	ctx->link_fd = xsocket(PF_ROUTE,
 	    SOCK_RAW | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
 
 	if (ctx->link_fd == -1) {
@@ -186,12 +180,13 @@ if_closesockets_os(struct dhcpcd_ctx *ctx)
 	struct priv		*priv;
 
 	priv = (struct priv *)ctx->priv;
-	if (priv->pf_inet6_fd != -1)
+	if (priv && priv->pf_inet6_fd != -1)
 		close(priv->pf_inet6_fd);
 #endif
 
 	/* each interface should have closed itself */
 	free(ctx->priv);
+	ctx->priv = NULL;
 }
 
 int
@@ -733,7 +728,7 @@ if_route_get(struct dhcpcd_ctx *ctx, struct rt *rt)
 
 	if_route0(ctx, &rtm, RTM_GET, rt);
 	rt = NULL;
-	s = socket(PF_ROUTE, SOCK_RAW | SOCK_CLOEXEC, 0);
+	s = xsocket(PF_ROUTE, SOCK_RAW | SOCK_CLOEXEC, 0);
 	if (s == -1)
 		return NULL;
 	if (write(s, &rtm, rtm.hdr.rtm_msglen) == -1)

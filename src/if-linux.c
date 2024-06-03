@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
 /*
  * Linux interface driver for dhcpcd
- * Copyright (c) 2006-2021 Roy Marples <roy@marples.name>
+ * Copyright (c) 2006-2023 Roy Marples <roy@marples.name>
  * All rights reserved
 
  * Redistribution and use in source and binary forms, with or without
@@ -59,6 +59,9 @@
 #else
 #include <linux/if_arp.h>
 #endif
+
+/* Inlcude this *after* net/if.h so we get IFF_DORMANT */
+#include <linux/if.h>
 
 #include <dirent.h>
 #include <errno.h>
@@ -141,12 +144,6 @@ int if_getssid_wext(const char *ifname, uint8_t *ssid);
 	(struct rtattr *)(void *)(((char *)(rta)) \
 	+ RTA_ALIGN((rta)->rta_len)))
 
-struct priv {
-	int route_fd;
-	int generic_fd;
-	uint32_t route_pid;
-};
-
 /* We need this to send a broadcast for InfiniBand.
  * Our old code used sendto, but our new code writes to a raw BPF socket.
  * What header structure does IPoIB use? */
@@ -161,7 +158,6 @@ static const uint8_t ipv4_bcast_addr[] = {
 
 static int if_addressexists(struct interface *, struct in_addr *);
 
-#define PROC_INET6	"/proc/net/if_inet6"
 #define PROC_PROMOTE	"/proc/sys/net/ipv4/conf/%s/promote_secondaries"
 #define SYS_BRIDGE	"/sys/class/net/%s/bridge/bridge_id"
 #define SYS_LAYER2	"/sys/class/net/%s/device/layer2"
@@ -189,18 +185,20 @@ static const char *mproc =
 	"cpu model"
 #elif defined(__frv__)
 	"System"
+#elif defined(__hppa__)
+	"model"
 #elif defined(__i386__) || defined(__x86_64__)
 	"vendor_id"
 #elif defined(__ia64__)
 	"vendor"
-#elif defined(__hppa__)
-	"model"
 #elif defined(__m68k__)
 	"MMU"
 #elif defined(__mips__)
 	"system type"
 #elif defined(__powerpc__) || defined(__powerpc64__)
 	"machine"
+#elif defined(__riscv)
+	"uarch"
 #elif defined(__s390__) || defined(__s390x__)
 	"Manufacturer"
 #elif defined(__sh__)
@@ -233,7 +231,7 @@ if_machinearch(char *str, size_t len)
 		if (strncmp(buf, mproc, strlen(mproc)) == 0 &&
 		    fscanf(fp, "%255s", buf) == 1)
 		{
-		        fclose(fp);
+			fclose(fp);
 			return snprintf(str, len, "%s", buf);
 		}
 	}
@@ -446,6 +444,13 @@ if_opensockets_os(struct dhcpcd_ctx *ctx)
 	int on = 1;
 #endif
 
+#ifdef PRIVSEP
+	if (ctx->options & DHCPCD_PRIVSEPROOT) {
+		ctx->link_fd = -1;
+		goto setup_priv;
+	}
+#endif
+
 	/* Open the link socket first so it gets pid() for the socket.
 	 * Then open our persistent route socket so we get a unique
 	 * pid that doesn't clash with a process id for after we fork. */
@@ -468,6 +473,9 @@ if_opensockets_os(struct dhcpcd_ctx *ctx)
 		logerr("%s: NETLINK_BROADCAST_ERROR", __func__);
 #endif
 
+#ifdef PRIVSEP
+setup_priv:
+#endif
 	if ((priv = calloc(1, sizeof(*priv))) == NULL)
 		return -1;
 
@@ -492,13 +500,22 @@ if_opensockets_os(struct dhcpcd_ctx *ctx)
 void
 if_closesockets_os(struct dhcpcd_ctx *ctx)
 {
-	struct priv *priv;
+	struct priv *priv = ctx->priv;
 
-	if (ctx->priv != NULL) {
-		priv = (struct priv *)ctx->priv;
+	if (priv == NULL)
+		return;
+
+	if (priv->route_fd != -1) {
 		close(priv->route_fd);
-		close(priv->generic_fd);
+		priv->route_fd = -1;
 	}
+	if (priv->generic_fd != -1) {
+		close(priv->generic_fd);
+		priv->generic_fd = -1;
+	}
+
+	free(priv);
+	ctx->priv = NULL;
 }
 
 int
@@ -518,23 +535,39 @@ if_setmac(struct interface *ifp, void *mac, uint8_t maclen)
 	return if_ioctl(ifp->ctx, SIOCSIFHWADDR, &ifr, sizeof(ifr));
 }
 
+static int if_carrier_from_flags(unsigned int flags)
+{
+
+#ifdef IFF_LOWER_UP
+	return ((flags & (IFF_LOWER_UP | IFF_RUNNING)) ==
+		(IFF_LOWER_UP | IFF_RUNNING))
+#ifdef IFF_DORMANT
+		&& !(flags & IFF_DORMANT)
+#endif
+		? LINK_UP : LINK_DOWN;
+#else
+	return flags & IFF_RUNNING ? LINK_UP : LINK_DOWN;
+#endif
+}
+
 int
 if_carrier(struct interface *ifp, __unused const void *ifadata)
 {
-
-	return ifp->flags & IFF_RUNNING ? LINK_UP : LINK_DOWN;
+	return if_carrier_from_flags(ifp->flags);
 }
 
 bool
 if_roaming(struct interface *ifp)
 {
 
-#ifdef IFF_LOWER_UP
 	if (!ifp->wireless ||
-	    ifp->flags & IFF_RUNNING ||
-	    (ifp->flags & (IFF_UP | IFF_LOWER_UP)) != (IFF_UP | IFF_LOWER_UP))
+	    ifp->flags & IFF_RUNNING)
 		return false;
-	return true;
+
+#if defined(IFF_DORMANT)
+	return ifp->flags & IFF_DORMANT;
+#elif defined(IFF_LOWER_UP)
+	return (ifp->flags & (IFF_UP|IFF_LOWER_UP)) == (IFF_UP|IFF_LOWER_UP);
 #else
 	return false;
 #endif
@@ -549,15 +582,15 @@ if_getnetlink(struct dhcpcd_ctx *ctx, struct iovec *iov, int fd, int flags,
 	    .msg_name = &nladdr, .msg_namelen = sizeof(nladdr),
 	    .msg_iov = iov, .msg_iovlen = 1,
 	};
-	ssize_t len;
+	size_t len;
 	struct nlmsghdr *nlm;
 	int r = 0;
 	unsigned int again;
 	bool terminated;
 
 recv_again:
-	len = recvmsg(fd, &msg, flags);
-	if (len == -1 || len == 0)
+	len = (size_t)recvmsg(fd, &msg, flags);
+	if (len == 0 || (ssize_t)len == -1)
 		return (int)len;
 
 	/* Check sender */
@@ -573,7 +606,7 @@ recv_again:
 	again = 0;
 	terminated = false;
 	for (nlm = iov->iov_base;
-	     nlm && NLMSG_OK(nlm, (size_t)len);
+	     nlm && NLMSG_OK(nlm, len);
 	     nlm = NLMSG_NEXT(nlm, len))
 	{
 		again = (nlm->nlmsg_flags & NLM_F_MULTI);
@@ -745,8 +778,8 @@ link_route(struct dhcpcd_ctx *ctx, __unused struct interface *ifp,
 
 	/* Ignore messages we sent. */
 #ifdef PRIVSEP
-	if (ctx->ps_root_pid != 0 &&
-	    nlm->nlmsg_pid == (uint32_t)ctx->ps_root_pid)
+	if (ctx->ps_root != NULL &&
+	    nlm->nlmsg_pid == (uint32_t)ctx->ps_root->psp_pid)
 		return 0;
 #endif
 	priv = (struct priv *)ctx->priv;
@@ -788,8 +821,8 @@ link_addr(struct dhcpcd_ctx *ctx, struct interface *ifp, struct nlmsghdr *nlm)
 	 * We need to process address flag changes though. */
 	if (nlm->nlmsg_type == RTM_DELADDR) {
 #ifdef PRIVSEP
-		if (ctx->ps_root_pid != 0 &&
-		    nlm->nlmsg_pid == (uint32_t)ctx->ps_root_pid)
+		if (ctx->ps_root != NULL &&
+		    nlm->nlmsg_pid == (uint32_t)ctx->ps_root->psp_pid)
 			return 0;
 #endif
 		priv = (struct priv*)ctx->priv;
@@ -915,7 +948,7 @@ link_neigh(struct dhcpcd_ctx *ctx, __unused struct interface *ifp,
 	r = NLMSG_DATA(nlm);
 	rta = RTM_RTA(r);
 	len = RTM_PAYLOAD(nlm);
-        if (r->ndm_family == AF_INET6) {
+	if (r->ndm_family == AF_INET6) {
 		bool unreachable;
 		struct in6_addr addr6;
 
@@ -1040,7 +1073,7 @@ link_netlink(struct dhcpcd_ctx *ctx, void *arg, struct nlmsghdr *nlm)
 	}
 
 	dhcpcd_handlecarrier(ifp,
-	    ifi->ifi_flags & IFF_RUNNING ? LINK_UP : LINK_DOWN,
+	    if_carrier_from_flags(ifi->ifi_flags),
 	    ifi->ifi_flags);
 	return 0;
 }
@@ -1138,7 +1171,8 @@ if_sendnetlink(struct dhcpcd_ctx *ctx, int protocol, struct nlmsghdr *hdr,
 }
 
 #define NLMSG_TAIL(nmsg)						\
-	((struct rtattr *)(((ptrdiff_t)(nmsg))+NLMSG_ALIGN((nmsg)->nlmsg_len)))
+	((struct rtattr *)(void *)(((char *)(nmsg)) + \
+	    NLMSG_ALIGN((nmsg)->nlmsg_len)))
 
 static int
 add_attr_l(struct nlmsghdr *n, unsigned short maxlen, unsigned short type,
@@ -1974,46 +2008,83 @@ if_address6(unsigned char cmd, const struct ipv6_addr *ia)
 	    NULL, NULL);
 }
 
+struct ifiaddr6
+{
+	unsigned int ifa_ifindex;
+	struct in6_addr ifa_addr;
+	uint32_t ifa_flags;
+	bool ifa_found;
+};
+
+static int
+_if_addrflags6(__unused struct dhcpcd_ctx *ctx,
+    void *arg, struct nlmsghdr *nlm)
+{
+	struct ifiaddr6 *ia = arg;
+	size_t len;
+	struct rtattr *rta;
+	struct ifaddrmsg *ifa;
+	struct in6_addr *local = NULL, *address = NULL;
+	uint32_t *flags = NULL;
+
+	ifa = NLMSG_DATA(nlm);
+	if (ifa->ifa_index != ia->ifa_ifindex || ifa->ifa_family != AF_INET6)
+		return 0;
+
+	rta = IFA_RTA(ifa);
+	len = NLMSG_PAYLOAD(nlm, sizeof(*ifa));
+	for (; RTA_OK(rta, len); rta = RTA_NEXT(rta, len)) {
+		switch (rta->rta_type) {
+		case IFA_ADDRESS:
+			address = (struct in6_addr *)RTA_DATA(rta);
+			break;
+		case IFA_LOCAL:
+			local = (struct in6_addr *)RTA_DATA(rta);
+			break;
+		case IFA_FLAGS:
+			flags = (uint32_t *)RTA_DATA(rta);
+			break;
+		}
+	}
+
+	if (local) {
+	       if (IN6_ARE_ADDR_EQUAL(&ia->ifa_addr, local))
+			ia->ifa_found = true;
+	} else if (address) {
+	       if (IN6_ARE_ADDR_EQUAL(&ia->ifa_addr, address))
+			ia->ifa_found = true;
+	}
+	if (flags && ia->ifa_found)
+		memcpy(&ia->ifa_flags, flags, sizeof(ia->ifa_flags));
+	return 0;
+}
+
 int
 if_addrflags6(const struct interface *ifp, const struct in6_addr *addr,
     __unused const char *alias)
 {
-	char buf[PS_BUFLEN], *bp = buf, *line;
-	ssize_t buflen;
-	char *p, ifaddress[33], address[33], name[IF_NAMESIZE + 1];
-	unsigned int ifindex;
-	int prefix, scope, flags, i;
+	struct ifiaddr6 ia = {
+		.ifa_ifindex = ifp->index,
+		.ifa_addr = *addr,
+		.ifa_found = false,
+	};
+	struct nlma nlm = {
+	    .hdr.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifaddrmsg)),
+	    .hdr.nlmsg_type = RTM_GETADDR,
+	    .hdr.nlmsg_flags = NLM_F_REQUEST | NLM_F_MATCH,
+	    .ifa.ifa_family = AF_INET6,
+	    .ifa.ifa_index = ifp->index,
+	};
 
-	buflen = dhcp_readfile(ifp->ctx, PROC_INET6, buf, sizeof(buf));
-	if (buflen == -1)
+	int error = if_sendnetlink(ifp->ctx, NETLINK_ROUTE, &nlm.hdr,
+	    &_if_addrflags6, &ia);
+	if (error == -1)
 		return -1;
-	if ((size_t)buflen == sizeof(buf)) {
-		errno = ENOBUFS;
+	if (!ia.ifa_found) {
+		errno = ESRCH;
 		return -1;
 	}
-
-	p = ifaddress;
-	for (i = 0; i < (int)sizeof(addr->s6_addr); i++) {
-		p += snprintf(p, 3, "%.2x", addr->s6_addr[i]);
-	}
-	*p = '\0';
-
-	while ((line = get_line(&bp, &buflen)) != NULL) {
-		if (sscanf(line,
-		    "%32[a-f0-9] %x %x %x %x %"TOSTRING(IF_NAMESIZE)"s\n",
-		    address, &ifindex, &prefix, &scope, &flags, name) != 6 ||
-		    strlen(address) != 32)
-		{
-			errno = EINVAL;
-			return -1;
-		}
-		if (strcmp(name, ifp->name) == 0 &&
-		    strcmp(ifaddress, address) == 0)
-			return flags;
-	}
-
-	errno = ESRCH;
-	return -1;
+	return (int)ia.ifa_flags;
 }
 
 int
@@ -2090,23 +2161,27 @@ if_setup_inet6(const struct interface *ifp)
 	int ra;
 	char path[256];
 
-	/* The kernel cannot make stable private addresses.
+	/* Modern linux kernels can make a stable private address.
 	 * However, a lot of distros ship newer kernel headers than
-	 * the kernel itself so sweep that error under the table. */
+	 * the kernel itself so we sweep that error under the table
+	 * from old kernels and just make them ourself regardless. */
 	if (if_disable_autolinklocal(ctx, ifp->index) == -1 &&
 	    errno != ENODEV && errno != ENOTSUP && errno != EINVAL)
 		logdebug("%s: if_disable_autolinklocal", ifp->name);
 
-	/*
-	 * If not doing autoconf, don't disable the kernel from doing it.
-	 * If we need to, we should have another option actively disable it.
-	 */
+	/* If not doing autoconf, don't disable the kernel from doing it.
+	 * If we need to, we should have another option actively disable it. */
 	if (!(ifp->options->options & DHCPCD_IPV6RS))
 		return;
 
 	snprintf(path, sizeof(path), "%s/%s/autoconf", p_conf, ifp->name);
 	ra = check_proc_int(ctx, path);
-	if (ra != 1 && ra != -1) {
+	if (ra == -1) {
+		/* The sysctl probably doesn't exist, but this isn't an
+		 * error as such so just log it and continue */
+		if (errno != ENOENT)
+			logerr("%s: %s", __func__, path);
+	} else if (ra != 0) {
 		if (if_writepathuint(ctx, path, 0) == -1)
 			logerr("%s: %s", __func__, path);
 	}

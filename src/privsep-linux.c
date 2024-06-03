@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
 /*
  * Privilege Separation for dhcpcd, Linux driver
- * Copyright (c) 2006-2021 Roy Marples <roy@marples.name>
+ * Copyright (c) 2006-2023 Roy Marples <roy@marples.name>
  * All rights reserved
 
  * Redistribution and use in source and binary forms, with or without
@@ -30,7 +30,6 @@
 #include <sys/prctl.h>
 #include <sys/socket.h>
 #include <sys/syscall.h>
-#include <sys/termios.h>	/* For TCGETS */
 
 #include <linux/audit.h>
 #include <linux/filter.h>
@@ -40,10 +39,12 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <termios.h>	/* For TCGETS */
 #include <unistd.h>
 
 #include "common.h"
@@ -60,39 +61,42 @@
 //#define SECCOMP_FILTER_DEBUG
 
 static ssize_t
-ps_root_dosendnetlink(int protocol, struct msghdr *msg)
+ps_root_dosendnetlink(struct dhcpcd_ctx *ctx, int protocol, struct msghdr *msg)
 {
-	struct sockaddr_nl snl = { .nl_family = AF_NETLINK };
+	struct priv *priv = (struct priv *)ctx->priv;
 	int s;
 	unsigned char buf[16 * 1024];
 	struct iovec riov = {
 		.iov_base = buf,
 		.iov_len = sizeof(buf),
 	};
-	ssize_t retval;
 
-	if ((s = if_linksocket(&snl, protocol, 0)) == -1)
+	switch(protocol) {
+	case NETLINK_GENERIC:
+		s = priv->generic_fd;
+		break;
+	case NETLINK_ROUTE:
+		s = priv->route_fd;
+		break;
+	default:
+		errno = EPFNOSUPPORT;
 		return -1;
-
-	if (sendmsg(s, msg, 0) == -1) {
-		retval = -1;
-		goto out;
 	}
 
-	retval = if_getnetlink(NULL, &riov, s, 0, NULL, NULL);
-out:
-	close(s);
-	return retval;
+	if (sendmsg(s, msg, 0) == -1)
+		return -1;
+
+	return if_getnetlink(NULL, &riov, s, 0, NULL, NULL);
 }
 
 ssize_t
-ps_root_os(struct ps_msghdr *psm, struct msghdr *msg,
-    __unused void **rdata, __unused size_t *rlen)
+ps_root_os(struct dhcpcd_ctx *ctx, struct ps_msghdr *psm, struct msghdr *msg,
+    __unused void **rdata, __unused size_t *rlen, __unused bool *free_data)
 {
 
 	switch (psm->ps_cmd) {
 	case PS_ROUTE:
-		return ps_root_dosendnetlink((int)psm->ps_flags, msg);
+		return ps_root_dosendnetlink(ctx, (int)psm->ps_flags, msg);
 	default:
 		errno = ENOTSUP;
 		return -1;
@@ -103,11 +107,15 @@ ssize_t
 ps_root_sendnetlink(struct dhcpcd_ctx *ctx, int protocol, struct msghdr *msg)
 {
 
-	if (ps_sendmsg(ctx, ctx->ps_root_fd, PS_ROUTE,
+	if (ps_sendmsg(ctx, PS_ROOT_FD(ctx), PS_ROUTE,
 	    (unsigned long)protocol, msg) == -1)
 		return -1;
 	return ps_root_readerror(ctx, NULL, 0);
 }
+
+#ifdef DISABLE_SECCOMP
+#warning SECCOMP has been disabled
+#else
 
 #if (BYTE_ORDER == LITTLE_ENDIAN)
 # define SECCOMP_ARG_LO	0
@@ -165,6 +173,16 @@ ps_root_sendnetlink(struct dhcpcd_ctx *ctx, int protocol, struct msghdr *msg)
 #  else
 #    error "Platform does not support seccomp filter yet"
 #  endif
+#elif defined(__ARCV3__)
+#  if defined(__ARC64__)
+#    if (BYTE_ORDER == LITTLE_ENDIAN)
+#      define SECCOMP_AUDIT_ARCH AUDIT_ARCH_ARCV3
+#    else
+#      define SECCOMP_AUDIT_ARCH AUDIT_ARCH_ARCV3BE
+#    endif
+#  else
+#    error "Platform does not support seccomp filter yet"
+#  endif
 #elif defined(__arm__)
 #  ifndef EM_ARM
 #    define EM_ARM 40
@@ -186,6 +204,12 @@ ps_root_sendnetlink(struct dhcpcd_ctx *ctx, int protocol, struct msghdr *msg)
 #  endif
 #elif defined(__ia64__)
 #  define SECCOMP_AUDIT_ARCH AUDIT_ARCH_IA64
+#elif defined(__loongarch__)
+#  if defined(__LP64__)
+#    define SECCOMP_AUDIT_ARCH AUDIT_ARCH_LOONGARCH64
+#  else
+#    define SECCOMP_AUDIT_ARCH AUDIT_ARCH_LOONGARCH32
+#  endif
 #elif defined(__microblaze__)
 #  define SECCOMP_AUDIT_ARCH AUDIT_ARCH_MICROBLAZE
 #elif defined(__m68k__)
@@ -213,7 +237,11 @@ ps_root_sendnetlink(struct dhcpcd_ctx *ctx, int protocol, struct msghdr *msg)
 #elif defined(__or1k__)
 #  define SECCOMP_AUDIT_ARCH AUDIT_ARCH_OPENRISC
 #elif defined(__powerpc64__)
-#  define SECCOMP_AUDIT_ARCH AUDIT_ARCH_PPC64
+#  if (BYTE_ORDER == LITTLE_ENDIAN)
+#    define SECCOMP_AUDIT_ARCH AUDIT_ARCH_PPC64LE
+#  else
+#    define SECCOMP_AUDIT_ARCH AUDIT_ARCH_PPC64
+#  endif
 #elif defined(__powerpc__)
 #  define SECCOMP_AUDIT_ARCH AUDIT_ARCH_PPC
 #elif defined(__riscv)
@@ -273,11 +301,29 @@ static struct sock_filter ps_seccomp_filter[] = {
 #if defined(__x86_64__) && defined(__ILP32__) && defined(__X32_SYSCALL_BIT)
 	SECCOMP_ALLOW(__NR_clock_gettime & ~__X32_SYSCALL_BIT),
 #endif
+#ifdef __NR_clock_gettime32
+	SECCOMP_ALLOW(__NR_clock_gettime32),
+#endif
 #ifdef __NR_clock_gettime64
 	SECCOMP_ALLOW(__NR_clock_gettime64),
 #endif
 #ifdef __NR_close
 	SECCOMP_ALLOW(__NR_close),
+#endif
+#ifdef __NR_dup2
+	SECCOMP_ALLOW(__NR_dup2), // daemonising dups stderr to stdin(/dev/null)
+#endif
+#ifdef __NR_dup3
+	SECCOMP_ALLOW(__NR_dup3),
+#endif
+#ifdef __NR_epoll_ctl
+	SECCOMP_ALLOW(__NR_epoll_ctl),
+#endif
+#ifdef __NR_epoll_wait
+	SECCOMP_ALLOW(__NR_epoll_wait),
+#endif
+#ifdef __NR_epoll_pwait
+	SECCOMP_ALLOW(__NR_epoll_pwait),
 #endif
 #ifdef __NR_exit_group
 	SECCOMP_ALLOW(__NR_exit_group),
@@ -300,6 +346,9 @@ static struct sock_filter ps_seccomp_filter[] = {
 #ifdef __NR_getpid
 	SECCOMP_ALLOW(__NR_getpid),
 #endif
+#ifdef __NR_getrandom
+	SECCOMP_ALLOW(__NR_getrandom),
+#endif
 #ifdef __NR_getsockopt
 	/* For route socket overflow */
 	SECCOMP_ALLOW_ARG(__NR_getsockopt, 1, SOL_SOCKET),
@@ -313,23 +362,37 @@ static struct sock_filter ps_seccomp_filter[] = {
 	SECCOMP_ALLOW_ARG(__NR_ioctl, 1, SIOCGIFVLAN),
 	/* printf over serial terminal requires this */
 	SECCOMP_ALLOW_ARG(__NR_ioctl, 1, TCGETS),
+	/* dumping leases on musl requires this */
+	SECCOMP_ALLOW_ARG(__NR_ioctl, 1, TIOCGWINSZ),
 	/* SECCOMP BPF is newer than nl80211 so we don't need SIOCGIWESSID
 	 * which lives in the impossible to include linux/wireless.h header */
+#endif
+#ifdef __NR_madvise /* needed for musl */
+	SECCOMP_ALLOW(__NR_madvise),
 #endif
 #ifdef __NR_mmap
 	SECCOMP_ALLOW(__NR_mmap),
 #endif
+#ifdef __NR_mmap2
+	SECCOMP_ALLOW(__NR_mmap2),
+#endif
 #ifdef __NR_munmap
 	SECCOMP_ALLOW(__NR_munmap),
 #endif
-#ifdef __NR_nanosleep
-	SECCOMP_ALLOW(__NR_nanosleep),	/* XXX should use ppoll instead */
+#ifdef __NR_newfstatat
+	SECCOMP_ALLOW(__NR_newfstatat),
 #endif
 #ifdef __NR_ppoll
 	SECCOMP_ALLOW(__NR_ppoll),
 #endif
 #ifdef __NR_ppoll_time64
 	SECCOMP_ALLOW(__NR_ppoll_time64),
+#endif
+#ifdef __NR_pselect6
+	SECCOMP_ALLOW(__NR_pselect6),
+#endif
+#ifdef __NR_pselect6_time64
+	SECCOMP_ALLOW(__NR_pselect6_time64),
 #endif
 #ifdef __NR_read
 	SECCOMP_ALLOW(__NR_read),
@@ -453,3 +516,4 @@ ps_seccomp_enter(void)
 	}
 	return 0;
 }
+#endif /* !DISABLE_SECCOMP */
