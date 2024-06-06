@@ -983,6 +983,37 @@ ieee80211_get_node_txpower(struct ieee80211_node *ni)
 }
 
 /*
+ * Determine whether the given key in the given VAP is a global key.
+ * (key index 0..3, shared between all stations on a VAP.)
+ *
+ * This is either a WEP key or a GROUP key.
+ *
+ * Note this will NOT return true if it is a IGTK key.
+ */
+static __inline int
+ieee80211_is_key_global(const struct ieee80211vap *vap,
+    const struct ieee80211_key *key)
+{
+	return (&vap->iv_nw_keys[0] <= key &&
+	    key < &vap->iv_nw_keys[IEEE80211_WEP_NKID]);
+}
+
+/*
+ * Determine whether the given key in the given VAP is a unicast key.
+ */
+static __inline int
+ieee80211_is_key_unicast(const struct ieee80211vap *vap,
+    const struct ieee80211_key *key)
+{
+	/*
+	 * This is a short-cut for now; eventually we will need
+	 * to support multiple unicast keys, IGTK, etc) so we
+	 * will absolutely need to fix the key flags.
+	 */
+	return (!ieee80211_is_key_global(vap, key));
+}
+
+/*
  * Debugging facilities compiled in when IEEE80211_DEBUG is defined.
  *
  * The intent is that any problem in the net80211 layer can be
