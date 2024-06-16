@@ -271,8 +271,14 @@ struct ieee80211_stats {
  * Otherwise a unicast/pairwise key is specified by the bssid
  * (on a station) or mac address (on an ap).  They key length
  * must include any MIC key data; otherwise it should be no
- * more than IEEE80211_KEYBUF_SIZE.
+ * more than IEEE80211_IOCTL_KEYBUF_SIZE.
  */
+#define	IEEE80211_IOCTL_KEYBUF_SIZE	(16) /* 128 bit keys */
+#define	IEEE80211_IOCTL_MICBUF_SIZE	(8+8) /* TX + RX MIC */
+
+#define	IEEE80211_IOCTL_KEYDATA_SIZE	\
+	    (IEEE80211_IOCTL_KEYBUF_SIZE + IEEE80211_IOCTL_MICBUF_SIZE)
+
 struct ieee80211req_key {
 	uint8_t		ik_type;	/* key/cipher type */
 	uint8_t		ik_pad;
@@ -284,7 +290,7 @@ struct ieee80211req_key {
 	uint8_t		ik_macaddr[IEEE80211_ADDR_LEN];
 	uint64_t	ik_keyrsc;	/* key receive sequence counter */
 	uint64_t	ik_keytsc;	/* key transmit sequence counter */
-	uint8_t		ik_keydata[IEEE80211_KEYBUF_SIZE+IEEE80211_MICBUF_SIZE];
+	uint8_t		ik_keydata[IEEE80211_IOCTL_KEYDATA_SIZE];
 };
 
 /*
