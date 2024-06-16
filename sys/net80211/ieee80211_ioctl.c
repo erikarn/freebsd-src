@@ -110,11 +110,18 @@ ieee80211_ioctl_getkey(u_long cmd, struct ieee80211vap *vap,
 		ik.ik_keyrsc = wk->wk_keyrsc[IEEE80211_NONQOS_TID];
 		ik.ik_keytsc = wk->wk_keytsc;
 		memcpy(ik.ik_keydata, wk->wk_key, wk->wk_keylen);
+
+		/*
+		 * Treat the ioctl as a fixed-size key buffer for now
+		 * and use the ioctl sizes.  This will return truncated
+		 * keys the net80211 key is larger, but it won't leak data,
+		 * go out of bounds or change the ioctl ABI.
+		 */
 		if (cip->ic_cipher == IEEE80211_CIPHER_TKIP) {
 			memcpy(ik.ik_keydata+wk->wk_keylen,
-				wk->wk_key + IEEE80211_KEYBUF_SIZE,
-				IEEE80211_MICBUF_SIZE);
-			ik.ik_keylen += IEEE80211_MICBUF_SIZE;
+				wk->wk_key + IEEE80211_IOCTL_KEYBUF_SIZE,
+				IEEE80211_IOCTL_MICBUF_SIZE);
+			ik.ik_keylen += IEEE80211_IOCTL_MICBUF_SIZE;
 		}
 	} else {
 		ik.ik_keyrsc = 0;
@@ -1177,6 +1184,7 @@ ieee80211_ioctl_setkey(struct ieee80211vap *vap, struct ieee80211req *ireq)
 	struct ieee80211_key *wk;
 	uint16_t kid;
 	int error, i;
+	int max_keylen;
 
 	if (ireq->i_len != sizeof(ik))
 		return EINVAL;
@@ -1217,17 +1225,40 @@ ieee80211_ioctl_setkey(struct ieee80211vap *vap, struct ieee80211req *ireq)
 			wk->wk_keyix = kid;
 		ni = NULL;
 	}
+
+	max_keylen = ieee80211_crypto_get_max_keylen(ik.ik_type);
+	if (max_keylen == 0)
+		return EINVAL;
+
 	error = 0;
 	ieee80211_key_update_begin(vap);
 	if (ieee80211_crypto_newkey(vap, ik.ik_type, ik.ik_flags, wk)) {
 		wk->wk_keylen = ik.ik_keylen;
-		/* NB: MIC presence is implied by cipher type */
-		if (wk->wk_keylen > IEEE80211_KEYBUF_SIZE)
-			wk->wk_keylen = IEEE80211_KEYBUF_SIZE;
+
+		/*
+		 * Cap the key length at the cipher key length.
+		 *
+		 * This captures the TKIP case where we're passed in both
+		 * a key and the TX/RX MIC; the ioctl API unfortunately
+		 * doesn't separate them out.  (And in fairness, neither
+		 * does the net80211 crypto code.)
+		 */
+		if (wk->wk_keylen > max_keylen)
+			wk->wk_keylen = max_keylen;
+
 		for (i = 0; i < IEEE80211_TID_SIZE; i++)
 			wk->wk_keyrsc[i] = ik.ik_keyrsc;
 		wk->wk_keytsc = 0;			/* new key, reset */
 		memset(wk->wk_key, 0, sizeof(wk->wk_key));
+		/*
+		 * Copy the key and any tx/rx MIC that is present.
+		 *
+		 * For TKIP w/ MIC the ik_keylen being passed in
+		 * includes tx/rx MIC and this memcpy() copies everything
+		 * including the tx/rx MIC blob that may be at the
+		 * end of the key.  However, wk->wk_keylen needs to be
+		 * the actual key length.
+		 */
 		memcpy(wk->wk_key, ik.ik_keydata, ik.ik_keylen);
 		IEEE80211_ADDR_COPY(wk->wk_macaddr,
 		    ni != NULL ?  ni->ni_macaddr : ik.ik_macaddr);
