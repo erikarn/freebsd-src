@@ -883,3 +883,20 @@ ieee80211_crypto_set_deftxkey(struct ieee80211vap *vap, ieee80211_keyix kid)
 
 	vap->iv_update_deftxkey(vap, kid);
 }
+
+/*
+ * Return the maximum key (not MIC or IV) size for the given cipher.
+ *
+ * Returns 0 if the cipher isn't defined/loaded.
+ */
+int
+ieee80211_crypto_get_max_keylen(int cipher)
+{
+	const struct ieee80211_cipher *cip;
+
+	cip = ciphers[cipher];
+	if (cip == NULL)
+		return 0;
+
+	return cip->ic_max_keylen;
+}

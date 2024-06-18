@@ -210,6 +210,7 @@ struct ieee80211_cipher {
 	u_int	ic_header;		/* size of privacy header (bytes) */
 	u_int	ic_trailer;		/* size of privacy trailer (bytes) */
 	u_int	ic_miclen;		/* size of mic trailer (bytes) */
+	u_int	ic_max_keylen;		/* maximum key length (bytes) */
 	void*	(*ic_attach)(struct ieee80211vap *, struct ieee80211_key *);
 	void	(*ic_detach)(struct ieee80211_key *);
 	int	(*ic_setkey)(struct ieee80211_key *);
@@ -265,6 +266,8 @@ ieee80211_crypto_resetkey(struct ieee80211vap *vap,
 	k->wk_keyix = k->wk_rxkeyix = ix;
 	k->wk_flags = IEEE80211_KEY_XMIT | IEEE80211_KEY_RECV;
 }
+
+int	ieee80211_crypto_get_max_keylen(int cipher);
 
 /*
  * Crypt-related notification methods.

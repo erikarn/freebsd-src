@@ -76,6 +76,7 @@ static const struct ieee80211_cipher ccmp = {
 			  IEEE80211_WEP_EXTIVLEN,
 	.ic_trailer	= IEEE80211_WEP_MICLEN,
 	.ic_miclen	= 0,
+	.ic_max_keylen	= 128 / NBBY,
 	.ic_attach	= ccmp_attach,
 	.ic_detach	= ccmp_detach,
 	.ic_setkey	= ccmp_setkey,
