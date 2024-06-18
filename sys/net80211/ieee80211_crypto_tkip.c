@@ -67,6 +67,7 @@ static const struct ieee80211_cipher tkip  = {
 			  IEEE80211_WEP_EXTIVLEN,
 	.ic_trailer	= IEEE80211_WEP_CRCLEN,
 	.ic_miclen	= IEEE80211_WEP_MICLEN,
+	.ic_max_keylen	= 128 / NBBY,
 	.ic_attach	= tkip_attach,
 	.ic_detach	= tkip_detach,
 	.ic_setkey	= tkip_setkey,

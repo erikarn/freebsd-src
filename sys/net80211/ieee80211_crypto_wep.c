@@ -62,6 +62,7 @@ static const struct ieee80211_cipher wep = {
 	.ic_header	= IEEE80211_WEP_IVLEN + IEEE80211_WEP_KIDLEN,
 	.ic_trailer	= IEEE80211_WEP_CRCLEN,
 	.ic_miclen	= 0,
+	.ic_max_keylen	= 108 / NBBY,
 	.ic_attach	= wep_attach,
 	.ic_detach	= wep_detach,
 	.ic_setkey	= wep_setkey,
