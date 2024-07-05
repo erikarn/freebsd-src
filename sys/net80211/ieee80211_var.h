@@ -826,6 +826,8 @@ char	ieee80211_channel_type_char(const struct ieee80211_channel *c);
 
 bool	ieee80211_is_key_global(const struct ieee80211vap *vap,
 	    const struct ieee80211_key *key);
+bool	ieee80211_is_key_igtk(const struct ieee80211vap *vap,
+	    const struct ieee80211_key *key);
 bool	ieee80211_is_key_unicast(const struct ieee80211vap *vap,
 	    const struct ieee80211_key *key);
 
