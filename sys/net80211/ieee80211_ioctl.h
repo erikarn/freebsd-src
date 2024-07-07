@@ -715,6 +715,10 @@ struct ieee80211req {
 #define	IEEE80211_IOC_LDPC		114	/* LDPC Tx/RX (on, off) */
 #define	IEEE80211_IOC_UAPSD		115	/* UAPSD (on, off) */
 #define	IEEE80211_IOC_UAPSD_INFO	116	/* UAPSD (SP, per-AC enable) */
+#define	IEEE80211_IOC_MFP		117	/* MFP (off, optional, required) */
+#define		IEEE80211_MFP_DISABLED		0
+#define		IEEE80211_MFP_OPTIONAL		1
+#define		IEEE80211_MFP_REQUIRED		2
 
 /* VHT */
 #define	IEEE80211_IOC_VHTCONF		130	/* VHT config (off, on; widths) */

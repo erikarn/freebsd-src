@@ -1166,6 +1166,19 @@ ieee80211_ioctl_get80211(struct ieee80211vap *vap, u_long cmd,
 		if (vap->iv_flags_ext & IEEE80211_FEXT_UAPSD)
 			ireq->i_val = 1;
 		break;
+	case IEEE80211_IOC_MFP:
+		switch (vap->iv_mfp_cfg) {
+		case IEEE80211_MFP_PROTMODE_DISABLED:
+			ireq->i_val = IEEE80211_MFP_DISABLED;
+			break;
+		case IEEE80211_MFP_PROTMODE_OPTIONAL:
+			ireq->i_val = IEEE80211_MFP_OPTIONAL;
+			break;
+		case IEEE80211_MFP_PROTMODE_REQUIRED:
+			ireq->i_val = IEEE80211_MFP_REQUIRED;
+			break;
+	}
+	break;
 	case IEEE80211_IOC_VHTCONF:
 		ireq->i_val = vap->iv_vht_flags & IEEE80211_FVHT_MASK;
 		break;
@@ -3508,6 +3521,24 @@ ieee80211_ioctl_set80211(struct ieee80211vap *vap, u_long cmd, struct ieee80211r
 			vap->iv_flags_ext |= IEEE80211_FEXT_UAPSD;
 		else
 			return EINVAL;
+		break;
+	case IEEE80211_IOC_MFP:
+		if ((vap->iv_ic->ic_caps & IEEE80211_C_MFP) == 0)
+			return EOPNOTSUPP;
+		if_printf(vap->iv_ifp, "%s: MFP: set %d\n", __func__, ireq->i_val);
+		switch (ireq->i_val) {
+		case IEEE80211_MFP_DISABLED:
+			vap->iv_mfp_cfg = IEEE80211_MFP_PROTMODE_DISABLED;
+			break;
+		case IEEE80211_MFP_OPTIONAL:
+			vap->iv_mfp_cfg = IEEE80211_MFP_PROTMODE_OPTIONAL;
+			break;
+		case IEEE80211_MFP_REQUIRED:
+			vap->iv_mfp_cfg = IEEE80211_MFP_PROTMODE_REQUIRED;
+			break;
+		default:
+			return EINVAL;
+		}
 		break;
 
 	/* VHT */
