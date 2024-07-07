@@ -1269,6 +1269,7 @@ wpa_driver_bsd_associate(void *priv, struct wpa_driver_associate_params *params)
 	u32 mode;
 	int ret = 0;
 	const u8 *wpa_ie, *rsn_ie;
+	int value = 0;
 
 	wpa_printf(MSG_DEBUG,
 		"%s: ssid '%.*s' wpa ie len %u pairwise %u group %u key mgmt %u"
@@ -1317,6 +1318,25 @@ wpa_driver_bsd_associate(void *priv, struct wpa_driver_associate_params *params)
 		ret = -1;
 	if (wpa_driver_bsd_set_auth_alg(drv, params->auth_alg) < 0)
 		ret = -1;
+
+	/* XXX TODO: only if IEEE80211_IOC_MFP is defined? */
+	switch (params->mgmt_frame_protection) {
+	case NO_MGMT_FRAME_PROTECTION:
+		value = IEEE80211_MFP_DISABLED;
+		break;
+	case MGMT_FRAME_PROTECTION_OPTIONAL:
+		value = IEEE80211_MFP_OPTIONAL;
+		break;
+	case MGMT_FRAME_PROTECTION_REQUIRED:
+		value = IEEE80211_MFP_REQUIRED;
+		break;
+	}
+
+	/* XXX TODO: only make this a perm failure if the request is optional/required? */
+	if (set80211param(priv, IEEE80211_IOC_MFP, value)) {
+		wpa_printf(MSG_INFO,
+		    "Unable to set MFP configuration to %d", value);
+	}
 
 	if (params->wpa_ie_len) {
 		rsn_ie = get_ie(params->wpa_ie, params->wpa_ie_len,
