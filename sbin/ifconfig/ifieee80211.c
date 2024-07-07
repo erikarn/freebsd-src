@@ -4985,6 +4985,20 @@ ieee80211_status(if_ctx *ctx)
 		}
 	}
 
+	if (get80211val(ctx, IEEE80211_IOC_MFP, &val) != -1) {
+		switch (val) {
+		case IEEE80211_MFP_DISABLED:
+			LINE_CHECK("mfp DISABLED");
+			break;
+		case IEEE80211_MFP_OPTIONAL:
+			LINE_CHECK("mfp OPTIONAL");
+			break;
+		case IEEE80211_MFP_REQUIRED:
+			LINE_CHECK("mfp REQUIRED");
+			break;
+		}
+	}
+
 	if (wpa || verbose) {
 		if (get80211val(ctx, IEEE80211_IOC_WPS, &val) != -1) {
 			if (val)
