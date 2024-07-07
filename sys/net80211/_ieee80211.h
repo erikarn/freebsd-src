@@ -487,7 +487,7 @@ struct ieee80211_mimo_info {
 #define	IEEE80211_C_SWSLEEP	0x00080000	/* CAPABILITY: do sleep here */
 #define	IEEE80211_C_SWAMSDUTX	0x00100000	/* CAPABILITY: software A-MSDU TX */
 #define	IEEE80211_C_UAPSD	0x00200000	/* CAPABILITY: U-APSD */
-/* 0x7c0000 available */
+#define	IEEE80211_C_MFP		0x00400000	/* CAPABILITY: MFP */
 #define	IEEE80211_C_WPA1	0x00800000	/* CAPABILITY: WPA1 avail */
 #define	IEEE80211_C_WPA2	0x01000000	/* CAPABILITY: WPA2 avail */
 #define	IEEE80211_C_WPA		0x01800000	/* CAPABILITY: WPA1+WPA2 avail*/
@@ -649,6 +649,12 @@ struct ieee80211_rx_stats {
 
 struct ieee80211_rx_params {
 	struct ieee80211_rx_stats params;
+};
+
+enum ieee80211_mfp_mode {
+	IEEE80211_MFP_PROTMODE_DISABLED = 0,
+	IEEE80211_MFP_PROTMODE_OPTIONAL = 1,
+	IEEE80211_MFP_PROTMODE_REQUIRED = 2,
 };
 
 #endif /* _NET80211__IEEE80211_H_ */

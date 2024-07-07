@@ -588,6 +588,7 @@ ieee80211_vap_setup(struct ieee80211com *ic, struct ieee80211vap *vap,
 
 	vap->iv_opmode = opmode;
 	vap->iv_caps |= ieee80211_opcap[opmode];
+	vap->iv_mfp_cfg = IEEE80211_MFP_PROTMODE_DISABLED;
 	IEEE80211_ADDR_COPY(vap->iv_myaddr, ic->ic_macaddr);
 	switch (opmode) {
 	case IEEE80211_M_WDS:

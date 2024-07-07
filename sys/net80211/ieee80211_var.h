@@ -611,6 +611,9 @@ struct ieee80211vap {
 	/* per-vap U-APSD state */
 	uint8_t			iv_uapsdinfo;	/* sta mode QoS Info flags */
 
+	/* per-VAP MFP configuration */
+	enum ieee80211_mfp_mode iv_mfp_cfg;
+
 	/* Optional transmit/receive histogram statistics */
 	struct ieee80211_rx_histogram	*rx_histogram;
 	struct ieee80211_tx_histogram	*tx_histogram;
