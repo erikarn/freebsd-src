@@ -126,6 +126,7 @@
 #define	IEEE80211_NODE_VHT	0x100000	/* VHT enabled */
 #define	IEEE80211_NODE_LDPC	0x200000	/* LDPC enabled */
 #define	IEEE80211_NODE_UAPSD	0x400000	/* UAPSD enabled */
+#define	IEEE80211_NODE_MFP	0x800000	/* MFP enabled */
 #endif
 
 /* XXX should also figure out where to put these for k/u-space sharing. */
@@ -2693,6 +2694,8 @@ getflags(int flags)
 		*cp++ = 'U';
 	if (flags & IEEE80211_NODE_LDPC)
 		*cp++ = 'L';
+	if (flags & IEEE80211_NODE_MFP)
+		*cp++ = 'F';
 	*cp = '\0';
 	return flagstring;
 }
