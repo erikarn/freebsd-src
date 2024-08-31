@@ -145,6 +145,7 @@ struct ieee80211_node {
 #define	IEEE80211_NODE_VHT	0x100000	/* VHT enabled */
 #define	IEEE80211_NODE_LDPC	0x200000	/* LDPC enabled */
 #define	IEEE80211_NODE_UAPSD	0x400000	/* U-APSD power save enabled */
+#define	IEEE80211_NODE_MFP	0x800000	/* MFP enabled */
 	uint16_t		ni_associd;	/* association ID */
 	uint16_t		ni_vlan;	/* vlan tag */
 	uint16_t		ni_txpower;	/* current transmit power */
