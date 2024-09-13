@@ -185,11 +185,34 @@ rtwn_key_set_cb0(struct rtwn_softc *sc, const struct ieee80211_key *k)
 	uint8_t algo, keyid;
 	int i, error;
 
+
+	/*
+	 * TODO: what about IGTK keys (4, 5) ? Would they allocated
+	 * as "real" keycache entries?
+	*/
+
+	/*
+	 * TODO: I likely need to clean up by introducing
+	 * "are these WEP group keys" and "are these IGTK group keys"
+	 * inline functions and use them here, not the wk_keyix thing).
+	*/
+
 	if (sc->sc_hwcrypto == RTWN_CRYPTO_FULL &&
-	    k->wk_keyix < IEEE80211_WEP_NKID)
+	    k->wk_keyix < IEEE80211_WEP_NKID) {
 		keyid = k->wk_keyix;
-	else
+	} else if (sc->sc_hwcrypto == RTWN_CRYPTO_FULL &&
+	    k->wk_flags & IEEE80211_KEY_GROUP) {
+		keyid = k->wk_keyix;
+	} else if (sc->sc_hwcrypto == RTWN_CRYPTO_FULL &&
+	    (k->wk_flags & (IEEE80211_KEY_GROUP | IEEE80211_KEY_IGTK)) &&
+	    (k->wk_keyix == 4 || k->wk_keyix == 5)) {
+		device_printf(sc->sc_dev, "%s: got group key idx 4/5? (%d) (flags=0x%08x)\n",
+		    __func__, k->wk_keyix, k->wk_flags);
 		keyid = 0;
+	} else {
+		keyid = 0;
+	}
+
 
 	/* Map net80211 cipher to HW crypto algorithm. */
 	switch (k->wk_cipher->ic_cipher) {

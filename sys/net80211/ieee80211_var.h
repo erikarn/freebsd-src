@@ -509,7 +509,7 @@ struct ieee80211vap {
 	/* Key management */
 	uint16_t		iv_max_keyix;	/* max h/w key index */
 	ieee80211_keyix		iv_def_txkey;	/* default/group tx key index */
-	struct ieee80211_key	iv_nw_keys[IEEE80211_WEP_NKID];
+	struct ieee80211_key	iv_nw_keys[IEEE80211_MAX_NKID];
 	int			(*iv_key_alloc)(struct ieee80211vap *,
 				    struct ieee80211_key *,
 				    ieee80211_keyix *, ieee80211_keyix *);

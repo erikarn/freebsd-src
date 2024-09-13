@@ -604,7 +604,7 @@ _db_show_vap(const struct ieee80211vap *vap, int showmesh, int showprocs)
 	db_printf("\tmax_keyix %u", vap->iv_max_keyix);
 	db_printf(" def_txkey %d", vap->iv_def_txkey);
 	db_printf("\n");
-	for (i = 0; i < IEEE80211_WEP_NKID; i++)
+	for (i = 0; i < IEEE80211_MAX_NKID; i++)
 		_db_show_key("\tnw_keys[%u]", i, &vap->iv_nw_keys[i]);
 
 	db_printf("\tauth %p(%s)", vap->iv_auth, vap->iv_auth->ia_name);

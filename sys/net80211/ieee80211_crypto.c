@@ -41,6 +41,7 @@
 
 #include <net/if.h>
 #include <net/if_media.h>
+#include <net/if_var.h>			/* ic_printf */
 #include <net/ethernet.h>		/* XXX ETHER_HDR_LEN */
 
 #include <net80211/ieee80211_var.h>
@@ -231,9 +232,11 @@ ieee80211_crypto_vattach(struct ieee80211vap *vap)
 	/* NB: we assume everything is pre-zero'd */
 	vap->iv_max_keyix = IEEE80211_WEP_NKID;
 	vap->iv_def_txkey = IEEE80211_KEYIX_NONE;
-	for (i = 0; i < IEEE80211_WEP_NKID; i++)
+
+	for (i = 0; i < IEEE80211_MAX_NKID; i++)
 		ieee80211_crypto_resetkey(vap, &vap->iv_nw_keys[i],
 			IEEE80211_KEYIX_NONE);
+
 	/*
 	 * Initialize the driver key support routines to noop entries.
 	 * This is useful especially for the cipher test modules.
@@ -546,7 +549,7 @@ ieee80211_crypto_delglobalkeys(struct ieee80211vap *vap)
 	int i;
 
 	ieee80211_key_update_begin(vap);
-	for (i = 0; i < IEEE80211_WEP_NKID; i++)
+	for (i = 0; i < IEEE80211_MAX_NKID; i++)
 		(void) _ieee80211_crypto_delkey(vap, &vap->iv_nw_keys[i]);
 	ieee80211_key_update_end(vap);
 }
@@ -613,6 +616,28 @@ ieee80211_crypto_get_key_wepidx(const struct ieee80211vap *vap,
 }
 
 /*
+ * Return index if the key is an IGTK key (4..5); -1 otherwise.
+ *
+ * This is different to "get_keyid" which defaults to returning
+ * 0 for unicast keys; it assumes that it won't be used for WEP.
+ */
+int
+ieee80211_crypto_get_key_igtk_idx(const struct ieee80211vap *vap,
+    const struct ieee80211_key *k)
+{
+	if (ieee80211_is_key_igtk(vap, k)) {
+		/* XXX TODO: i hate this */
+		return (k - vap->iv_nw_keys);
+	}
+
+	return (-1);
+}
+
+/*
+ * Return the group or unicast key.
+ *
+ * Don't call this for IGTK keyx!
+ *
  * Note: only supports a single unicast key (0).
  */
 uint8_t
@@ -620,6 +645,16 @@ ieee80211_crypto_get_keyid(struct ieee80211vap *vap, struct ieee80211_key *k)
 {
 	if (ieee80211_is_key_global(vap, k)) {
 		return (k - vap->iv_nw_keys);
+	}
+
+	/*
+	 * TODO: I wish this function could return an error,
+	 * but then I'd have to audit all the places that called it
+	 * and make sure THEY can handle the error!
+	 */
+	if (ieee80211_is_key_igtk(vap, k)) {
+		if_printf(vap->iv_ifp, "%s: IGTK key passed in! Invalid!\n",
+		    __func__);
 	}
 
 	return (0);
@@ -857,11 +892,16 @@ ieee80211_crypto_reload_keys(struct ieee80211com *ic)
 	TAILQ_FOREACH(vap, &ic->ic_vaps, iv_next) {
 		if (vap->iv_state != IEEE80211_S_RUN)
 			continue;
+
+		/* Global/WEP keys */
 		for (i = 0; i < IEEE80211_WEP_NKID; i++) {
 			const struct ieee80211_key *k = &vap->iv_nw_keys[i];
 			if (k->wk_flags & IEEE80211_KEY_DEVKEY)
 				dev_key_set(vap, k);
 		}
+
+		/* TODO: do the two iGTK keys too if the driver supports it? */
+		/* (The drivers will need to be made aware of the other two KIDs and ignore them if needed..) */
 	}
 	/*
 	 * Unicast keys.

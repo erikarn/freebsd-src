@@ -91,6 +91,7 @@ struct ieee80211_key {
 #define	IEEE80211_KEY_NOIVMGT	0x00008000	/* don't insert IV/MIC for mgmt */
 #define	IEEE80211_KEY_NOMIC	0x00010000	/* don't insert MIC for !mgmt */
 #define	IEEE80211_KEY_NOMICMGT	0x00020000	/* don't insert MIC for mgmt */
+#define	IEEE80211_KEY_IGTK	0x00040000	/* key is used for IGTK */
 
 	ieee80211_keyix	wk_keyix;	/* h/w key index */
 	ieee80211_keyix	wk_rxkeyix;	/* optional h/w rx key index */
@@ -106,7 +107,7 @@ struct ieee80211_key {
 };
 #define	IEEE80211_KEY_COMMON 		/* common flags passed in by apps */\
 	(IEEE80211_KEY_XMIT | IEEE80211_KEY_RECV | IEEE80211_KEY_GROUP | \
-	 IEEE80211_KEY_NOREPLAY)
+	 IEEE80211_KEY_NOREPLAY | IEEE80211_KEY_IGTK)
 
 #define	IEEE80211_KEY_SWCRYPT \
 	(IEEE80211_KEY_SWENCRYPT | IEEE80211_KEY_SWDECRYPT)
@@ -230,6 +231,8 @@ void	ieee80211_crypto_unregister(const struct ieee80211_cipher *);
 int	ieee80211_crypto_available(u_int cipher);
 
 int	ieee80211_crypto_get_key_wepidx(const struct ieee80211vap *,
+	    const struct ieee80211_key *k);
+int	ieee80211_crypto_get_key_igtk_idx(const struct ieee80211vap *,
 	    const struct ieee80211_key *k);
 uint8_t	ieee80211_crypto_get_keyid(struct ieee80211vap *vap,
 		struct ieee80211_key *k);
