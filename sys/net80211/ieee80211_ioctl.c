@@ -93,7 +93,7 @@ ieee80211_ioctl_getkey(u_long cmd, struct ieee80211vap *vap,
 			return ENOENT;
 		wk = &ni->ni_ucastkey;
 	} else {
-		if (kid >= IEEE80211_WEP_NKID)
+		if (kid >= IEEE80211_MAX_NKID)
 			return EINVAL;
 		wk = &vap->iv_nw_keys[kid];
 		IEEE80211_ADDR_COPY(&ik.ik_macaddr, vap->iv_bss->ni_macaddr);
@@ -1177,8 +1177,8 @@ ieee80211_ioctl_get80211(struct ieee80211vap *vap, u_long cmd,
 		case IEEE80211_MFP_PROTMODE_REQUIRED:
 			ireq->i_val = IEEE80211_MFP_REQUIRED;
 			break;
-	}
-	break;
+		}
+		break;
 	case IEEE80211_IOC_VHTCONF:
 		ireq->i_val = vap->iv_vht_flags & IEEE80211_FVHT_MASK;
 		break;
@@ -1227,7 +1227,7 @@ ieee80211_ioctl_setkey(struct ieee80211vap *vap, struct ieee80211req *ireq)
 		}
 		wk = &ni->ni_ucastkey;
 	} else {
-		if (kid >= IEEE80211_WEP_NKID)
+		if (kid >= IEEE80211_MAX_NKID)
 			return EINVAL;
 		wk = &vap->iv_nw_keys[kid];
 		/*
@@ -1327,7 +1327,7 @@ ieee80211_ioctl_delkey(struct ieee80211vap *vap, struct ieee80211req *ireq)
 		ieee80211_node_delucastkey(ni);
 		ieee80211_free_node(ni);
 	} else {
-		if (kid >= IEEE80211_WEP_NKID)
+		if (kid >= IEEE80211_MAX_NKID)
 			return EINVAL;
 		/* XXX error return */
 		ieee80211_crypto_delkey(vap, &vap->iv_nw_keys[kid]);

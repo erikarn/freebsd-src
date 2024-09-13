@@ -1472,7 +1472,9 @@ enum {
 #define	IEEE80211_WEP_TOTLEN		(IEEE80211_WEP_IVLEN + \
 					 IEEE80211_WEP_KIDLEN + \
 					 IEEE80211_WEP_CRCLEN)
-#define	IEEE80211_WEP_NKID		4	/* number of key ids */
+#define	IEEE80211_WEP_NKID		4	/* number of WEP/global key ids */
+#define	IEEE80211_MAX_NKID		6	/* number of WEP/global/iGTK key ids */
+#define	IEEE80211_IGTK_NKID		2	/* number of iGTK key IDs */
 
 /*
  * 802.11i defines an extended IV for use with non-WEP ciphers.

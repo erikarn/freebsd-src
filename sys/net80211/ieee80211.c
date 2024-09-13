@@ -2693,6 +2693,7 @@ bool
 ieee80211_is_key_global(const struct ieee80211vap *vap,
     const struct ieee80211_key *key)
 {
+
 	return (&vap->iv_nw_keys[0] <= key &&
 	    key < &vap->iv_nw_keys[IEEE80211_WEP_NKID]);
 }
@@ -2705,7 +2706,9 @@ bool
 ieee80211_is_key_igtk(const struct ieee80211vap *vap,
     const struct ieee80211_key *key)
 {
-	return false;
+
+	/* TODO: don't hard-code these two key indexes? */
+	return (key == &vap->iv_nw_keys[4] || key == &vap->iv_nw_keys[5]);
 }
 
 /*
@@ -2715,10 +2718,7 @@ bool
 ieee80211_is_key_unicast(const struct ieee80211vap *vap,
     const struct ieee80211_key *key)
 {
-	/*
-	 * This is a short-cut for now; eventually we will need
-	 * to support multiple unicast keys, IGTK, etc) so we
-	 * will absolutely need to fix the key flags.
-	 */
-	return (!ieee80211_is_key_global(vap, key));
+
+	return (!(ieee80211_is_key_global(vap, key)
+	    || ieee80211_is_key_igtk(vap, key)));
 }
