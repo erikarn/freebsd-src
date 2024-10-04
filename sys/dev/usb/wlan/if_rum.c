@@ -1512,7 +1512,7 @@ rum_tx_mgt(struct rum_softc *sc, struct mbuf *m0, struct ieee80211_node *ni)
 			return (ENOENT);
 
 		if ((k->wk_flags & IEEE80211_KEY_SWCRYPT) &&
-		    !k->wk_cipher->ic_encap(k, m0))
+		    !k->wk_cipher->ic_encap(k, ni, m0))
 			return (ENOBUFS);
 
 		wh = mtod(m0, struct ieee80211_frame *);
@@ -1658,7 +1658,7 @@ rum_tx_data(struct rum_softc *sc, struct mbuf *m0, struct ieee80211_node *ni)
 			return (ENOENT);
 		}
 		if ((k->wk_flags & IEEE80211_KEY_SWCRYPT) &&
-		    !k->wk_cipher->ic_encap(k, m0)) {
+		    !k->wk_cipher->ic_encap(k, ni, m0)) {
 			m_freem(m0);
 			return (ENOBUFS);
 		}

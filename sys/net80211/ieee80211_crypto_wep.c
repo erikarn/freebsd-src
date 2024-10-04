@@ -51,8 +51,10 @@ static	void *wep_attach(struct ieee80211vap *, struct ieee80211_key *);
 static	void wep_detach(struct ieee80211_key *);
 static	int wep_setkey(struct ieee80211_key *);
 static	void wep_setiv(struct ieee80211_key *, uint8_t *);
-static	int wep_encap(struct ieee80211_key *, struct mbuf *);
-static	int wep_decap(struct ieee80211_key *, struct mbuf *, int);
+static	int wep_encap(struct ieee80211_key *, struct ieee80211_node *,
+	    struct mbuf *);
+static	int wep_decap(struct ieee80211_key *, struct ieee80211_node *,
+	    struct mbuf *, int);
 static	int wep_enmic(struct ieee80211_key *, struct mbuf *, int);
 static	int wep_demic(struct ieee80211_key *, struct mbuf *, int);
 
@@ -177,7 +179,7 @@ wep_setiv(struct ieee80211_key *k, uint8_t *ivp)
  * Add privacy headers appropriate for the specified key.
  */
 static int
-wep_encap(struct ieee80211_key *k, struct mbuf *m)
+wep_encap(struct ieee80211_key *k, struct ieee80211_node *ni, struct mbuf *m)
 {
 	struct wep_ctx *ctx = k->wk_private;
 	struct ieee80211com *ic = ctx->wc_ic;
@@ -236,7 +238,8 @@ wep_enmic(struct ieee80211_key *k, struct mbuf *m, int force)
  * the specified key.
  */
 static int
-wep_decap(struct ieee80211_key *k, struct mbuf *m, int hdrlen)
+wep_decap(struct ieee80211_key *k, struct ieee80211_node *ni, struct mbuf *m,
+    int hdrlen)
 {
 	struct wep_ctx *ctx = k->wk_private;
 	struct ieee80211vap *vap = ctx->wc_vap;

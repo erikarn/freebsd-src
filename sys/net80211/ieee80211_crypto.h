@@ -216,8 +216,8 @@ struct ieee80211_cipher {
 	void	(*ic_detach)(struct ieee80211_key *);
 	int	(*ic_setkey)(struct ieee80211_key *);
 	void	(*ic_setiv)(struct ieee80211_key *, uint8_t *);
-	int	(*ic_encap)(struct ieee80211_key *, struct mbuf *);
-	int	(*ic_decap)(struct ieee80211_key *, struct mbuf *, int);
+	int	(*ic_encap)(struct ieee80211_key *, struct ieee80211_node *, struct mbuf *);
+	int	(*ic_decap)(struct ieee80211_key *, struct ieee80211_node *, struct mbuf *, int);
 	int	(*ic_enmic)(struct ieee80211_key *, struct mbuf *, int);
 	int	(*ic_demic)(struct ieee80211_key *, struct mbuf *, int);
 };
@@ -231,6 +231,8 @@ void	ieee80211_crypto_unregister(const struct ieee80211_cipher *);
 int	ieee80211_crypto_available(u_int cipher);
 
 int	ieee80211_crypto_get_key_wepidx(const struct ieee80211vap *,
+	    const struct ieee80211_key *k);
+int	ieee80211_crypto_get_key_igtk_idx(const struct ieee80211vap *,
 	    const struct ieee80211_key *k);
 int	ieee80211_crypto_get_key_igtk_idx(const struct ieee80211vap *,
 	    const struct ieee80211_key *k);

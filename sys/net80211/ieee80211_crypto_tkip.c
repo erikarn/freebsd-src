@@ -55,9 +55,11 @@ static	void *tkip_attach(struct ieee80211vap *, struct ieee80211_key *);
 static	void tkip_detach(struct ieee80211_key *);
 static	int tkip_setkey(struct ieee80211_key *);
 static	void tkip_setiv(struct ieee80211_key *, uint8_t *);
-static	int tkip_encap(struct ieee80211_key *, struct mbuf *);
+static	int tkip_encap(struct ieee80211_key *, struct ieee80211_node *,
+	    struct mbuf *);
 static	int tkip_enmic(struct ieee80211_key *, struct mbuf *, int);
-static	int tkip_decap(struct ieee80211_key *, struct mbuf *, int);
+static	int tkip_decap(struct ieee80211_key *, struct ieee80211_node *,
+	    struct mbuf *, int);
 static	int tkip_demic(struct ieee80211_key *, struct mbuf *, int);
 
 static const struct ieee80211_cipher tkip  = {
@@ -173,7 +175,7 @@ tkip_setiv(struct ieee80211_key *k, uint8_t *ivp)
  * Add privacy headers and do any s/w encryption required.
  */
 static int
-tkip_encap(struct ieee80211_key *k, struct mbuf *m)
+tkip_encap(struct ieee80211_key *k, struct ieee80211_node *ni, struct mbuf *m)
 {
 	struct tkip_ctx *ctx = k->wk_private;
 	struct ieee80211vap *vap = ctx->tc_vap;
@@ -285,7 +287,8 @@ READ_6(uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3, uint8_t b4, uint8_t b5)
  * the specified key.
  */
 static int
-tkip_decap(struct ieee80211_key *k, struct mbuf *m, int hdrlen)
+tkip_decap(struct ieee80211_key *k, struct ieee80211_node *ni, struct mbuf *m,
+    int hdrlen)
 {
 	const struct ieee80211_rx_stats *rxs;
 	struct tkip_ctx *ctx = k->wk_private;

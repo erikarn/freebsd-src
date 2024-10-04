@@ -706,7 +706,7 @@ ieee80211_crypto_encap(struct ieee80211_node *ni, struct mbuf *m)
 
 	if ((k = ieee80211_crypto_get_txkey(ni, m)) != NULL) {
 		cip = k->wk_cipher;
-		return (cip->ic_encap(k, m) ? k : NULL);
+		return (cip->ic_encap(k, ni, m) ? k : NULL);
 	}
 
 	return NULL;
@@ -795,7 +795,7 @@ ieee80211_crypto_decap(struct ieee80211_node *ni, struct mbuf *m, int hdrlen,
 	 * If we fail then don't return the key - return NULL
 	 * and an error.
 	 */
-	if (cip->ic_decap(k, m, hdrlen)) {
+	if (cip->ic_decap(k, ni, m, hdrlen)) {
 		/* success */
 		*key = k;
 		return (1);
