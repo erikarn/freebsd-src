@@ -55,7 +55,7 @@
 
 #include <dev/rtwn/rtl8192c/usb/r92cu_reg.h>
 
-static const struct usb_config rtwn_config_common[RTWN_N_TRANSFER] = {
+static const struct usb_config rtwn_config_common[RTWN_BULK_EP_COUNT] = {
 	[RTWN_BULK_RX] = {
 		.type = UE_BULK,
 		.endpoint = UE_ADDR_ANY,
@@ -76,7 +76,7 @@ static const struct usb_config rtwn_config_common[RTWN_N_TRANSFER] = {
 			.pipe_bof = 1,
 			.force_short_xfer = 1,
 		},
-		.callback = rtwn_bulk_tx_callback,
+		.callback = rtwn_bulk_tx_callback_be,
 		.timeout = RTWN_TX_TIMEOUT,	/* ms */
 	},
 	[RTWN_BULK_TX_BK] = {
@@ -89,7 +89,7 @@ static const struct usb_config rtwn_config_common[RTWN_N_TRANSFER] = {
 			.pipe_bof = 1,
 			.force_short_xfer = 1,
 		},
-		.callback = rtwn_bulk_tx_callback,
+		.callback = rtwn_bulk_tx_callback_bk,
 		.timeout = RTWN_TX_TIMEOUT,	/* ms */
 	},
 	[RTWN_BULK_TX_VI] = {
@@ -102,7 +102,7 @@ static const struct usb_config rtwn_config_common[RTWN_N_TRANSFER] = {
 			.pipe_bof = 1,
 			.force_short_xfer = 1
 		},
-		.callback = rtwn_bulk_tx_callback,
+		.callback = rtwn_bulk_tx_callback_vi,
 		.timeout = RTWN_TX_TIMEOUT,	/* ms */
 	},
 	[RTWN_BULK_TX_VO] = {
@@ -115,7 +115,7 @@ static const struct usb_config rtwn_config_common[RTWN_N_TRANSFER] = {
 			.pipe_bof = 1,
 			.force_short_xfer = 1
 		},
-		.callback = rtwn_bulk_tx_callback,
+		.callback = rtwn_bulk_tx_callback_vo,
 		.timeout = RTWN_TX_TIMEOUT,	/* ms */
 	},
 };
@@ -225,7 +225,7 @@ rtwn_usb_setup_endpoints(struct rtwn_usb_softc *uc)
 	rtwn_config[RTWN_BULK_RX].bufsize =
 	    uc->uc_rx_buf_size * RTWN_USB_RXBUFSZ_UNIT;
 	error = usbd_transfer_setup(uc->uc_udev, &iface_index,
-	    uc->uc_xfer, rtwn_config, RTWN_N_TRANSFER, uc, &sc->sc_mtx);
+	    uc->uc_xfer, rtwn_config, RTWN_BULK_EP_COUNT, uc, &sc->sc_mtx);
 	free(rtwn_config, M_TEMP);
 
 	if (error) {
