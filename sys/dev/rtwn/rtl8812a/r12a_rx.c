@@ -275,31 +275,38 @@ r12a_get_rx_stats(struct rtwn_softc *sc, struct ieee80211_rx_stats *rxs,
 		is5ghz = (physt->cfosho[2] != 0x01);
 
 		/* XXX VHT */
-		if (rate < RTWN_RIDX_HT_MCS(0)) {
+		if (RTWN_RATE_IS_CCK(rate) || RTWN_RATE_IS_OFDM(rate)) {
 			if (is5ghz)
 				rxs->c_phytype = IEEE80211_RX_FP_11A;
 			else
 				rxs->c_phytype = IEEE80211_RX_FP_11G;
-		} else {
+		} else if (RTWN_RATE_IS_HT(rate)) {
 			if (is5ghz)
 				rxs->c_phytype = IEEE80211_RX_FP_11NA;
 			else
 				rxs->c_phytype = IEEE80211_RX_FP_11NG;
+		} else if (RTWN_RATE_IS_VHT(rate)) {
+				/* XXX TODO: there's no FP_VHT_5GHZ yet */
+				rxs->c_phytype = IEEE80211_RX_FP_11NA;
 		}
 	}
 
 	/* Map HW rate index to 802.11 rate. */
-	if (rate < RTWN_RIDX_HT_MCS(0)) {
+	if (RTWN_RATE_IS_CCK(rate) || RTWN_RATE_IS_OFDM(rate)) {
 		rxs->c_rate = ridx2rate[rate];
 		if (RTWN_RATE_IS_CCK(rate))
 			rxs->c_pktflags |= IEEE80211_RX_F_CCK;
 		else
 			rxs->c_pktflags |= IEEE80211_RX_F_OFDM;
-	} else {	/* MCS0~15. */
-		/* TODO: VHT rates */
+	} else if (RTWN_RATE_IS_HT(rate)) {	/* MCS0~15. */
 		rxs->c_rate =
 		    IEEE80211_RATE_MCS | (rate - RTWN_RIDX_HT_MCS_SHIFT);
 		rxs->c_pktflags |= IEEE80211_RX_F_HT;
+	} else if (RTWN_RATE_IS_VHT(rate)) {
+		/* XXX terrible! */
+		rxs->c_vhtnss = (rate - RTWN_RIDX_VHT_MCS_SHIFT) / 10;
+		rxs->c_rate = (rate - RTWN_RIDX_VHT_MCS_SHIFT) % 10;
+		rxs->c_pktflags |= IEEE80211_RX_F_VHT;
 	}
 
 	/*

@@ -1527,6 +1527,8 @@ rtwn_getradiocaps(struct ieee80211com *ic,
 	uint8_t bands[IEEE80211_MODE_BYTES];
 	int cbw_flags, i;
 
+	device_printf(sc->sc_dev, "%s: called\n", __func__);
+
 	cbw_flags = (ic->ic_htcaps & IEEE80211_HTCAP_CHWIDTH40) ?
 	    NET80211_CBW_FLAG_HT40 : 0;
 
@@ -1540,6 +1542,15 @@ rtwn_getradiocaps(struct ieee80211com *ic,
 	/* XXX workaround add_channel_list() limitations */
 	setbit(bands, IEEE80211_MODE_11A);
 	setbit(bands, IEEE80211_MODE_11NA);
+
+	if (ic->ic_flags_ext & IEEE80211_FEXT_VHT) {
+		device_printf(sc->sc_dev, "%s: enabling VHT channels\n",
+		    __func__);
+		setbit(bands, IEEE80211_MODE_VHT_5GHZ);
+	}
+
+	/* TODO: NET80211_CBW_FLAG_VHT80 */
+
 	for (i = 0; i < nitems(sc->chan_num_5ghz); i++) {
 		if (sc->chan_num_5ghz[i] == 0)
 			continue;

@@ -60,30 +60,10 @@
 #include <dev/rtwn/rtl8812a/r12a_var.h>
 
 static void
-r12a_write_txpower(struct rtwn_softc *sc, int chain,
+r12a_write_txpower_ht(struct rtwn_softc *sc, int chain,
     struct ieee80211_channel *c, uint8_t power[RTWN_RIDX_COUNT])
 {
 
-	if (IEEE80211_IS_CHAN_2GHZ(c)) {
-		/* Write per-CCK rate Tx power. */
-		rtwn_bb_write(sc, R12A_TXAGC_CCK11_1(chain),
-		    SM(R12A_TXAGC_CCK1,  power[RTWN_RIDX_CCK1]) |
-		    SM(R12A_TXAGC_CCK2,  power[RTWN_RIDX_CCK2]) |
-		    SM(R12A_TXAGC_CCK55, power[RTWN_RIDX_CCK55]) |
-		    SM(R12A_TXAGC_CCK11, power[RTWN_RIDX_CCK11]));
-	}
-
-	/* Write per-OFDM rate Tx power. */
-	rtwn_bb_write(sc, R12A_TXAGC_OFDM18_6(chain),
-	    SM(R12A_TXAGC_OFDM06, power[RTWN_RIDX_OFDM6]) |
-	    SM(R12A_TXAGC_OFDM09, power[RTWN_RIDX_OFDM9]) |
-	    SM(R12A_TXAGC_OFDM12, power[RTWN_RIDX_OFDM12]) |
-	    SM(R12A_TXAGC_OFDM18, power[RTWN_RIDX_OFDM18]));
-	rtwn_bb_write(sc, R12A_TXAGC_OFDM54_24(chain),
-	    SM(R12A_TXAGC_OFDM24, power[RTWN_RIDX_OFDM24]) |
-	    SM(R12A_TXAGC_OFDM36, power[RTWN_RIDX_OFDM36]) |
-	    SM(R12A_TXAGC_OFDM48, power[RTWN_RIDX_OFDM48]) |
-	    SM(R12A_TXAGC_OFDM54, power[RTWN_RIDX_OFDM54]));
 	/* Write per-MCS Tx power. */
 	rtwn_bb_write(sc, R12A_TXAGC_MCS3_0(chain),
 	    SM(R12A_TXAGC_MCS0, power[RTWN_RIDX_HT_MCS(0)]) |
@@ -107,8 +87,104 @@ r12a_write_txpower(struct rtwn_softc *sc, int chain,
 		    SM(R12A_TXAGC_MCS14, power[RTWN_RIDX_HT_MCS(14)]) |
 		    SM(R12A_TXAGC_MCS15, power[RTWN_RIDX_HT_MCS(15)]));
 	}
+	/* TODO: MCS 16 -> 24 */
+	/* TODO: MCS 25 -> 31 */
+}
 
-	/* TODO: VHT rates */
+static void
+r12a_write_txpower_vht(struct rtwn_softc *sc, int chain,
+    struct ieee80211_channel *c, uint8_t power[RTWN_RIDX_COUNT])
+{
+
+	/* 1SS, MCS 0..3 */
+	rtwn_bb_write(sc, R12A_TXAGC_NSS1IX3_1IX0(chain),
+	    SM(R12A_TXAGC_NSS1_MCS0, power[RTWN_RIDX_VHT_MCS(0, 0)]) |
+	    SM(R12A_TXAGC_NSS1_MCS1, power[RTWN_RIDX_VHT_MCS(0, 1)]) |
+	    SM(R12A_TXAGC_NSS1_MCS2, power[RTWN_RIDX_VHT_MCS(0, 2)]) |
+	    SM(R12A_TXAGC_NSS1_MCS3, power[RTWN_RIDX_VHT_MCS(0, 3)]));
+
+	/* 1SS, MCS 4..7 */
+	rtwn_bb_write(sc, R12A_TXAGC_NSS1IX7_1IX4(chain),
+	    SM(R12A_TXAGC_NSS1_MCS4, power[RTWN_RIDX_VHT_MCS(0, 4)]) |
+	    SM(R12A_TXAGC_NSS1_MCS5, power[RTWN_RIDX_VHT_MCS(0, 5)]) |
+	    SM(R12A_TXAGC_NSS1_MCS6, power[RTWN_RIDX_VHT_MCS(0, 6)]) |
+	    SM(R12A_TXAGC_NSS1_MCS7, power[RTWN_RIDX_VHT_MCS(0, 7)]));
+
+	/* 1SS, MCS 8,9 ; 2SS MCS0, 1 */
+	if (sc->ntxchains == 1) {
+		rtwn_bb_write(sc, R12A_TXAGC_NSS2IX1_1IX8(chain),
+		    SM(R12A_TXAGC_NSS1_MCS8, power[RTWN_RIDX_VHT_MCS(0, 8)]) |
+		    SM(R12A_TXAGC_NSS1_MCS9, power[RTWN_RIDX_VHT_MCS(0, 9)]) |
+		    SM(R12A_TXAGC_NSS2_MCS0, 0) |
+		    SM(R12A_TXAGC_NSS2_MCS1, 0));
+	} else {
+		rtwn_bb_write(sc, R12A_TXAGC_NSS2IX1_1IX8(chain),
+		    SM(R12A_TXAGC_NSS1_MCS8, power[RTWN_RIDX_VHT_MCS(0, 8)]) |
+		    SM(R12A_TXAGC_NSS1_MCS9, power[RTWN_RIDX_VHT_MCS(0, 9)]) |
+		    SM(R12A_TXAGC_NSS2_MCS0, power[RTWN_RIDX_VHT_MCS(1, 0)]) |
+		    SM(R12A_TXAGC_NSS2_MCS1, power[RTWN_RIDX_VHT_MCS(1, 1)]));
+	}
+
+	/* 2SS MCS 2..5 */
+	if (sc->ntxchains > 1) {
+		rtwn_bb_write(sc, R12A_TXAGC_NSS2IX5_2IX2(chain),
+		    SM(R12A_TXAGC_NSS2_MCS2, power[RTWN_RIDX_VHT_MCS(1, 2)]) |
+		    SM(R12A_TXAGC_NSS2_MCS3, power[RTWN_RIDX_VHT_MCS(1, 3)]) |
+		    SM(R12A_TXAGC_NSS2_MCS4, power[RTWN_RIDX_VHT_MCS(1, 4)]) |
+		    SM(R12A_TXAGC_NSS2_MCS5, power[RTWN_RIDX_VHT_MCS(1, 5)]));
+	}
+
+	/* 2SS MCS 6..9 */
+	if (sc->ntxchains > 1) {
+		rtwn_bb_write(sc, R12A_TXAGC_NSS2IX9_2IX6(chain),
+		    SM(R12A_TXAGC_NSS2_MCS2, power[RTWN_RIDX_VHT_MCS(1, 6)]) |
+		    SM(R12A_TXAGC_NSS2_MCS3, power[RTWN_RIDX_VHT_MCS(1, 7)]) |
+		    SM(R12A_TXAGC_NSS2_MCS4, power[RTWN_RIDX_VHT_MCS(1, 8)]) |
+		    SM(R12A_TXAGC_NSS2_MCS5, power[RTWN_RIDX_VHT_MCS(1, 9)]));
+	}
+}
+
+static void
+r12a_write_txpower_cck(struct rtwn_softc *sc, int chain,
+    struct ieee80211_channel *c, uint8_t power[RTWN_RIDX_COUNT])
+{
+
+	if (IEEE80211_IS_CHAN_2GHZ(c)) {
+		/* Write per-CCK rate Tx power. */
+		rtwn_bb_write(sc, R12A_TXAGC_CCK11_1(chain),
+		    SM(R12A_TXAGC_CCK1,  power[RTWN_RIDX_CCK1]) |
+		    SM(R12A_TXAGC_CCK2,  power[RTWN_RIDX_CCK2]) |
+		    SM(R12A_TXAGC_CCK55, power[RTWN_RIDX_CCK55]) |
+		    SM(R12A_TXAGC_CCK11, power[RTWN_RIDX_CCK11]));
+	}
+}
+
+static void
+r12a_write_txpower_ofdm(struct rtwn_softc *sc, int chain,
+    struct ieee80211_channel *c, uint8_t power[RTWN_RIDX_COUNT])
+{
+
+	/* Write per-OFDM rate Tx power. */
+	rtwn_bb_write(sc, R12A_TXAGC_OFDM18_6(chain),
+	    SM(R12A_TXAGC_OFDM06, power[RTWN_RIDX_OFDM6]) |
+	    SM(R12A_TXAGC_OFDM09, power[RTWN_RIDX_OFDM9]) |
+	    SM(R12A_TXAGC_OFDM12, power[RTWN_RIDX_OFDM12]) |
+	    SM(R12A_TXAGC_OFDM18, power[RTWN_RIDX_OFDM18]));
+	rtwn_bb_write(sc, R12A_TXAGC_OFDM54_24(chain),
+	    SM(R12A_TXAGC_OFDM24, power[RTWN_RIDX_OFDM24]) |
+	    SM(R12A_TXAGC_OFDM36, power[RTWN_RIDX_OFDM36]) |
+	    SM(R12A_TXAGC_OFDM48, power[RTWN_RIDX_OFDM48]) |
+	    SM(R12A_TXAGC_OFDM54, power[RTWN_RIDX_OFDM54]));
+}
+
+static void
+r12a_write_txpower(struct rtwn_softc *sc, int chain,
+    struct ieee80211_channel *c, uint8_t power[RTWN_RIDX_COUNT])
+{
+	r12a_write_txpower_cck(sc, chain, c, power);
+	r12a_write_txpower_ofdm(sc, chain, c, power);
+	r12a_write_txpower_ht(sc, chain, c, power);
+	r12a_write_txpower_vht(sc, chain, c, power);
 }
 
 static int

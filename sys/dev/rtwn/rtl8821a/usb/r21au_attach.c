@@ -154,11 +154,24 @@ r21au_adj_devcaps(struct rtwn_softc *sc)
 	struct ieee80211com *ic = &sc->sc_ic;
 	struct r12a_softc *rs = sc->sc_priv;
 
+	device_printf(sc->sc_dev, "%s: called\n", __func__);
+
 	ic->ic_htcaps |= IEEE80211_HTC_TXLDPC;
 	if (rs->rs_radar != 0)
 		ic->ic_caps |= IEEE80211_C_DFS;
 
-	/* TODO: VHT */
+	/* VHT config */
+	ic->ic_flags_ext |= IEEE80211_FEXT_VHT;
+#if 0
+	ic->ic_vht_conf |= IEEE80211_FVHT_USEVHT40;
+	ic->ic_vht_conf |= IEEE80211_FVHT_USEVHT80;
+#endif
+
+	ic->ic_vht_cap.vht_cap_info = 0x3c001a2;
+	ic->ic_vht_cap.supp_mcs.rx_mcs_map = IEEE80211_VHT_MCS_SUPPORT_0_9;
+	ic->ic_vht_cap.supp_mcs.rx_highest = 0;
+	ic->ic_vht_cap.supp_mcs.tx_mcs_map = IEEE80211_VHT_MCS_SUPPORT_0_9;
+	ic->ic_vht_cap.supp_mcs.tx_highest = 0;
 }
 
 void

@@ -102,20 +102,19 @@ r12a_tx_protection(struct rtwn_softc *sc, struct r12a_tx_desc *txd,
 		break;
 	}
 
-	/* XXX VHT */
 	if (mode == IEEE80211_PROT_CTSONLY ||
 	    mode == IEEE80211_PROT_RTSCTS) {
-
-		/* XXX specifically VHT check and vht mcsrate logic here */
-
 		/*
 		 * Note: this code assumes basic rates for protection for
 		 * both 802.11abg and 802.11n rates.
 		 */
-		if (ridx >= RTWN_RIDX_HT_MCS(0))
+		if (RTWN_RATE_IS_VHT(ridx))
+			rate = rtwn_ctl_vhtrate(ic->ic_rt, ridx);
+		else if (RTWN_RATE_IS_HT(ridx))
 			rate = rtwn_ctl_mcsrate(ic->ic_rt, ridx);
 		else
 			rate = ieee80211_ctl_rate(ic->ic_rt, ridx2rate[ridx]);
+		/* Map basic rate back to ridx */
 		ridx = rate2ridx(IEEE80211_RV(rate));
 
 		txd->txdw4 |= htole32(SM(R12A_TXDW4_RTSRATE, ridx));
@@ -154,6 +153,9 @@ r12a_tx_raid(struct rtwn_softc *sc, struct r12a_tx_desc *txd,
 			break;
 		case IEEE80211_MODE_11NG:
 			mode = IEEE80211_MODE_11G;
+			break;
+		case IEEE80211_MODE_VHT_5GHZ:
+			mode = IEEE80211_MODE_VHT_5GHZ;
 			break;
 		default:
 			device_printf(sc->sc_dev, "unknown mode(1) %d!\n",
@@ -194,8 +196,20 @@ r12a_tx_raid(struct rtwn_softc *sc, struct r12a_tx_desc *txd,
 				raid = R12A_RAID_11BGN_2;
 		}
 		break;
+	case IEEE80211_MODE_VHT_5GHZ:
+		if (sc->ntxchains == 1) {
+			if (IEEE80211_IS_CHAN_VHT80(chan))
+				raid = R12A_RAID_11AC_1_80;
+			else
+				raid = R12A_RAID_11AC_1;
+		} else {
+			if (IEEE80211_IS_CHAN_VHT80(chan))
+				raid = R12A_RAID_11AC_2_80;
+			else
+				raid = R12A_RAID_11AC_2;
+		}
+		break;
 	default:
-		/* TODO: 80 MHz / 11ac */
 		device_printf(sc->sc_dev, "unknown mode(2) %d!\n", mode);
 		return;
 	}
