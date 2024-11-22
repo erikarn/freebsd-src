@@ -87,8 +87,8 @@ r12a_write_txpower_ht(struct rtwn_softc *sc, int chain,
 		    SM(R12A_TXAGC_MCS14, power[RTWN_RIDX_HT_MCS(14)]) |
 		    SM(R12A_TXAGC_MCS15, power[RTWN_RIDX_HT_MCS(15)]));
 	}
-
-	/* TODO: HT MCS 16 -> 31 */
+	/* TODO: MCS 16 -> 24 */
+	/* TODO: MCS 25 -> 31 */
 }
 
 static void
@@ -145,7 +145,6 @@ r12a_write_txpower_vht(struct rtwn_softc *sc, int chain,
 
 	/* TODO: 3SS, 4SS VHT rates */
 }
-
 
 static void
 r12a_write_txpower_cck(struct rtwn_softc *sc, int chain,

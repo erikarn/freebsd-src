@@ -138,6 +138,7 @@ rtwn_tx_data(struct rtwn_softc *sc, struct ieee80211_node *ni,
 	else {
 		if (sc->sc_ratectl == RTWN_RATECTL_NET80211) {
 			/* XXX pass pktlen */
+			/* XXX TODO: need a hack for VHT rates */
 			(void) ieee80211_ratectl_rate(ni, NULL, 0);
 			rate = ni->ni_txrate;
 		} else {

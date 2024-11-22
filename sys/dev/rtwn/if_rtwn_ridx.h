@@ -119,6 +119,16 @@ rtwn_ctl_mcsrate(const struct ieee80211_rate_table *rt, uint8_t ridx)
 	return rt->info[cix].dot11Rate;
 }
 
-/* XXX TODO: VHT version of rtwn_ctl_mcsrate */
+/* VHT version of rtwn_ctl_mcsrate */
+/* XXX TODO: also should move this to net80211 */
+static __inline__ uint8_t
+rtwn_ctl_vhtrate(const struct ieee80211_rate_table *rt, uint8_t ridx)
+{
+	/* Check if we are using VHT MCS rate. */
+	KASSERT(RTWN_RATE_IS_VHT(ridx), ("bad mcs rate index %d", ridx));
+
+	/* TODO: there's no VHT tables, so for now just stick to OFDM12 */
+	return 24;
+}
 
 #endif	/* IF_RTWN_RIDX_H */
