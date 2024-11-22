@@ -239,7 +239,7 @@ r12a_get_txpower(struct rtwn_softc *sc, int chain,
     struct ieee80211_channel *c, uint8_t power[RTWN_RIDX_COUNT])
 {
 	struct r12a_softc *rs = sc->sc_priv;
-	int i, ridx, group, max_mcs;
+	int i, ridx, group, max_mcs, max_vht_mcs;
 
 	/* Determine channel group. */
 	group = r12a_get_power_group(sc, c);
@@ -248,8 +248,8 @@ r12a_get_txpower(struct rtwn_softc *sc, int chain,
 		return;
 	}
 
-	/* TODO: VHT rates. */
 	max_mcs = RTWN_RIDX_HT_MCS(sc->ntxchains * 8 - 1);
+	max_vht_mcs = RTWN_RIDX_VHT_MCS(sc->ntxchains, 9) - 1;
 
 	/* XXX regulatory */
 	/* XXX net80211 regulatory */
@@ -283,9 +283,14 @@ r12a_get_txpower(struct rtwn_softc *sc, int chain,
 				power[ridx] += pwr_diff;
 		}
 	} else {	/* 5GHz */
+		/* OFDM + HT */
 		for (ridx = RTWN_RIDX_OFDM6; ridx <= max_mcs; ridx++)
 			power[ridx] = rs->ht40_tx_pwr_5g[chain][group];
+		/* VHT */
+		for (ridx = RTWN_RIDX_VHT_MCS_SHIFT; ridx <= max_vht_mcs; ridx++)
+			power[ridx] = rs->ht40_tx_pwr_5g[chain][group];
 
+		/* Add power for OFDM rates */
 		for (ridx = RTWN_RIDX_OFDM6; ridx <= RTWN_RIDX_OFDM54; ridx++)
 			power[ridx] += rs->ofdm_tx_pwr_diff_5g[chain][0];
 
@@ -304,9 +309,17 @@ r12a_get_txpower(struct rtwn_softc *sc, int chain,
 			else
 				pwr_diff = rs->bw20_tx_pwr_diff_5g[chain][i];
 
+			/* Adjust HT rates */
 			min_mcs = RTWN_RIDX_HT_MCS(i * 8);
 			for (ridx = min_mcs; ridx <= max_mcs; ridx++)
 				power[ridx] += pwr_diff;
+
+			/* Adjust VHT rates */
+			for (ridx = RTWN_RIDX_VHT_MCS(i, 0);
+			    ridx <= RTWN_RIDX_VHT_MCS(i, 9);
+			    ridx++)
+				power[ridx] += pwr_diff;
+
 		}
 	}
 
