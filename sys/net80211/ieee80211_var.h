@@ -244,10 +244,11 @@ struct ieee80211com {
 	uint8_t			ic_txstream;    /* # TX streams */
 
 	/* VHT information */
-	uint32_t		ic_vht_flags;	/* VHT state flags */
+	uint32_t		ic_vht_flags;	/* VHT state flags (IEEE80211_FVHT) */
 	struct ieee80211_vht_cap ic_vht_cap;	/* VHT capabilities + MCS info */
 	uint32_t		ic_vhtextcaps;	/* VHT extended capabilities (TODO) */
-	uint32_t		ic_vht_spare[3];
+	uint32_t		ic_vht_conf;	/* VHT config (IEEE80211_FVHT) */
+	uint32_t		ic_vht_spare[2];
 
 	/* optional state for Atheros SuperG protocol extensions */
 	struct ieee80211_superg	*ic_superg;

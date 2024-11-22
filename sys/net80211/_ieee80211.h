@@ -400,6 +400,9 @@ struct ieee80211_htrateset {
 
 #define	IEEE80211_RATE_MCS	0x80
 
+/* TODO: VHT rateset */
+/* Remember, VHT MCS goes from 0..9, some vendors have added MCS10/MCS11 */
+
 /*
  * Per-mode transmit parameters/controls visible to user space.
  * These can be used to set fixed transmit rate for all operating

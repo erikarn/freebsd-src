@@ -221,5 +221,7 @@ uint32_t	ieee80211_compute_duration_ht(uint32_t frameLen,
 			uint16_t rate, int streams, int isht40,
 			int isShortGI);
 
+/* TODO: VHT rate manipulation */
+
 #endif	/* _KERNEL */
 #endif	/* !_NET80211_IEEE80211_PHY_H_ */

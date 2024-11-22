@@ -275,6 +275,8 @@ static struct ieee80211_rate_table ieee80211_11na_table = {
     },
 };
 
+/* TODO: VHT tables for 5g VHT20, VHT40, VHT80 */
+
 #undef	Mb
 #undef	B
 #undef	OFDM
