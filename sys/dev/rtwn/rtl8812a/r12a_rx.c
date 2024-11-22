@@ -107,6 +107,7 @@ r12a_ratectl_tx_complete(struct rtwn_softc *sc, uint8_t *buf, int len)
 		txs.flags = IEEE80211_RATECTL_STATUS_LONG_RETRY |
 			    IEEE80211_RATECTL_STATUS_FINAL_RATE;
 		txs.long_retries = ntries;
+		/* TODO: use RTWN_RATE_IS_*() macros; fail through to CCK1? */
 		if (rpt->final_rate > RTWN_RIDX_OFDM54) {	/* MCS */
 			txs.final_rate =
 			    rpt->final_rate - RTWN_RIDX_HT_MCS_SHIFT;
@@ -273,6 +274,7 @@ r12a_get_rx_stats(struct rtwn_softc *sc, struct ieee80211_rx_stats *rxs,
 		/* XXX check with RTL8812AU */
 		is5ghz = (physt->cfosho[2] != 0x01);
 
+		/* XXX VHT */
 		if (rate < RTWN_RIDX_HT_MCS(0)) {
 			if (is5ghz)
 				rxs->c_phytype = IEEE80211_RX_FP_11A;
