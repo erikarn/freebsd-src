@@ -298,6 +298,21 @@ r12a_fill_tx_desc(struct rtwn_softc *sc, struct ieee80211_node *ni,
 	if (ismcast)
 		txd->flags0 |= R12A_FLAGS0_BMCAST;
 
+#if 1
+	/* LOCAL HACK */
+	/*
+	 * If it's an HT MCS 0..7 frame, and the node is VHT, then
+	 * map it to VHT MCS 0..7.  That's purely just to test
+	 * out that the VHT packet transmission stuff is working OK.
+	 */
+	if ((type == IEEE80211_FC0_TYPE_DATA) &&
+	    (ni->ni_flags & IEEE80211_NODE_VHT) &&
+	    (RTWN_RATE_IS_HT(ridx)) &&
+	    (ridx < RTWN_RIDX_HT_MCS(7))) {
+		ridx = RTWN_RIDX_VHT_MCS(0, (ridx - RTWN_RIDX_HT_MCS_SHIFT));
+	}
+#endif
+
 	if (!ismcast) {
 		/* Unicast frame, check if an ACK is expected. */
 		if (!qos || (qos & IEEE80211_QOS_ACKPOLICY) !=
