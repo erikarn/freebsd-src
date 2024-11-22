@@ -107,11 +107,27 @@ r12a_ratectl_tx_complete(struct rtwn_softc *sc, uint8_t *buf, int len)
 		txs.flags = IEEE80211_RATECTL_STATUS_LONG_RETRY |
 			    IEEE80211_RATECTL_STATUS_FINAL_RATE;
 		txs.long_retries = ntries;
-		if (RTWN_RATE_IS_HT(rpt->final_rate)) {	/* MCS */
+		/*
+		 * XXX TODO: net80211's rate control should grow some
+		 * more flags to communicate CCK/OFDM/HT/VHT/etc, number
+		 * of spatial streams and MCS rate.
+		 */
+		if (RTWN_RATE_IS_CCK(rpt->final_rate) ||
+		    RTWN_RATE_IS_OFDM(rpt->final_rate))
+			/* CCK / OFDM - table lookup */
+			txs.final_rate = ridx2rate[rpt->final_rate];
+		else if (RTWN_RATE_IS_HT(rpt->final_rate)) {
 			txs.final_rate = RTWN_RIDX_TO_MCS(rpt->final_rate);
 			txs.final_rate |= IEEE80211_RATE_MCS;
-		} else
+		} else if (RTWN_RATE_IS_VHT(rpt->final_rate)) {
+			/* XXX VHT - for now, just map to MCS 0, will need VHT flags */
+			txs.final_rate = IEEE80211_RATE_MCS | 0x0;
+		} else {
+			/* XXX shouldn't happen, but at least return /a/ rate */
+			/* XXX should also have a flag for final rate == invalid */
 			txs.final_rate = ridx2rate[rpt->final_rate];
+		}
+
 		if (rpt->txrptb0 & R12A_TXRPTB0_RETRY_OVER)
 			txs.status = IEEE80211_RATECTL_TX_FAIL_LONG;
 		else if (rpt->txrptb0 & R12A_TXRPTB0_LIFE_EXPIRE)
