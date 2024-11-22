@@ -2507,6 +2507,11 @@ ieee80211_rate2media(struct ieee80211com *ic, int rate, enum ieee80211_phymode m
 		{  75, IFM_IEEE80211_MCS },
 		{  76, IFM_IEEE80211_MCS },
 	};
+
+	/*
+	 * TODO: is it enough to just do MCS0..9, or
+	 * should we be doing it per spatial stream?
+	 */
 	static const struct ratemedia vhtrates[] = {
 		{   0, IFM_IEEE80211_VHT },
 		{   1, IFM_IEEE80211_VHT },

@@ -143,11 +143,25 @@ ieee80211_vht_vattach(struct ieee80211vap *vap)
 	vap->iv_vht_cap.vht_cap_info = ic->ic_vht_cap.vht_cap_info;
 	vap->iv_vhtextcaps = ic->ic_vhtextcaps;
 
-	/* XXX assume VHT80 support; should really check vhtcaps */
-	vap->iv_vht_flags =
-	    IEEE80211_FVHT_VHT
-	    | IEEE80211_FVHT_USEVHT40
-	    | IEEE80211_FVHT_USEVHT80;
+	vap->iv_vht_flags = IEEE80211_FVHT_VHT;
+
+	/*
+	 * This isn't in vht_cap_info, it's actually in the channel config.
+	 * So instead check the config.
+	 */
+	if (ic->ic_vht_conf & IEEE80211_FVHT_USEVHT40)
+		vap->iv_vht_flags |= IEEE80211_FVHT_USEVHT40;
+	if (ic->ic_vht_conf & IEEE80211_FVHT_USEVHT80)
+		vap->iv_vht_flags |= IEEE80211_FVHT_USEVHT80;
+
+	/*
+	 * These are in vht_cap_info, so just use them.
+	 *
+	 * It may be better to only enable VHT80 if 40 is enabled,
+	 * and 160 / 80+80 if 40 is enabled.  It's also likely better
+	 * to put the FVHT into the config space and do a sanity check
+	 * here.
+	 */
 	if (IEEE80211_VHTCAP_SUPP_CHAN_WIDTH_IS_160MHZ(vap->iv_vht_cap.vht_cap_info))
 		vap->iv_vht_flags |= IEEE80211_FVHT_USEVHT160;
 	if (IEEE80211_VHTCAP_SUPP_CHAN_WIDTH_IS_160_80P80MHZ(vap->iv_vht_cap.vht_cap_info))
