@@ -60,7 +60,6 @@
  * VHT MCS0..9 for 1-4 streams.
  */
 #define RTWN_RIDX_COUNT		84
-
 #define RTWN_RIDX_UNKNOWN	(uint8_t)-1
 
 #define RTWN_RATE_IS_CCK(rate)	((rate) <= RTWN_RIDX_CCK11)
@@ -71,15 +70,19 @@
 #define RTWN_RATE_IS_VHT(rate) \
 	((rate) >= RTWN_RIDX_VHT_MCS_SHIFT && (rate) <= RTWN_RIDX_COUNT)
 
+/* TODO: make an inline function here, with bounds checking */
 static const uint8_t ridx2rate[] =
 	{ 2, 4, 11, 22, 12, 18, 24, 36, 48, 72, 96, 108 };
 
+/* TODO: VHT */
 static __inline uint8_t
 rate2ridx(uint8_t rate)
 {
 	if (rate & IEEE80211_RATE_MCS) {
 		return ((rate & 0xf) + RTWN_RIDX_HT_MCS_SHIFT);
 	}
+
+	/* TODO: return ridx macros! */
 	switch (rate) {
 	/* 11g */
 	case 12:	return 4;
@@ -95,7 +98,9 @@ rate2ridx(uint8_t rate)
 	case 4:		return 1;
 	case 11:	return 2;
 	case 22:	return 3;
-	default:	return RTWN_RIDX_UNKNOWN;
+	default:
+		printf("%s: called; unknown rate (%d)\n", __func__, rate);
+		return RTWN_RIDX_UNKNOWN;
 	}
 }
 
@@ -113,5 +118,7 @@ rtwn_ctl_mcsrate(const struct ieee80211_rate_table *rt, uint8_t ridx)
 	KASSERT(cix != (uint8_t)-1, ("rate %d (%d) has no info", rate, ridx));
 	return rt->info[cix].dot11Rate;
 }
+
+/* XXX TODO: VHT version of rtwn_ctl_mcsrate */
 
 #endif	/* IF_RTWN_RIDX_H */

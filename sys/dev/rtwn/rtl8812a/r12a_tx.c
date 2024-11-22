@@ -101,9 +101,14 @@ r12a_tx_protection(struct rtwn_softc *sc, struct r12a_tx_desc *txd,
 		break;
 	}
 
+	/* XXX VHT */
 	if (mode == IEEE80211_PROT_CTSONLY ||
 	    mode == IEEE80211_PROT_RTSCTS) {
 		/* TODO: VHT */
+		/*
+		 * Note: this code assumes basic rates for protection for
+		 * both 802.11abg and 802.11n rates.
+		 */
 		if (RTWN_RATE_IS_HT(ridx))
 			rate = rtwn_ctl_mcsrate(ic->ic_rt, ridx);
 		else
@@ -326,8 +331,9 @@ r12a_fill_tx_desc(struct rtwn_softc *sc, struct ieee80211_node *ni,
 				txd->txdw5 |= htole32(R12A_TXDW5_DATA_SHORT);
 
 			prot = IEEE80211_PROT_NONE;
-			/* TODO: VHT */
-			if (RTWN_RATE_IS_HT(ridx)) {
+			/* HT / VHT flags */
+			/* XXX VHT differences? */
+			if (RTWN_RATE_IS_HT(ridx) || RTWN_RATE_IS_VHT(ridx)) {
 				r12a_tx_set_ht40(sc, txd, ni);
 				r12a_tx_set_sgi(sc, txd, ni);
 				r12a_tx_set_ldpc(sc, txd, ni);
@@ -448,6 +454,8 @@ r12a_fill_tx_desc_null(struct rtwn_softc *sc, void *buf, int is11b, int qos,
 
 	txd->txdw3 = htole32(R12A_TXDW3_DRVRATE);
 	txd->txdw6 = htole32(SM(R21A_TXDW6_MBSSID, id));
+
+	/* TODO: is this OK for HT/VHT with no legacy rates? */
 	if (is11b) {
 		txd->txdw4 = htole32(SM(R12A_TXDW4_DATARATE,
 		    RTWN_RIDX_CCK1));
