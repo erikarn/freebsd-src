@@ -105,29 +105,42 @@ r12a_ratectl_tx_complete(struct rtwn_softc *sc, uint8_t *buf, int len)
 		    R12A_TXRPTB0_LIFE_EXPIRE)) ? " not" : "", ntries);
 
 		txs.flags = IEEE80211_RATECTL_STATUS_LONG_RETRY |
-			    IEEE80211_RATECTL_STATUS_FINAL_RATE;
+			    IEEE80211_RATECTL_STATUS_FINAL_RATE |
+			    IEEE80211_RATECTL_STATUS_PHYTYPE;
 		txs.long_retries = ntries;
 
-		/*
-		 * XXX TODO: net80211's rate control should grow some
-		 * more flags to communicate CCK/OFDM/HT/VHT/etc, number
-		 * of spatial streams and MCS rate.
-		 */
-		if (RTWN_RATE_IS_CCK(rpt->final_rate) ||
-		    RTWN_RATE_IS_OFDM(rpt->final_rate))
-			/* CCK / OFDM - table lookup */
+		if (RTWN_RATE_IS_CCK(rpt->final_rate)) {
+			/* CCK - table lookup */
 			txs.final_rate = ridx2rate[rpt->final_rate];
-		else if (RTWN_RATE_IS_HT(rpt->final_rate)) {
+			txs.phytype = IEEE80211_T_CCK;
+		} else if RTWN_RATE_IS_OFDM(rpt->final_rate) {
+			/* CCK - table lookup */
+			txs.final_rate = ridx2rate[rpt->final_rate];
+			txs.phytype = IEEE80211_T_OFDM;
+		} else if (RTWN_RATE_IS_HT(rpt->final_rate)) {
+			/* Old; since current ratectl expects HT to use final_rate */
 			txs.final_rate =
 			    rpt->final_rate - RTWN_RIDX_HT_MCS_SHIFT;
 			txs.final_rate |= IEEE80211_RATE_MCS;
+
+			/* New; report MCS */
+			/* XXX eww turn this into a macro */
+			txs.mcs =
+			    (rpt->final_rate - RTWN_RIDX_HT_MCS_SHIFT);
+			txs.flags |= IEEE80211_RATECTL_STATUS_MCS;
+			txs.phytype = IEEE80211_T_HT;
 		} else if (RTWN_RATE_IS_VHT(rpt->final_rate)) {
-			/* XXX VHT - for now, just map to MCS 0, will need VHT flags */
-			txs.final_rate = IEEE80211_RATE_MCS | 0x0;
+			txs.flags &= ~IEEE80211_RATECTL_STATUS_FINAL_RATE;
+			txs.final_rate = 0;
+			txs.flags = IEEE80211_RATECTL_STATUS_MCS |
+			    IEEE80211_RATECTL_STATUS_NSS;
+			/* XXX eww, turn into a macro */
+			txs.mcs = (rpt->final_rate - RTWN_RIDX_VHT_MCS_SHIFT) / 10;
+			txs.nss = (rpt->final_rate - RTWN_RIDX_VHT_MCS_SHIFT) % 10;
+			txs.phytype = IEEE80211_T_VHT;
 		} else {
-			/* XXX shouldn't happen, but at least return /a/ rate */
-			/* XXX should also have a flag for final rate == invalid */
-			txs.final_rate = ridx2rate[rpt->final_rate];
+			txs.flags &= ~IEEE80211_RATECTL_STATUS_FINAL_RATE;
+			txs.final_rate = 0;
 		}
 
 		if (rpt->txrptb0 & R12A_TXRPTB0_RETRY_OVER)
