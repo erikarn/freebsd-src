@@ -49,6 +49,7 @@
 #define R12A_DATA_SEC_TXSC_20M_S	0
 #define R12A_DATA_SEC_TXSC_40M_M	0x000000f0
 #define R12A_DATA_SEC_TXSC_40M_S	4
+
 #define R12A_ARFR_2G(i)			(0x48c + (i) * 8)
 #define R12A_HT_SINGLE_AMPDU		0x4c7
 

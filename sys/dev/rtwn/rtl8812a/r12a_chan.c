@@ -405,7 +405,7 @@ r12a_fix_spur(struct rtwn_softc *sc, struct ieee80211_channel *c)
 		    (chan == 13 || chan == 14))
 			rtwn_bb_setbits(sc, R12A_RFMOD, 0, 0x300);
 		else if (IEEE80211_IS_CHAN_2GHZ(c))
-			rtwn_bb_setbits(sc, R12A_RFMOD, 0x100, 0x200);
+			rtwn_bb_setbits(sc, R12A_RFMOD, 0x300, 0x200);
 	}
 }
 
@@ -469,6 +469,21 @@ r12a_set_chan(struct rtwn_softc *sc, struct ieee80211_channel *c)
 	uint16_t chan;
 	int i;
 
+#if 0
+	device_printf(sc->sc_dev,
+	    "%s: ht20=%d, ht40=%d (u=%d, d=%d) vht20=%d, vht40=%d (u=%d, d=%d), vht80=%d\n",
+	    __func__,
+	    IEEE80211_IS_CHAN_HT20(c),
+	    IEEE80211_IS_CHAN_HT40(c),
+	    IEEE80211_IS_CHAN_HT40U(c),
+	    IEEE80211_IS_CHAN_HT40D(c),
+	    IEEE80211_IS_CHAN_VHT20(c),
+	    IEEE80211_IS_CHAN_VHT40(c),
+	    IEEE80211_IS_CHAN_VHT40U(c),
+	    IEEE80211_IS_CHAN_VHT40D(c),
+	    IEEE80211_IS_CHAN_VHT80(c));
+#endif
+
 	r12a_set_band(sc, c);
 
 	chan = rtwn_chan2centieee(c);
@@ -525,6 +540,7 @@ r12a_set_chan(struct rtwn_softc *sc, struct ieee80211_channel *c)
 				ext40 = R12A_DATA_SEC_PRIM_DOWN_40;
 			}
 		}
+
 		/* Form txsc from sec20/sec40 config */
 		txsc = SM(R12A_DATA_SEC_TXSC_20M, ext20);
 		txsc |= SM(R12A_DATA_SEC_TXSC_40M, ext40);
@@ -572,7 +588,7 @@ r12a_set_chan(struct rtwn_softc *sc, struct ieee80211_channel *c)
 		else
 			ext_chan = R12A_DATA_SEC_PRIM_UP_20;
 
-		rtwn_setbits_2(sc, R92C_WMAC_TRXPTCL_CTL, 0x100, 0x80);
+		rtwn_setbits_2(sc, R92C_WMAC_TRXPTCL_CTL, 0x180, 0x80);
 		rtwn_write_1(sc, R12A_DATA_SEC, ext_chan);
 
 		rtwn_bb_setbits(sc, R12A_RFMOD, 0x003003c3, 0x00300201);

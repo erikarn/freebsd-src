@@ -1554,8 +1554,7 @@ rtwn_getradiocaps(struct ieee80211com *ic,
 		setbit(bands, IEEE80211_MODE_VHT_5GHZ);
 	}
 
-	/* TODO: NET80211_CBW_FLAG_VHT80 */
-
+	cbw_flags |= NET80211_CBW_FLAG_VHT80;
 	for (i = 0; i < nitems(sc->chan_num_5ghz); i++) {
 		if (sc->chan_num_5ghz[i] == 0)
 			continue;
