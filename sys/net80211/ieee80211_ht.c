@@ -3604,3 +3604,23 @@ ieee80211_add_htinfo_vendor(uint8_t *frm, struct ieee80211_node *ni)
 	frm[5] = BCM_OUI_HTINFO;
 	return ieee80211_add_htinfo_body(frm + 6, ni);
 }
+
+/*
+ * Get the HT density for the given 802.11n node.
+ *
+ * Take into account the density advertised from the peer.
+ * Larger values are longer A-MPDU density spacing values, and
+ * we want to obey them per station if we get them.
+ */
+int
+ieee80211_ht_get_node_ampdu_density(struct ieee80211_node *ni)
+{
+	struct ieee80211vap *vap = ni->ni_vap;
+	int peer_mpdudensity;
+
+	peer_mpdudensity =
+	    _IEEE80211_MASKSHIFT(ni->ni_htparam, IEEE80211_HTCAP_MPDUDENSITY);
+	if (vap->iv_ampdu_density > peer_mpdudensity)
+		peer_mpdudensity = vap->iv_ampdu_density;
+	return peer_mpdudensity;
+}
