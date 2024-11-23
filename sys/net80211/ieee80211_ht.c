@@ -3624,3 +3624,22 @@ ieee80211_ht_get_node_ampdu_density(struct ieee80211_node *ni)
 		peer_mpdudensity = vap->iv_ampdu_density;
 	return peer_mpdudensity;
 }
+
+/*
+ * Get the transmit A-MPDU limit for the given 802.11n node.
+ *
+ * Take into account the limit advertised from the peer.
+ * Smaller values indicate smaller maximum A-MPDU sizes, and
+ * should be used when forming an A-MPDU to the given peer.
+ */
+int
+ieee80211_ht_get_node_ampdu_limit(struct ieee80211_node *ni)
+{
+	struct ieee80211vap *vap = ni->ni_vap;
+	int peer_mpdulimit;
+
+	peer_mpdulimit =
+	    _IEEE80211_MASKSHIFT(ni->ni_htparam, IEEE80211_HTCAP_MAXRXAMPDU);
+
+	return MIN(vap->iv_ampdu_limit, peer_mpdulimit);
+}

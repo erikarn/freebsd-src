@@ -241,5 +241,6 @@ int	ieee80211_ampdu_tx_request_active_ext(struct ieee80211_node *ni,
 	    int tid, int status);
 void	ieee80211_htinfo_notify(struct ieee80211vap *vap);
 int	ieee80211_ht_get_node_ampdu_density(struct ieee80211_node *ni);
+int	ieee80211_ht_get_node_ampdu_limit(struct ieee80211_node *ni);
 
 #endif /* _NET80211_IEEE80211_HT_H_ */
