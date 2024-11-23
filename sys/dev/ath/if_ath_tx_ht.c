@@ -552,8 +552,6 @@ static int
 ath_get_aggr_limit(struct ath_softc *sc, struct ieee80211_node *ni,
     struct ath_buf *bf)
 {
-	struct ieee80211vap *vap = ni->ni_vap;
-
 	int amin = ATH_AGGR_MAXSIZE;
 	int i;
 
@@ -561,15 +559,9 @@ ath_get_aggr_limit(struct ath_softc *sc, struct ieee80211_node *ni,
 	if (sc->sc_aggr_limit > 0 && sc->sc_aggr_limit < ATH_AGGR_MAXSIZE)
 		amin = sc->sc_aggr_limit;
 
-	/* Check the vap configured transmit limit */
-	amin = MIN(amin, ath_rx_ampdu_to_byte(vap->iv_ampdu_limit));
-
-	/*
-	 * Check the HTCAP field for the maximum size the node has
-	 * negotiated.  If it's smaller than what we have, cap it there.
-	 */
-	amin = MIN(amin, ath_rx_ampdu_to_byte(
-	    _IEEE80211_MASKSHIFT(ni->ni_htparam, IEEE80211_HTCAP_MAXRXAMPDU)));
+	/* Check the vap and node configured transmit limit */
+	amin = MIN(amin,
+	    ath_rx_ampdu_to_byte(ieee80211_ht_get_node_ampdu_limit(ni)));
 
 	for (i = 0; i < ATH_RC_NUM; i++) {
 		if (bf->bf_state.bfs_rc[i].tries == 0)
