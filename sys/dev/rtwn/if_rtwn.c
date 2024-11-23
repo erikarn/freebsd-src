@@ -326,7 +326,7 @@ rtwn_sysctlattach(struct rtwn_softc *sc)
 	struct sysctl_oid *tree = device_get_sysctl_tree(sc->sc_dev);
 
 #if 1
-	sc->sc_ht40 = 0;
+	sc->sc_ht40 = 1;
 	SYSCTL_ADD_INT(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
 	    "ht40", CTLFLAG_RDTUN, &sc->sc_ht40,
 	    sc->sc_ht40, "Enable 40 MHz mode support");
@@ -570,6 +570,7 @@ rtwn_vap_create(struct ieee80211com *ic, const char name[IFNAMSIZ], int unit,
 	/* 802.11n parameters */
 	vap->iv_ampdu_density = IEEE80211_HTCAP_MPDUDENSITY_16;
 	vap->iv_ampdu_rxmax = IEEE80211_HTCAP_MAXRXAMPDU_64K;
+	vap->iv_ampdu_limit = IEEE80211_HTCAP_MAXRXAMPDU_64K;
 
 	TIMEOUT_TASK_INIT(taskqueue_thread, &uvp->tx_beacon_csa, 0,
 	    rtwn_tx_beacon_csa, vap);
