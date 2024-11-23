@@ -271,7 +271,7 @@ r92c_fill_tx_desc(struct rtwn_softc *sc, struct ieee80211_node *ni,
 			    (m->m_flags & M_AMPDU_MPDU) != 0);
 			if (m->m_flags & M_AMPDU_MPDU) {
 				txd->txdw2 |= htole32(SM(R92C_TXDW2_AMPDU_DEN,
-				    vap->iv_ampdu_density));
+				    ieee80211_ht_get_node_ampdu_density(ni)));
 				txd->txdw6 |= htole32(SM(R92C_TXDW6_MAX_AGG,
 				    0x1f));	/* XXX */
 			}
