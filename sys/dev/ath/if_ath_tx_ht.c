@@ -406,7 +406,6 @@ ath_compute_num_delims(struct ath_softc *sc, struct ath_buf *first_bf,
 {
 	const HAL_RATE_TABLE *rt = sc->sc_currates;
 	struct ieee80211_node *ni = first_bf->bf_node;
-	struct ieee80211vap *vap = ni->ni_vap;
 	int ndelim, mindelim = 0;
 	int mpdudensity;	/* in 1/100'th of a microsecond */
 	int peer_mpdudensity;	/* net80211 value */
@@ -418,17 +417,7 @@ ath_compute_num_delims(struct ath_softc *sc, struct ath_buf *first_bf,
 	/*
 	 * Get the advertised density from the node.
 	 */
-	peer_mpdudensity =
-	    _IEEE80211_MASKSHIFT(ni->ni_htparam, IEEE80211_HTCAP_MPDUDENSITY);
-
-	/*
-	 * vap->iv_ampdu_density is a net80211 value, rather than the actual
-	 * density.  Larger values are longer A-MPDU density spacing values,
-	 * and we want to obey larger configured / negotiated density values
-	 * per station if we get it.
-	 */
-	if (vap->iv_ampdu_density > peer_mpdudensity)
-		peer_mpdudensity = vap->iv_ampdu_density;
+	peer_mpdudensity = ieee80211_ht_get_node_ampdu_density(ni);
 
 	/*
 	 * Convert the A-MPDU density net80211 value to a 1/100 microsecond
