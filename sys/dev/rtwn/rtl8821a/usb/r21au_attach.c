@@ -168,8 +168,8 @@ r21au_adj_devcaps(struct rtwn_softc *sc)
 	/* TODO: VHT */
 	/* VHT config */
 	ic->ic_flags_ext |= IEEE80211_FEXT_VHT;
-#if 0
 	ic->ic_vht_conf |= IEEE80211_FVHT_USEVHT40;
+#if 0
 	ic->ic_vht_conf |= IEEE80211_FVHT_USEVHT80;
 #endif
 
