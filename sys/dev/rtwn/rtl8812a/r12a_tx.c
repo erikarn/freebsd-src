@@ -308,7 +308,7 @@ r12a_fill_tx_desc(struct rtwn_softc *sc, struct ieee80211_node *ni,
 	if ((type == IEEE80211_FC0_TYPE_DATA) &&
 	    (ni->ni_flags & IEEE80211_NODE_VHT) &&
 	    (RTWN_RATE_IS_HT(ridx)) &&
-	    (ridx < RTWN_RIDX_HT_MCS(7))) {
+	    (ridx <= RTWN_RIDX_HT_MCS(7))) {
 		ridx = RTWN_RIDX_VHT_MCS(0, (ridx - RTWN_RIDX_HT_MCS_SHIFT));
 	}
 #endif
