@@ -181,8 +181,8 @@ r12au_adj_devcaps(struct rtwn_softc *sc)
 
 	ic->ic_flags_ext |= IEEE80211_FEXT_VHT;
 	ic->ic_vht_conf |= IEEE80211_FVHT_USEVHT40;
-	/* TODO: 40/80MHz */
-#if 0
+	/* TODO: 80MHz */
+#if 1
 	ic->ic_vht_conf |= IEEE80211_FVHT_USEVHT80;
 #endif
 

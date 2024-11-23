@@ -172,7 +172,9 @@ r12a_iq_calib_fw(struct rtwn_softc *sc)
 		cmd.band_bw = RTWN_CMD_IQ_BAND_2GHZ;
 
 	/* TODO: 80/160 MHz. */
-	if (IEEE80211_IS_CHAN_HT40(c))
+	if (IEEE80211_IS_CHAN_VHT80(c))
+		cmd.band_bw |= RTWN_CMD_IQ_CHAN_WIDTH_80;
+	else if (IEEE80211_IS_CHAN_HT40(c))
 		cmd.band_bw |= RTWN_CMD_IQ_CHAN_WIDTH_40;
 	else
 		cmd.band_bw |= RTWN_CMD_IQ_CHAN_WIDTH_20;
