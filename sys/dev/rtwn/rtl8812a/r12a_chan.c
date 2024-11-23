@@ -270,10 +270,10 @@ r12a_get_txpower(struct rtwn_softc *sc, int chain,
 			uint8_t min_mcs;
 			uint8_t pwr_diff;
 
-			if (IEEE80211_IS_CHAN_VHT80(c)) {
+			if (IEEE80211_IS_CHAN_VHT80(c))
 				/* Vendor driver uses HT40 values here. */
 				pwr_diff = rs->bw40_tx_pwr_diff_2g[chain][i];
-			} else
+			else
 			if (IEEE80211_IS_CHAN_HT40(c) || IEEE80211_IS_CHAN_VHT40(c))
 				pwr_diff = rs->bw40_tx_pwr_diff_2g[chain][i];
 			else
@@ -318,7 +318,6 @@ r12a_get_txpower(struct rtwn_softc *sc, int chain,
 			    ridx <= RTWN_RIDX_VHT_MCS(i, 9);
 			    ridx++)
 				power[ridx] += pwr_diff;
-
 		}
 	}
 
@@ -328,11 +327,14 @@ r12a_get_txpower(struct rtwn_softc *sc, int chain,
 			power[ridx] = R92C_MAX_TX_PWR;
 	}
 	for (ridx = RTWN_RIDX_VHT_MCS(0, 0);
-	    ridx <= RTWN_RIDX_VHT_MCS(3, 9);
-	    ridx++) {
+	     ridx <= RTWN_RIDX_VHT_MCS(3, 9);
+	     ridx++) {
 		if (power[ridx] > R92C_MAX_TX_PWR)
 			power[ridx] = R92C_MAX_TX_PWR;
 	}
+
+	/* XXX Apply net80211 regulatory limit */
+	/* (would be easier if i knew if these values were in dBm, 1/2 dBm, 1/4 dBm, etc */
 
 #ifdef RTWN_DEBUG
 	if (sc->sc_debug & RTWN_DEBUG_TXPWR) {
@@ -341,6 +343,9 @@ r12a_get_txpower(struct rtwn_softc *sc, int chain,
 		for (ridx = RTWN_RIDX_CCK1; ridx <= max_mcs; ridx++)
 			printf("Rate %d = %u\n", ridx, power[ridx]);
 		/* TODO: dump VHT 0..9 for each spatial stream */
+		printf("Tx power for VHT 1SS MCS 0..9 chain %d:\n", chain);
+		for (ridx = RTWN_RIDX_VHT_MCS(0, 0); ridx <= RTWN_RIDX_VHT_MCS(0, 9); ridx++)
+			printf("Rate %d = %u\n", ridx, power[ridx]);
 	}
 #endif
 }
