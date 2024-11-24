@@ -169,11 +169,17 @@ r21au_adj_devcaps(struct rtwn_softc *sc)
 	/* VHT config */
 	ic->ic_flags_ext |= IEEE80211_FEXT_VHT;
 	ic->ic_vht_conf |= IEEE80211_FVHT_USEVHT40;
-#if 1
 	ic->ic_vht_conf |= IEEE80211_FVHT_USEVHT80;
-#endif
 
-	ic->ic_vht_cap.vht_cap_info = 0x3c001a2;
+	ic->ic_vht_cap.vht_cap_info =
+	    IEEE80211_VHTCAP_MAX_MPDU_LENGTH_11454
+	    | IEEE80211_VHTCAP_SHORT_GI_80
+	    | IEEE80211_VHTCAP_TXSTBC
+	    | IEEE80211_VHTCAP_RXSTBC_1
+	    | IEEE80211_VHTCAP_HTC_VHT
+	    | _IEEE80211_SHIFTMASK(7,
+	        IEEE80211_VHTCAP_MAX_A_MPDU_LENGTH_EXPONENT_MASK);
+
 	ic->ic_vht_cap.supp_mcs.rx_mcs_map = IEEE80211_VHT_MCS_SUPPORT_0_9;
 	ic->ic_vht_cap.supp_mcs.rx_highest = 0;
 	ic->ic_vht_cap.supp_mcs.tx_mcs_map = IEEE80211_VHT_MCS_SUPPORT_0_9;
