@@ -246,9 +246,10 @@ rtwn_attach(struct rtwn_softc *sc)
 	    | IEEE80211_HTCAP_MAXAMSDU_3839	/* max A-MSDU length */
 	    | IEEE80211_HTCAP_SMPS_OFF		/* SM PS mode disabled */
 	    /* s/w capabilities */
+	    | IEEE80211_HTC_RX_AMSDU_AMPDU	/* A-MSDU in A-MPDU */
 	    | IEEE80211_HTC_HT			/* HT operation */
-	    | IEEE80211_HTC_AMPDU		/* A-MPDU tx */
-	    | IEEE80211_HTC_AMSDU		/* A-MSDU tx */
+	    | IEEE80211_HTC_AMPDU		/* A-MPDU tx/rx */
+	    | IEEE80211_HTC_AMSDU		/* A-MSDU tx/rx */
 	    ;
 
 	if (sc->sc_ht40) {
