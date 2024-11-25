@@ -268,6 +268,13 @@ rtwn_rx_common(struct rtwn_softc *sc, struct mbuf *m, void *desc)
 	pktlen = MS(rxdw0, RTWN_RXDW0_PKTLEN);
 	shift = MS(rxdw0, RTWN_RXDW0_SHIFT);
 
+	RTWN_DPRINTF(sc, RTWN_DEBUG_RECV,
+	    "%s: cipher=%d, infosz=%d, pktlen=%d, shift=%d, m_len=%d\n",
+	    __func__,
+	    cipher, infosz, pktlen, shift, m->m_pkthdr.len);
+	if (sc->sc_debug & RTWN_DEBUG_RECV)
+		m_print(m, -1);
+
 	wh = (struct ieee80211_frame_min *)(mtodo(m, shift + infosz));
 	if ((wh->i_fc[1] & IEEE80211_FC1_PROTECTED) &&
 	    cipher != R92C_CAM_ALGO_NONE)
@@ -471,6 +478,16 @@ rtwn_rxfilter_init(struct rtwn_softc *sc)
 	sc->rcr |= R92C_RCR_AM | R92C_RCR_AB | R92C_RCR_APM |
 	    R92C_RCR_HTC_LOC_CTRL | R92C_RCR_APP_PHYSTS |
 	    R92C_RCR_APP_ICV | R92C_RCR_APP_MIC;
+
+	/*
+	 * Disable PHYSTS if requested
+	 * Right now, leaving this enabled results in pairs of short packets
+	 * w/ VHT RX on RTL8821AU/RTL8812AU
+	 */
+	if (sc->sc_ena_phystatus == 0) {
+		device_printf(sc->sc_dev, "%s: PHYSTS disabled\n", __func__);
+		sc->rcr &= ~R92C_RCR_APP_PHYSTS;
+	}
 
 	/* Update dynamic Rx filter parts. */
 	rtwn_rxfilter_update(sc);
