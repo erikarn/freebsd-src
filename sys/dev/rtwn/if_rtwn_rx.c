@@ -268,6 +268,13 @@ rtwn_rx_common(struct rtwn_softc *sc, struct mbuf *m, void *desc)
 	pktlen = MS(rxdw0, RTWN_RXDW0_PKTLEN);
 	shift = MS(rxdw0, RTWN_RXDW0_SHIFT);
 
+	RTWN_DPRINTF(sc, RTWN_DEBUG_RECV,
+	    "%s: cipher=%d, infosz=%d, pktlen=%d, shift=%d, m_len=%d\n",
+	    __func__,
+	    cipher, infosz, pktlen, shift, m->m_pkthdr.len);
+	if (sc->sc_debug & RTWN_DEBUG_RECV)
+		m_print(m, -1);
+
 	wh = (struct ieee80211_frame_min *)(mtodo(m, shift + infosz));
 	if ((wh->i_fc[1] & IEEE80211_FC1_PROTECTED) &&
 	    cipher != R92C_CAM_ALGO_NONE)

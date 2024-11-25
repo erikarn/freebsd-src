@@ -247,7 +247,6 @@ rtwn_attach(struct rtwn_softc *sc)
 	    | IEEE80211_HTCAP_SMPS_OFF		/* SM PS mode disabled */
 	    /* s/w capabilities */
 	    | IEEE80211_HTC_HT			/* HT operation */
-	    | IEEE80211_HTC_RX_AMSDU_AMPDU	/* A-MSDU in A-MPDU */
 	    | IEEE80211_HTC_AMPDU		/* A-MPDU tx */
 	    | IEEE80211_HTC_AMSDU		/* A-MSDU tx */
 	    ;
@@ -1554,7 +1553,9 @@ rtwn_getradiocaps(struct ieee80211com *ic,
 		setbit(bands, IEEE80211_MODE_VHT_5GHZ);
 	}
 
-	cbw_flags |= NET80211_CBW_FLAG_VHT80;
+	/* Only enable VHT80 if HT40/VHT40 is available */
+	cbw_flags |= sc->sc_ht40 ? NET80211_CBW_FLAG_VHT80 : 0;
+
 	for (i = 0; i < nitems(sc->chan_num_5ghz); i++) {
 		if (sc->chan_num_5ghz[i] == 0)
 			continue;
