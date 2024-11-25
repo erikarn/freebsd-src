@@ -126,6 +126,12 @@ r12a_tx_protection(struct rtwn_softc *sc, struct r12a_tx_desc *txd,
 	}
 }
 
+/*
+ * TODO: should this depend upon the peer being transmitted to?
+ *
+ * (eg if they're only a HT node but we're on a VHT channel,
+ * RAID should select that.)
+ */
 static void
 r12a_tx_raid(struct rtwn_softc *sc, struct r12a_tx_desc *txd,
     struct ieee80211_node *ni, int ismcast)
@@ -209,6 +215,11 @@ r12a_tx_raid(struct rtwn_softc *sc, struct r12a_tx_desc *txd,
 	txd->txdw1 |= htole32(SM(R12A_TXDW1_RAID, raid));
 }
 
+/*
+ * Set short-GI based on node capability.
+ *
+ * TODO: this is wrong for VHT80! Refactor this out.
+ */
 static void
 r12a_tx_set_sgi(struct rtwn_softc *sc, void *buf, struct ieee80211_node *ni)
 {
@@ -232,6 +243,12 @@ r12a_tx_set_sgi(struct rtwn_softc *sc, void *buf, struct ieee80211_node *ni)
 	}
 }
 
+/*
+ * Set LDPC configuration for an outgoing packet.
+ *
+ * TODO: fix this for VHT modes, and double check if it's dependent
+ * upon the rate.
+ */
 static void
 r12a_tx_set_ldpc(struct rtwn_softc *sc, struct r12a_tx_desc *txd,
     struct ieee80211_node *ni)
