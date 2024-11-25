@@ -341,6 +341,10 @@ rtwn_rx_common(struct rtwn_softc *sc, struct mbuf *m, void *desc)
 	/* Drop PHY descriptor. */
 	m_adj(m, infosz + shift);
 
+	/* If APPFCS, drop FCS */
+	if (sc->rcr & R92C_RCR_APPFCS)
+		m_adj(m, -IEEE80211_CRC_LEN);
+
 	return (ni);
 }
 
@@ -478,6 +482,9 @@ rtwn_rxfilter_init(struct rtwn_softc *sc)
 	sc->rcr |= R92C_RCR_AM | R92C_RCR_AB | R92C_RCR_APM |
 	    R92C_RCR_HTC_LOC_CTRL | R92C_RCR_APP_PHYSTS |
 	    R92C_RCR_APP_ICV | R92C_RCR_APP_MIC;
+
+	/* RTL8821/RTL8812 testing */
+	sc->rcr |= R92C_RCR_APPFCS;
 
 	/*
 	 * Disable PHYSTS if requested
