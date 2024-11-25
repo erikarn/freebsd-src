@@ -1,6 +1,35 @@
 
-rtw88 stuff
+rtw88 stuff that may be worth porting over
 
 * look at __priority_queue_cfg() - eg REG_RXFF_BNDY,
 * rsvd_boundary, rsvd_drv_addr, page offset, everything
   around that mess.
+* any/all of the calib stuff? if it's not done ni firmware?
+* the stuff to decode the old/new firmware headers and print out
+  the versions during load time?
+
+
+known issues;
+
+* the occasional truncated packet, missing 4 bytes from the end
+  of the buffer (which is typically half of the CCMP IV.)  Since the
+  hardware tags the frame as decrypted and IP/TCP/UDP checksum validated,
+  the malformed packet is sent up and confuses things / hangs TCP, hard.
+
+  The workaround for now is to disable PHYSTS - clearing the
+  R92C_RCR_APP_PHYSTS bit in the receive config register.
+  However, that means all of the RX phy status - RX rate, RSSI, etc -
+  is no longer available.
+
+  It only shows up when VHT is enabled and receiving VHT frames.
+  It's not a problem with HT or legacy rates.
+
+* The Short-GI, LDPC, STBC, etc decision bits need to be pushed into
+  net80211, and take into account the selected rate and local/peer
+  capabilities.  This is going to be especially true for AP modes.
+
+TODO:
+
+* no way to get VHT rates from AMRR yet, hence hacks
+* I'm not yet loading in 2SS rates for 2 stream NICs, need to do that
+
