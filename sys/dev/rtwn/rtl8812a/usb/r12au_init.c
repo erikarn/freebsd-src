@@ -66,6 +66,7 @@ r12au_init_rx_agg(struct rtwn_softc *sc)
 	    rs->ac_usb_dma_size | (rs->ac_usb_dma_time << 8));
 	rtwn_setbits_1(sc, R92C_TRXDMA_CTRL, 0,
 	    R92C_TRXDMA_CTRL_RXDMA_AGG_EN);
+	/* TODO: ARBBW_EN (bit 0) too? */
 }
 
 void
