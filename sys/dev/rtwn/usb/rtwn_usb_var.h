@@ -24,13 +24,14 @@
 
 #define RTWN_USB_RXBUFSZ_UNIT		(512)
 #define RTWN_USB_RXBUFSZ_MIN		( 4)
-#define RTWN_USB_RXBUFSZ_DEF		(24)
+//#define RTWN_USB_RXBUFSZ_DEF		(24)
+#define RTWN_USB_RXBUFSZ_DEF		(64)
 #define RTWN_USB_RXBUFSZ_MAX		(64)
 #define RTWN_USB_TXBUFSZ		(16 * 1024)
 
 #define RTWN_IFACE_INDEX		0
 
-#define RTWN_USB_RX_LIST_COUNT		1
+#define RTWN_USB_RX_LIST_COUNT		4
 #define RTWN_USB_TX_LIST_COUNT		16
 
 struct rtwn_data {
