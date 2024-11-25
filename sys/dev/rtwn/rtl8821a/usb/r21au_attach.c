@@ -174,6 +174,7 @@ r21au_adj_devcaps(struct rtwn_softc *sc)
 	    | _IEEE80211_SHIFTMASK(7,
 	        IEEE80211_VHTCAP_MAX_A_MPDU_LENGTH_EXPONENT_MASK);
 
+	/* Note: only 1 stream rates for now */
 	ic->ic_vht_cap.supp_mcs.rx_mcs_map = IEEE80211_VHT_MCS_SUPPORT_0_9;
 	ic->ic_vht_cap.supp_mcs.rx_highest = 0;
 	ic->ic_vht_cap.supp_mcs.tx_mcs_map = IEEE80211_VHT_MCS_SUPPORT_0_9;
