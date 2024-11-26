@@ -320,33 +320,17 @@ r12a_fill_tx_desc(struct rtwn_softc *sc, struct ieee80211_node *ni,
 
 			if (m->m_flags & M_AMPDU_MPDU) {
 				uint32_t ampdu_limit;
+				struct ieee80211_tx_ampdu *tap =
+				    &ni->ni_tx_ampdu[tid];
 
 				txd->txdw2 |= htole32(R12A_TXDW2_AGGEN);
 				txd->txdw2 |= htole32(SM(R12A_TXDW2_AMPDU_DEN,
 				    ieee80211_ht_get_node_ampdu_density(ni)));
-
-				/* How many packets can be added to the AMPDU */
-				/*
-				 * From rtw88 get_tx_ampdu_factor():
-				 *
-				 * represents val*2 packets can be aggregated;
-				 * but the spec talks about how big the AMPDUs
-				 * are! So, need to go figure this mess out.
-				 *
-				 * The reference driver does some other shenanigans -
-				 * update_txdesc() does some math based on
-				 * packet size and the HT or VHT factor in
-				 * bytes, ie:
-				 *
-				 * max_agg_num = (factor_in_bytes / sz) / 2;
-				 *
-				 * .. but, how it calculates size is not immediately
-				 * clear.
-				 */
-				ampdu_limit = ((1 << 2) << vap->iv_ampdu_limit) - 1;
+				ampdu_limit = tap->txa_wnd / 2;
 				if (ampdu_limit > 0x1f)
 					ampdu_limit = 0x1f;
-				txd->txdw3 |= htole32(SM(R12A_TXDW3_MAX_AGG, ampdu_limit));
+				txd->txdw3 |= htole32(SM(R12A_TXDW3_MAX_AGG,
+				    ampdu_limit));
 			} else
 				txd->txdw2 |= htole32(R12A_TXDW2_AGGBK);
 
