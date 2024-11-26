@@ -326,6 +326,7 @@ r12a_fill_tx_desc(struct rtwn_softc *sc, struct ieee80211_node *ni,
 				txd->txdw2 |= htole32(R12A_TXDW2_AGGEN);
 				txd->txdw2 |= htole32(SM(R12A_TXDW2_AMPDU_DEN,
 				    ieee80211_ht_get_node_ampdu_density(ni)));
+				/* Note: AMPDU_MAX_AGG is num packets * 2 */
 				ampdu_limit = tap->txa_wnd / 2;
 				if (ampdu_limit > 0x1f)
 					ampdu_limit = 0x1f;
