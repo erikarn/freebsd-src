@@ -153,6 +153,7 @@ r21au_adj_devcaps(struct rtwn_softc *sc)
 {
 	struct ieee80211com *ic = &sc->sc_ic;
 	struct r12a_softc *rs = sc->sc_priv;
+	uint32_t rx_mcs, tx_mcs;
 
 	device_printf(sc->sc_dev, "%s: called\n", __func__);
 
@@ -174,10 +175,26 @@ r21au_adj_devcaps(struct rtwn_softc *sc)
 	    | _IEEE80211_SHIFTMASK(7,
 	        IEEE80211_VHTCAP_MAX_A_MPDU_LENGTH_EXPONENT_MASK);
 
-	/* Note: only 1 stream rates for now */
-	ic->ic_vht_cap.supp_mcs.rx_mcs_map = IEEE80211_VHT_MCS_SUPPORT_0_9;
+	device_printf(sc->sc_dev, "%s: txs=%d, rxs=%d\n",
+	    __func__,
+	    sc->ntxchains,
+	    sc->nrxchains);
+
+	rx_mcs = tx_mcs = 0;
+	for (int i = 0 ; i < 8; i++) {
+		if (i < sc->ntxchains)
+			tx_mcs |= (IEEE80211_VHT_MCS_SUPPORT_0_9 << (i*2));
+		else
+			tx_mcs |= (IEEE80211_VHT_MCS_NOT_SUPPORTED << (i*2));
+		if (i < sc->nrxchains)
+			rx_mcs |= (IEEE80211_VHT_MCS_SUPPORT_0_9 << (i*2));
+		else
+			rx_mcs |= (IEEE80211_VHT_MCS_NOT_SUPPORTED << (i*2));
+	}
+
+	ic->ic_vht_cap.supp_mcs.rx_mcs_map = rx_mcs;
 	ic->ic_vht_cap.supp_mcs.rx_highest = 0;
-	ic->ic_vht_cap.supp_mcs.tx_mcs_map = IEEE80211_VHT_MCS_SUPPORT_0_9;
+	ic->ic_vht_cap.supp_mcs.tx_mcs_map = tx_mcs;
 	ic->ic_vht_cap.supp_mcs.tx_highest = 0;
 }
 
