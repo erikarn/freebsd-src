@@ -433,6 +433,8 @@ SUBDIR=	\
 	wlan \
 	wlan_acl \
 	wlan_amrr \
+	wlan_bip_cmac \
+	wlan_bip_gmac \
 	wlan_ccmp \
 	wlan_gcmp \
 	wlan_rssadapt \

@@ -124,6 +124,9 @@ ieee80211_send_action_unregister(int cat, int act)
 	ieee80211_send_action_register(cat, act, send_inval);
 }
 
+/*
+ * XXX TODO: MFP!
+ */
 int
 ieee80211_send_action(struct ieee80211_node *ni, int cat, int act, void *sa)
 {
@@ -234,6 +237,10 @@ ieee80211_recv_action_unregister(int cat, int act)
 {
 	ieee80211_recv_action_register(cat, act, recv_inval);
 }
+
+/*
+ * TODO: MFP checks for both unicast and group management frames.
+ */
 
 int
 ieee80211_recv_action(struct ieee80211_node *ni,

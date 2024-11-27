@@ -927,12 +927,20 @@ sta_input(struct ieee80211_node *ni, struct mbuf *m,
 		 *       It also applies here.
 		 */
 
+		/* TODO: handle MFP check on received frames for this node */
+
 		/*
 		 * Again, having encrypted flag set check would be good, but
 		 * then we have to also handle crypto_decap() like above.
 		 */
 		if (IEEE80211_IS_PROTECTED(wh)) {
-			if (subtype != IEEE80211_FC0_SUBTYPE_AUTH) {
+			/*
+			 * TODO: this feels like a not great MFP check;
+			 * I need to refactor this out and then figure
+			 * out what it SHOULD be.
+			 */
+			if (((ni->ni_flags & IEEE80211_NODE_MFP) == 0) &&
+			    (subtype != IEEE80211_FC0_SUBTYPE_AUTH)) {
 				/*
 				 * Only shared key auth frames with a challenge
 				 * should be encrypted, discard all others.
@@ -965,6 +973,13 @@ sta_input(struct ieee80211_node *ni, struct mbuf *m,
 			has_decrypted = 1;
 			wh = mtod(m, struct ieee80211_frame *);
 			wh->i_fc[1] &= ~IEEE80211_FC1_PROTECTED;
+		}
+
+		/* Verify the management frame passes MFP checks */
+		if (ieee80211_mgmt_verify_mfp(ni, m, subtype, has_decrypted) == false) {
+			IEEE80211_DISCARD(vap, IEEE80211_MSG_ANY,
+			    wh, NULL, "type=%d subtype=%d, has_decrypted=%d, MFP check failed", type, subtype, has_decrypted);
+			/* XXX TODO: skip */
 		}
 		vap->iv_recv_mgmt(ni, m, subtype, rxs, rssi, nf);
 		goto out;
@@ -1408,6 +1423,7 @@ sta_recv_mgmt(struct ieee80211_node *ni, struct mbuf *m0, int subtype,
 	wh = mtod(m0, struct ieee80211_frame *);
 	frm = (uint8_t *)&wh[1];
 	efrm = mtod(m0, uint8_t *) + m0->m_len;
+
 	switch (subtype) {
 	case IEEE80211_FC0_SUBTYPE_PROBE_RESP:
 	case IEEE80211_FC0_SUBTYPE_BEACON: {
