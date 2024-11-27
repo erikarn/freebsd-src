@@ -712,6 +712,14 @@ ath_rx_pkt(struct ath_softc *sc, struct ath_rx_status *rs, HAL_STATUS status,
 			goto rx_error;	/* NB: don't count in ierrors */
 		}
 		if (rs->rs_status & HAL_RXERR_DECRYPT) {
+			const struct ieee80211_frame *wh =
+			    mtod(m, const struct ieee80211_frame *);
+
+			/* TODO: bounds check too */
+			if (IEEE80211_IS_MGMT(wh)) {
+				device_printf(sc->sc_dev,
+				    "%s: decrypt fail; mgmt frame\n", __func__);
+			}
 			/*
 			 * Decrypt error.  If the error occurred
 			 * because there was no hardware key, then

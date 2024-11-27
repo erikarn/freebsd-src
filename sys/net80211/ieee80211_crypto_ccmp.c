@@ -576,8 +576,11 @@ ccmp_encrypt(struct ieee80211_key *key, const struct ieee80211_node *ni,
 	wh = mtod(m, struct ieee80211_frame *);
 
 	/* Check if node has MFP negotiated, and this is a mgmt frame */
-	if ((ni->ni_flags & IEEE80211_NODE_MFP) && IEEE80211_IS_MGMT(wh))
+	if ((ni->ni_flags & IEEE80211_NODE_MFP) &&
+	    IEEE80211_IS_MGMT(wh)) {
+		printf("%s: mgmt frame\n", __func__);
 		is_mfp = true;
+	}
 
 	data_len = m->m_pkthdr.len - (hdrlen + ccmp_get_header_len(key));
 	ccmp_init_blocks(&ctx->cc_aes, wh, ccmp_get_ccm_m(key),
@@ -726,6 +729,7 @@ ccmp_decrypt(struct ieee80211_key *key, const struct ieee80211_node *ni,
 	uint8_t *pos;
 	u_int space;
 	bool is_mfp = false;
+	bool is_mgmt = false;
 
 	rxs = ieee80211_get_rx_params_ptr(m);
 	if ((rxs != NULL) && (rxs->c_pktflags & IEEE80211_RX_F_DECRYPTED) != 0)
@@ -735,9 +739,15 @@ ccmp_decrypt(struct ieee80211_key *key, const struct ieee80211_node *ni,
 
 	wh = mtod(m, struct ieee80211_frame *);
 
+	if (IEEE80211_IS_MGMT(wh))
+		is_mgmt = true;
+
 	/* Check if node has MFP negotiated, and this is a mgmt frame */
-	if ((ni->ni_flags & IEEE80211_NODE_MFP) && IEEE80211_IS_MGMT(wh))
+	if ((ni->ni_flags & IEEE80211_NODE_MFP) &&
+	    IEEE80211_IS_MGMT(wh)) {
+		printf("%s: mgmt frame\n", __func__);
 		is_mfp = true;
+	}
 
 	data_len = m->m_pkthdr.len -
 	    (hdrlen + ccmp_get_header_len(key) + ccmp_get_trailer_len(key));
@@ -811,6 +821,8 @@ ccmp_decrypt(struct ieee80211_key *key, const struct ieee80211_node *ni,
 	if (memcmp(mic, a, ccmp_get_trailer_len(key)) != 0) {
 		IEEE80211_NOTE_MAC(vap, IEEE80211_MSG_CRYPTO, wh->i_addr2,
 		    "%s", "AES-CCM decrypt failed; MIC mismatch");
+		if (is_mgmt)
+			printf("%s: .. also, was a mgmt frame\n", __func__);
 		vap->iv_stats.is_rx_ccmpmic++;
 		return 0;
 	}
