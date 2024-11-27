@@ -1026,6 +1026,20 @@ ath_attach(u_int16_t devid, struct ath_softc *sc)
 	sc->sc_rx_lnamixer = ath_hal_hasrxlnamixer(ah);
 	sc->sc_hasdivcomb = ath_hal_hasdivantcomb(ah);
 
+	/* Add basic MFP support */
+	/*
+	 * The AR9160 and later allows for configurable MFP encryption
+	 * and decryption.
+	 *
+	 * There's also some fun workarounds for Cisco's draft MFP
+	 * versus 802.11w MFP for AES-CCM AAD assembly.
+	 *
+	 * But for now, just enable it here and treat AES-CCM MFP as
+	 * normal data paths and IGTK as software encryption
+	 * whilst everything else is being sorted out.
+	 */
+	ic->ic_caps |= IEEE80211_C_MFP;
+
 	/*
 	 * Some WB335 cards do not support antenna diversity. Since
 	 * we use a hardcoded value for AR9565 instead of using the
@@ -1298,6 +1312,14 @@ ath_attach(u_int16_t devid, struct ath_softc *sc)
 	ic->ic_setregdomain = ath_setregdomain;
 	ic->ic_getradiocaps = ath_getradiocaps;
 	sc->sc_opmode = HAL_M_STA;
+
+	/* Enable software ciphers */
+	ic->ic_sw_cryptocaps = IEEE80211_CRYPTO_WEP
+		| IEEE80211_CRYPTO_TKIP
+		| IEEE80211_CRYPTO_AES_CCM
+		| IEEE80211_CRYPTO_BIP_CMAC_128
+		| IEEE80211_CRYPTO_BIP_GMAC_128
+		;
 
 	/* override default methods */
 	ic->ic_ioctl = ath_ioctl;
