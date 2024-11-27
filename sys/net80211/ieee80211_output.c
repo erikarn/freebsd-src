@@ -1008,6 +1008,20 @@ ieee80211_send_setup(
  * dispatched to the driver, then it is responsible for freeing the
  * reference (and potentially free'ing up any associated storage);
  * otherwise deal with reclaiming any reference (on error).
+ *
+ * TODO: MFP encryption depending upon destination node, type and
+ * MFP?
+ *
+ * TODO: MFP Group addressed mgmt frames may need a MIC IE - 9.4.2.55 -
+ *       Management MIC element (IE 76) .  This element always is at the
+ *       end!
+ *
+ * 12.2.7 - Requirements for the Protected Management Field
+ *       (includes individually addressed robust management frames)
+ * 12.2.8 - Requirements for Robust Management Frame Protection
+ *          Robust Mgmt Frames: Disassoc, Deauth, Robust Action
+          - Table 9-47 - Action Frames
+ *        - group addressed robust management frames - 11.13
  */
 int
 ieee80211_mgmt_output(struct ieee80211_node *ni, struct mbuf *m, int type,
@@ -1037,6 +1051,14 @@ ieee80211_mgmt_output(struct ieee80211_node *ni, struct mbuf *m, int type,
 	}
 
 	IEEE80211_TX_LOCK(ic);
+
+	/*
+	 * TODO: check if node has MFP and this action frame
+	 * requires encryption (and check unicast/group TX too.)
+	 *
+	 * At least the HT action frames (addba, etc) are
+	 * being sent without encryption enabled here.
+	 */
 
 	wh = mtod(m, struct ieee80211_frame *);
 	ieee80211_send_setup(ni, m,

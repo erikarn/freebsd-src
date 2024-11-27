@@ -674,6 +674,11 @@ ieee80211_parse_beacon(struct ieee80211_node *ni, struct mbuf *m,
 				}
 			}
 			break;
+		case IEEE80211_ELEMID_MMIC:
+			/* Note: this may happen in 802.11-2020, but we're targeting -2016 for MFP right now */
+			//if_printf(vap->iv_ifp, "%s: MMIC w/ beacon\n", __func__);
+			/* TODO */
+			break;
 		default:
 			IEEE80211_DISCARD_IE(vap, IEEE80211_MSG_ELEMID,
 			    wh, "unhandled",

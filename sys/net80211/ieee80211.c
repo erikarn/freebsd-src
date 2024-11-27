@@ -2722,3 +2722,303 @@ ieee80211_is_key_unicast(const struct ieee80211vap *vap,
 	return (!(ieee80211_is_key_global(vap, key)
 	    || ieee80211_is_key_igtk(vap, key)));
 }
+
+/*
+ * Table 9-47 - Category Values
+ */
+
+
+/*
+ * Return whether a given action frame is a robust management frame
+ * from 802.11-2016 Table 9-47.
+ *
+ * This requires the frame is encrypted with the PTK, not the MGTK.
+ */
+bool
+ieee80211_mgmt_action_mfp_robust(struct ieee80211_node *ni,
+    const struct mbuf *m0)
+{
+	struct ieee80211vap *vap = ni->ni_vap;
+	const struct ieee80211_frame *wh =
+	    mtod(m0, const struct ieee80211_frame *);
+	const uint8_t *frm = (const uint8_t *)&wh[1];
+	const uint8_t *efrm = mtod(m0, u_int8_t *) + m0->m_len;
+	const struct ieee80211_action *ia;
+
+	/* Check action frame length! */
+	/* XXX TODO: god I hate pointer math */
+	if ((efrm - frm) < sizeof(struct ieee80211_action)) {
+		if_printf(vap->iv_ifp, "%s: short action frame?\n", __func__);
+		return (false);
+	}
+
+	ia = (const struct ieee80211_action *) frm;
+	if_printf(vap->iv_ifp, "%s: action: category=%d subcategory=%d\n",
+	    __func__, ia->ia_category, ia->ia_action);
+
+	switch (ia->ia_category) {
+	case IEEE80211_ACTION_CAT_SM:
+	case IEEE80211_ACTION_CAT_QOS:
+	case 2: /* DLS */
+	case IEEE80211_ACTION_CAT_BA:
+	case IEEE80211_ACTION_CAT_FAST_BSS_TRANSITION:
+	case IEEE80211_ACTION_CAT_SA_QUERY:
+	case IEEE80211_ACTION_CAT_PROTECTED_DUAL_OF_PUBLIC_ACTION:
+	case IEEE80211_ACTION_CAT_WNM:
+	case IEEE80211_ACTION_CAT_UNPROTECTED_WNM:
+	case IEEE80211_ACTION_CAT_MESH:
+	case IEEE80211_ACTION_CAT_MULTIHOP:
+	case IEEE80211_ACTION_CAT_DMG:
+	case IEEE80211_ACTION_CAT_FAST_SESSION_TRANSFER:
+	case IEEE80211_ACTION_CAT_ROBUST_AV_STREAMING:
+	case IEEE80211_ACTION_CAT_VENDOR_SPECIFIC_PROTECTED:
+		return true;
+	case IEEE80211_ACTION_CAT_RADIO_MEASUREMENT:
+		/*
+		 * Note: Everything is protected except
+		 * Link Measurement Request and Link Measurement Reports.
+		 */
+		return false;
+	case IEEE80211_ACTION_CAT_TDLS:
+		/*
+		 * Note: these are always carried in a data frame, so
+		 * we likely should log something as a warning here?
+		 */
+		return false;
+	default:
+		return false;
+	}
+
+	return false;
+}
+
+/*
+ * Parse and check a group addressed management action frame.
+ *
+ * See: 802.11-2016 Section 11.13
+ * (Group addressed robust management frame procedures.)
+ *
+ * These are management frames listed in table 9-47 whose entry
+ * under "Group Addressed Privacy" is set to true.
+ *
+ * The encryption key to use must be the active MGTK, not the
+ * PTK (pairwise key.)
+ */
+bool
+ieee80211_mgmt_action_mfp_group_privacy(struct ieee80211_node *ni,
+    const struct mbuf *m0)
+{
+	struct ieee80211vap *vap = ni->ni_vap;
+	const struct ieee80211_frame *wh =
+	    mtod(m0, const struct ieee80211_frame *);
+	const uint8_t *frm = (const uint8_t *)&wh[1];
+	const uint8_t *efrm = mtod(m0, u_int8_t *) + m0->m_len;
+	const struct ieee80211_action *ia;
+
+	/* Check action frame length! */
+	/* XXX TODO: god I hate pointer math */
+	if ((efrm - frm) < sizeof(struct ieee80211_action)) {
+		if_printf(vap->iv_ifp, "%s: short action frame?\n", __func__);
+		return (false);
+	}
+
+	ia = (const struct ieee80211_action *) frm;
+
+	if_printf(vap->iv_ifp, "%s: action: category=%d subcategory=%d\n",
+	    __func__, ia->ia_category, ia->ia_action);
+
+	switch (ia->ia_category) {
+	case IEEE80211_ACTION_CAT_MESH:
+	case IEEE80211_ACTION_CAT_MULTIHOP:
+		return true;
+
+	default:
+		return false;
+	}
+
+	return false;
+}
+
+
+bool
+ieee80211_mgmt_verify_mfp(struct ieee80211_node *ni,
+    const struct mbuf *m0, uint8_t s_subtype, bool has_decrypted)
+{
+	const struct ieee80211_frame *wh;
+	int dir, type, subtype;
+	bool uni_check = false; /* Check if needing unicast key MFP */
+	bool group_check = false; /* Check if needing group key MFP */
+	bool bip_check = false; /* Check if needing BIP key MFP */
+	struct ieee80211vap *vap = ni->ni_vap;
+
+	wh = mtod(m0, const struct ieee80211_frame *);
+	dir = wh->i_fc[1] & IEEE80211_FC1_DIR_MASK;
+	type = wh->i_fc[0] & IEEE80211_FC0_TYPE_MASK;
+	subtype = wh->i_fc[0] & IEEE80211_FC0_SUBTYPE_MASK;
+
+	(void) dir;
+
+	if (type == IEEE80211_FC0_TYPE_MGT && subtype == IEEE80211_FC0_SUBTYPE_BEACON) {
+		/* Don't print for beacons, aiee */
+	} else {
+		if_printf(vap->iv_ifp,
+		    "%s: called: dir=%d, type=%d, subtype=%d, has_decrypted=%d\n",
+		    __func__,
+		    dir,
+		    type,
+		    subtype,
+		    has_decrypted);
+	}
+
+	/*
+	 * Robust Management Frame Protection - 802.11-2016
+	 * 12.2.8 (Requirements for Robust Management Frame Protection.)
+	 *
+	 * DISASSOC, DEAUTH, and Robust Management Frames (Table 9-47.)
+	 */
+	switch (type) {
+	case IEEE80211_FC0_TYPE_MGT:
+		switch (subtype) {
+		case IEEE80211_FC0_SUBTYPE_BEACON:
+			/* Not protected */
+			uni_check = false;
+			group_check = false;
+			/*
+			 * 802.11-2020 supports protected beacons,
+			 * but right now I'm working on 802.11-2016.
+			 */
+			bip_check = false;
+			break;
+		case IEEE80211_FC0_SUBTYPE_ATIM:
+			/* Not protected */
+			uni_check = false;
+			group_check = true;
+			bip_check = true;
+			break;
+		case IEEE80211_FC0_SUBTYPE_DISASSOC:
+			uni_check = true;
+			group_check = false;
+			bip_check = true;
+			break;
+		case IEEE80211_FC0_SUBTYPE_AUTH:
+			uni_check = false;
+			group_check = false;
+			bip_check = true;
+			break;
+		case IEEE80211_FC0_SUBTYPE_DEAUTH:
+			uni_check = true;
+			group_check = false;
+			bip_check = true;
+			break;
+		case IEEE80211_FC0_SUBTYPE_ACTION:
+		case IEEE80211_FC0_SUBTYPE_ACTION_NOACK:
+			/* Check unicast */
+			uni_check = ieee80211_mgmt_action_mfp_robust(ni, m0);
+			/* Check multicast protected (802.11-2016 11.13) */
+			group_check = ieee80211_mgmt_action_mfp_group_privacy(ni, m0);
+
+			/* Check multicast BIP */
+			if ((group_check == false) && (uni_check == false) &&
+			    IEEE80211_IS_MULTICAST(wh->i_addr1) &&
+			    (ni->ni_flags & IEEE80211_NODE_MFP)) {
+				bip_check = true;
+			}
+			break;
+		default:
+			uni_check = false;
+			group_check = false;
+			bip_check = true;
+			break;
+		}
+	default:
+		uni_check = false;
+		group_check = false;
+		bip_check = false;
+		break;
+	}
+
+	/*
+	 * 802.11-2016 12.2.8 (Requirements for Robust Management Frame
+	 * Protection):
+	 *
+	 * All group addressed management frames must be protected.
+	 *
+	 * If bip_check is true and we've negotiated MFP then we
+	 * need to check the management frame for a valid BIP IE.
+	 */
+	if (bip_check &&
+	    IEEE80211_IS_MULTICAST(wh->i_addr1) &&
+	    (ni->ni_flags & IEEE80211_NODE_MFP)) {
+		/*
+		 * This gets a bit special, as it requires parsing
+		 * all of the IEs in the frame to get to the last
+		 * one, which must be the IEEE80211_ELEMID_MMIC
+		 * element w/ the BIP verification stuff.
+		 *
+		 * Since each management frame has its own fixed
+		 * part, and we don't have a generic way of
+		 * parsing these out, I'm going to need to figure
+		 * out .. how to do this? Fun.
+		 */
+		if_printf(vap->iv_ifp,
+		    "%s: BIP key: type=%d, subtype=%d, has_decrypted=%d\n",
+		    __func__,
+		    type,
+		    subtype,
+		    has_decrypted);
+	}
+
+	/*
+	 * Encrypted (unicast management, broadcast/multicast
+	 * frames tagged appropriately in Table 9-47.
+	 */
+	if (uni_check) {
+		/* TODO: verify the keyidx used for decryption */
+		if_printf(vap->iv_ifp,
+		    "%s: unicast key: type=%d, subtype=%d, has_decrypted=%d, mfp=%d\n",
+		    __func__,
+		    type,
+		    subtype,
+		    has_decrypted,
+		    !! (ni->ni_flags & IEEE80211_NODE_MFP));
+
+		if ((ni->ni_flags & IEEE80211_NODE_MFP) &&
+		    (has_decrypted == false)) {
+			/* TODO: return failure */
+			if_printf(vap->iv_ifp,
+			    "%s: would fail MFP check!\n", __func__);
+		}
+	}
+
+	if (group_check) {
+		/* TODO: verify the keyidx used for decryption */
+		if_printf(vap->iv_ifp,
+		    "%s: group key: type=%d, subtype=%d, has_decrypted=%d, mfp=%d\n",
+		    __func__,
+		    type,
+		    subtype,
+		    has_decrypted,
+		    !! (ni->ni_flags & IEEE80211_NODE_MFP));
+
+		if ((ni->ni_flags & IEEE80211_NODE_MFP) &&
+		    (has_decrypted == false)) {
+			/* TODO: return failure */
+			if_printf(vap->iv_ifp,
+			    "%s: would fail MFP check!\n", __func__);
+		}
+	}
+
+
+	return true;
+}
+
+
+/*
+ * TODO: group addressed robust management frame protection procedures
+ *
+ * For group addressed robust MFP frames in the table, they need
+ * to be encrypted and sent via the MGTK - same as other broadcast frames.
+ *
+ * For any other broadcast/multicast management frames not in the table,
+ * they need to be sent with the BIP IE at the end for verification.
+ */

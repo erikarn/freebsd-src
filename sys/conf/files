@@ -4218,6 +4218,8 @@ net80211/ieee80211_adhoc.c	optional wlan \
 	compile-with "${NORMAL_C} -Wno-unused-function"
 net80211/ieee80211_ageq.c	optional wlan
 net80211/ieee80211_amrr.c	optional wlan | wlan_amrr
+net80211/ieee80211_crypto_bip_cmac.c optional wlan wlan_bip_cmac
+net80211/ieee80211_crypto_bip_gmac.c optional wlan wlan_bip_gmac
 net80211/ieee80211_crypto.c	optional wlan \
 	compile-with "${NORMAL_C} -Wno-unused-function"
 net80211/ieee80211_crypto_ccmp.c optional wlan wlan_ccmp

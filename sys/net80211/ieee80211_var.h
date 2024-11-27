@@ -612,7 +612,7 @@ struct ieee80211vap {
 	uint8_t			iv_uapsdinfo;	/* sta mode QoS Info flags */
 
 	/* per-VAP MFP configuration */
-	enum ieee80211_mfp_mode iv_mfp_cfg;
+	enum ieee80211_mfp_mode	iv_mfp_cfg;
 
 	/* Optional transmit/receive histogram statistics */
 	struct ieee80211_rx_histogram	*rx_histogram;
@@ -831,8 +831,23 @@ bool	ieee80211_is_key_global(const struct ieee80211vap *vap,
 	    const struct ieee80211_key *key);
 bool	ieee80211_is_key_igtk(const struct ieee80211vap *vap,
 	    const struct ieee80211_key *key);
+bool	ieee80211_is_key_igtk(const struct ieee80211vap *vap,
+	    const struct ieee80211_key *key);
 bool	ieee80211_is_key_unicast(const struct ieee80211vap *vap,
 	    const struct ieee80211_key *key);
+
+/* Note: this is in ieee80211.c, needs to be moved out */
+bool	ieee80211_mgmt_verify_mfp(struct ieee80211_node *ni,
+	    const struct mbuf *m, uint8_t subtype, bool has_decrypted);
+bool	ieee80211_mgmt_action_mfp_robust(struct ieee80211_node *ni,
+	    const struct mbuf *m0);
+bool	ieee80211_mgmt_action_mfp_group_privacy(struct ieee80211_node *ni,
+	    const struct mbuf *m0);
+
+/* Note: this is in ieee80211_hostap.c, it needs to be moved out */
+int	ieee80211_parse_rsn(struct ieee80211vap *vap, const uint8_t *frm,
+		struct ieee80211_rsnparms *rsn,
+		const struct ieee80211_frame *wh);
 
 void	ieee80211_radiotap_attach(struct ieee80211com *,
 	    struct ieee80211_radiotap_header *th, int tlen,

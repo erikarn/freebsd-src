@@ -439,6 +439,12 @@ ieee80211_create_ibss(struct ieee80211vap* vap, struct ieee80211_channel *chan)
 		}
 	}
 
+	/* Enable MFP if configured */
+	if (vap->iv_mfp_cfg != 0) {
+		if_printf(vap->iv_ifp, "%s: called; mfp enabled\n", __func__);
+		ni->ni_flags |= IEEE80211_NODE_MFP;
+	}
+
 	/* XXX TODO: other bits and pieces - eg fast-frames? */
 
 	/* If we're an 11n channel then initialise the 11n bits */
@@ -993,6 +999,8 @@ ieee80211_sta_join(struct ieee80211vap *vap, struct ieee80211_channel *chan,
 		if (ni->ni_ies.vhtopmode_ie != NULL)
 			ieee80211_parse_vhtopmode(ni, ni->ni_ies.vhtopmode_ie);
 
+		/* XXX parse RSN IE for MFP? */
+
 		/* XXX parse BSSLOAD IE */
 		/* XXX parse TXPWRENV IE */
 		/* XXX parse APCHANREP IE */
@@ -1006,6 +1014,86 @@ ieee80211_sta_join(struct ieee80211vap *vap, struct ieee80211_channel *chan,
 		IEEE80211_F_DOSORT);
 	if (ieee80211_iserp_rateset(&ni->ni_rates))
 		ni->ni_flags |= IEEE80211_NODE_ERP;
+
+	/*
+	 * XXX TODO: handle MFP negotiation!
+	 *
+	 * XXX TODO: this also means handling no RSN IE but
+	 * having MFP required on the VAP.
+	 */
+	if (ni->ni_ies.rsn_ie != NULL) {
+		struct ieee80211_rsnparms rsn;
+		uint16_t rsn_caps;
+		int ret;
+		bool enable_mfp = false;
+
+		/*
+		 * ieee80211_parse_rsn makes a bunch of decisions as well
+		 * as parsing; we don't need those decisions.
+		 * Let's hope they're OK.
+		 */
+		ret = ieee80211_parse_rsn(vap, ni->ni_ies.rsn_ie, &rsn, NULL); // NB: no frame here
+		if (ret != 0) {
+			vap->iv_stats.is_rx_assoc_badwpaie++;
+			return 0;
+		}
+
+		/* This is the only field we need here */
+		rsn_caps = rsn.rsn_caps;
+
+		if_printf(vap->iv_ifp,
+		    "%s: called; MFP config: %d, rsn_caps=0x%04x\n",
+		    __func__, vap->iv_mfp_cfg, rsn_caps);
+		if_printf(vap->iv_ifp, "%s: RSN IE: %*D\n",
+		    __func__,
+		    ni->ni_ies.rsn_ie[1] + 2,
+		    (u_char *) ni->ni_ies.rsn_ie,
+		    ":");
+
+		/*
+		 * Look at RSN_CAP_MFP_CAPABLE and RSN_CAP_MFP_REQUIRED
+		 * versus iv_mfp_cfg.
+		 */
+		switch (vap->iv_mfp_cfg) {
+		case IEEE80211_MFP_PROTMODE_DISABLED:
+			/* If disabled, then MFP bits must be none or capable; required == fail */
+			if (rsn_caps & RSN_CAP_MFP_REQUIRED) {
+				/* XXX counter */
+				if_printf(vap->iv_ifp,
+				    "%s: MFP DISABLED but RSN MFP REQUIRED, fail!",
+				    __func__);
+				return 0;
+			}
+			break;
+		case IEEE80211_MFP_PROTMODE_OPTIONAL:
+			/* If optional, then MFP bits can be none, capable, required */
+			break;
+		case IEEE80211_MFP_PROTMODE_REQUIRED:
+			/* If reqiured, then MFP bits must be capable or required, none == fail */
+			if ((rsn_caps & (RSN_CAP_MFP_REQUIRED | RSN_CAP_MFP_CAPABLE)) == 0) {
+				/* XXX counter */
+				if_printf(vap->iv_ifp,
+				    "%s: MFP REQUIRED but RSN MFP NONE, fail!",
+				    __func__);
+				return 0;
+			}
+		}
+
+
+		if ((vap->iv_mfp_cfg != IEEE80211_MFP_PROTMODE_DISABLED)
+		    && (rsn_caps & (RSN_CAP_MFP_REQUIRED | RSN_CAP_MFP_CAPABLE)))
+			enable_mfp = true;
+
+		if (enable_mfp == true) {
+			ni->ni_flags |= IEEE80211_NODE_MFP;
+		} else {
+			ni->ni_flags &= ~IEEE80211_NODE_MFP;
+		}
+		if_printf(vap->iv_ifp,
+		    "%s: MFP is %s\n",
+		    __func__,
+		    (enable_mfp == true ? "enabled" : "disabled"));
+	}
 
 	/*
 	 * Setup HT state for this node if it's available, otherwise
@@ -1216,6 +1304,10 @@ ieee80211_ies_expand(struct ieee80211_ies *ies)
 			break;
 		case IEEE80211_ELEMID_APCHANREP:
 			ies->apchanrep_ie = ie;
+			break;
+		case IEEE80211_ELEMID_MMIC:
+			/* XXX TODO: should just parse it out */
+			printf("%s: MMIC element\n", __func__);
 			break;
 		}
 		ielen -= 2 + ie[1];
@@ -1845,6 +1937,15 @@ ieee80211_init_neighbor(struct ieee80211_node *ni,
 		    (ni->ni_vap->iv_vht_flags & IEEE80211_FVHT_VHT)) {
 			do_vht_setup = 1;
 		}
+
+		/* XXX TODO: parse RSN IE for MFP? */
+	}
+
+	/*
+	 * XXX TODO: handle MFP negotiation!
+	 */
+	if (ni->ni_ies.rsn_ie != NULL) {
+		if_printf(ni->ni_vap->iv_ifp, "%s: called; MFP TODO\n", __func__);
 	}
 
 	/* NB: must be after ni_chan is setup */

@@ -887,6 +887,7 @@ hostap_input(struct ieee80211_node *ni, struct mbuf *m,
 		if (ieee80211_radiotap_active_vap(vap))
 			ieee80211_radiotap_rx(vap, m);
 		need_tap = 0;
+		/* XXX MFP */
 		vap->iv_recv_mgmt(ni, m, subtype, rxs, rssi, nf);
 		goto out;
 
@@ -1422,8 +1423,10 @@ rsn_keymgmt(const uint8_t *sel)
  * Parse a WPA/RSN information element to collect parameters
  * and validate the parameters against what has been
  * configured for the system.
+ *
+ * Further information can be found in 802.11-2016 9.4.2.25 (RSNE).
  */
-static int
+int
 ieee80211_parse_rsn(struct ieee80211vap *vap, const uint8_t *frm,
 	struct ieee80211_rsnparms *rsn, const struct ieee80211_frame *wh)
 {
@@ -1544,9 +1547,9 @@ ieee80211_parse_rsn(struct ieee80211vap *vap, const uint8_t *frm,
 		frm += 2, len -= 2;
 	}
 
-	/* XXX PMK Count / PMKID */
+	/* XXX PMKID */
 
-	/* XXX Group Cipher Management Suite */
+	/* XXX Group Management Cipher Suite */
 
 	return 0;
 }
@@ -2181,6 +2184,22 @@ hostap_recv_mgmt(struct ieee80211_node *ni, struct mbuf *m0,
 			ratesetmismatch(ni, wh, reassoc, resp, "11g", rate);
 			vap->iv_stats.is_rx_assoc_norate++;
 			return;
+		}
+
+		/*
+		 * TODO: check if the VAP has MFP enabled and MFP is
+		 * available in the relevant IE; update node state,
+		 * and reject if required if MFP is required by either
+		 * side and not BOTH sides!
+		 */
+		if (rsn != NULL) {
+			if (vap->iv_mfp_cfg != 0) {
+				if_printf(vap->iv_ifp,
+				    "%s: called; MFP on VAP, RSN IE, should go implement MFP negotiation!\n",
+				    __func__);
+			}
+
+			/* TODO: MFP negotiation/checks */
 		}
 
 		/*

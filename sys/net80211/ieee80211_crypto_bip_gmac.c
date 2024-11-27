@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2002-2008 Sam Leffler, Errno Consulting
+ * Copyright (c) 2024 Adrian Chadd <adrian@FreeBSD.org>.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,7 +28,7 @@
 
 #include <sys/cdefs.h>
 /*
- * IEEE 802.11i AES-CCMP crypto support.
+ * IEEE 802.11-2016 BIP GMAC crypto support.
  *
  * Part of this module is derived from similar code in the Host
  * AP driver. The code is used with the consent of the author and
@@ -50,59 +51,55 @@
 
 #include <net80211/ieee80211_var.h>
 
-#include <crypto/rijndael/rijndael.h>
-
-#define AES_BLOCK_LEN 16
-
-struct ccmp_ctx {
+struct bip_gmac_ctx {
 	struct ieee80211vap *cc_vap;	/* for diagnostics+statistics */
 	struct ieee80211com *cc_ic;
-	rijndael_ctx	     cc_aes;
 };
 
-static	void *ccmp_attach(struct ieee80211vap *, struct ieee80211_key *);
-static	void ccmp_detach(struct ieee80211_key *);
-static	int ccmp_setkey(struct ieee80211_key *);
-static	void ccmp_setiv(struct ieee80211_key *, uint8_t *);
-static	int ccmp_encap(struct ieee80211_key *, struct ieee80211_node *,
+static	void *bip_gmac_attach(struct ieee80211vap *, struct ieee80211_key *);
+static	void bip_gmac_detach(struct ieee80211_key *);
+static	int bip_gmac_setkey(struct ieee80211_key *);
+static	void bip_gmac_setiv(struct ieee80211_key *, uint8_t *);
+static	int bip_gmac_encap(struct ieee80211_key *, struct ieee80211_node *,
 	    struct mbuf *);
-static	int ccmp_decap(struct ieee80211_key *, struct ieee80211_node *,
+static	int bip_gmac_decap(struct ieee80211_key *, struct ieee80211_node *,
 	    struct mbuf *, int);
-static	int ccmp_enmic(struct ieee80211_key *, struct mbuf *, int);
-static	int ccmp_demic(struct ieee80211_key *, struct mbuf *, int);
+static	int bip_gmac_enmic(struct ieee80211_key *, struct mbuf *, int);
+static	int bip_gmac_demic(struct ieee80211_key *, struct mbuf *, int);
 
-static const struct ieee80211_cipher ccmp = {
-	.ic_name	= "AES-CCM",
-	.ic_cipher	= IEEE80211_CIPHER_AES_CCM,
+static const struct ieee80211_cipher bip_gmac_128 = {
+	.ic_name	= "BIP-GMAC-128",
+	.ic_cipher	= IEEE80211_CIPHER_BIP_GMAC_128,
+
+	/* TODO: these aren't relevant for BIP */
 	.ic_header	= IEEE80211_WEP_IVLEN + IEEE80211_WEP_KIDLEN +
 			  IEEE80211_WEP_EXTIVLEN,
 	.ic_trailer	= IEEE80211_WEP_MICLEN,
 	.ic_miclen	= 0,
 	.ic_max_keylen	= 128 / NBBY,
-	.ic_attach	= ccmp_attach,
-	.ic_detach	= ccmp_detach,
-	.ic_setkey	= ccmp_setkey,
-	.ic_setiv	= ccmp_setiv,
-	.ic_encap	= ccmp_encap,
-	.ic_decap	= ccmp_decap,
-	.ic_enmic	= ccmp_enmic,
-	.ic_demic	= ccmp_demic,
+	.ic_attach	= bip_gmac_attach,
+	.ic_detach	= bip_gmac_detach,
+	.ic_setkey	= bip_gmac_setkey,
+	.ic_setiv	= bip_gmac_setiv,
+	.ic_encap	= bip_gmac_encap,
+	.ic_decap	= bip_gmac_decap,
+	.ic_enmic	= bip_gmac_enmic,
+	.ic_demic	= bip_gmac_demic,
 };
 
-static	int ccmp_encrypt(struct ieee80211_key *, struct ieee80211_node *,
-	    struct mbuf *, int hdrlen);
-static	int ccmp_decrypt(struct ieee80211_key *, struct ieee80211_node *,
-	    u_int64_t pn, struct mbuf *, int hdrlen);
+static	int bip_gmac_encrypt(struct ieee80211_key *, struct mbuf *, int hdrlen);
+static	int bip_gmac_decrypt(struct ieee80211_key *, u_int64_t pn,
+		struct mbuf *, int hdrlen);
 
 /* number of references from net80211 layer */
 static	int nrefs = 0;
 
 static void *
-ccmp_attach(struct ieee80211vap *vap, struct ieee80211_key *k)
+bip_gmac_attach(struct ieee80211vap *vap, struct ieee80211_key *k)
 {
-	struct ccmp_ctx *ctx;
+	struct bip_gmac_ctx *ctx;
 
-	ctx = (struct ccmp_ctx *) IEEE80211_MALLOC(sizeof(struct ccmp_ctx),
+	ctx = (struct bip_gmac_ctx *) IEEE80211_MALLOC(sizeof(struct bip_gmac_ctx),
 		M_80211_CRYPTO, IEEE80211_M_NOWAIT | IEEE80211_M_ZERO);
 	if (ctx == NULL) {
 		vap->iv_stats.is_crypto_nomem++;
@@ -115,9 +112,9 @@ ccmp_attach(struct ieee80211vap *vap, struct ieee80211_key *k)
 }
 
 static void
-ccmp_detach(struct ieee80211_key *k)
+bip_gmac_detach(struct ieee80211_key *k)
 {
-	struct ccmp_ctx *ctx = k->wk_private;
+	struct bip_gmac_ctx *ctx = k->wk_private;
 
 	IEEE80211_FREE(ctx, M_80211_CRYPTO);
 	KASSERT(nrefs > 0, ("imbalanced attach/detach"));
@@ -125,9 +122,9 @@ ccmp_detach(struct ieee80211_key *k)
 }
 
 static int
-ccmp_setkey(struct ieee80211_key *k)
+bip_gmac_setkey(struct ieee80211_key *k)
 {
-	struct ccmp_ctx *ctx = k->wk_private;
+	struct bip_gmac_ctx *ctx = k->wk_private;
 
 	if (k->wk_keylen != (128/NBBY)) {
 		IEEE80211_DPRINTF(ctx->cc_vap, IEEE80211_MSG_CRYPTO,
@@ -135,15 +132,18 @@ ccmp_setkey(struct ieee80211_key *k)
 			__func__, k->wk_keylen, 128/NBBY);
 		return 0;
 	}
+#if 0
 	if (k->wk_flags & IEEE80211_KEY_SWENCRYPT)
 		rijndael_set_key(&ctx->cc_aes, k->wk_key, k->wk_keylen*NBBY);
+#endif
 	return 1;
 }
 
 static void
-ccmp_setiv(struct ieee80211_key *k, uint8_t *ivp)
+bip_gmac_setiv(struct ieee80211_key *k, uint8_t *ivp)
 {
-	struct ccmp_ctx *ctx = k->wk_private;
+#if 0
+	struct bip_gmac_ctx *ctx = k->wk_private;
 	struct ieee80211vap *vap = ctx->cc_vap;
 	uint8_t keyid;
 
@@ -158,17 +158,19 @@ ccmp_setiv(struct ieee80211_key *k, uint8_t *ivp)
 	ivp[5] = k->wk_keytsc >> 24;		/* PN3 */
 	ivp[6] = k->wk_keytsc >> 32;		/* PN4 */
 	ivp[7] = k->wk_keytsc >> 40;		/* PN5 */
+#endif
 }
 
 /*
  * Add privacy headers appropriate for the specified key.
  */
 static int
-ccmp_encap(struct ieee80211_key *k, struct ieee80211_node *ni,
+bip_gmac_encap(struct ieee80211_key *k, struct ieee80211_node *ni,
     struct mbuf *m)
 {
+#if 0
 	const struct ieee80211_frame *wh;
-	struct ccmp_ctx *ctx = k->wk_private;
+	struct bip_gmac_ctx *ctx = k->wk_private;
 	struct ieee80211com *ic = ctx->cc_ic;
 	uint8_t *ivp;
 	int hdrlen;
@@ -192,22 +194,22 @@ ccmp_encap(struct ieee80211_key *k, struct ieee80211_node *ni,
 	/*
 	 * Copy down 802.11 header and add the IV, KeyID, and ExtIV.
 	 */
-	M_PREPEND(m, ccmp.ic_header, IEEE80211_M_NOWAIT);
+	M_PREPEND(m, bip.ic_header, IEEE80211_M_NOWAIT);
 	if (m == NULL)
 		return 0;
 	ivp = mtod(m, uint8_t *);
-	ovbcopy(ivp + ccmp.ic_header, ivp, hdrlen);
+	ovbcopy(ivp + bip.ic_header, ivp, hdrlen);
 	ivp += hdrlen;
 
-	ccmp_setiv(k, ivp);
+	bip_gmac_setiv(k, ivp);
 
 	/*
 	 * Finally, do software encrypt if needed.
 	 */
 	if ((k->wk_flags & IEEE80211_KEY_SWENCRYPT) &&
-	    !ccmp_encrypt(k, ni, m, hdrlen))
+	    !bip_gmac_encrypt(k, m, hdrlen))
 		return 0;
-
+#endif
 	return 1;
 }
 
@@ -215,18 +217,10 @@ ccmp_encap(struct ieee80211_key *k, struct ieee80211_node *ni,
  * Add MIC to the frame as needed.
  */
 static int
-ccmp_enmic(struct ieee80211_key *k, struct mbuf *m, int force)
+bip_gmac_enmic(struct ieee80211_key *k, struct mbuf *m, int force)
 {
 
 	return 1;
-}
-
-static __inline uint64_t
-READ_6(uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3, uint8_t b4, uint8_t b5)
-{
-	uint32_t iv32 = (b0 << 0) | (b1 << 8) | (b2 << 16) | (b3 << 24);
-	uint16_t iv16 = (b4 << 0) | (b5 << 8);
-	return (((uint64_t)iv16) << 32) | iv32;
 }
 
 /*
@@ -235,11 +229,12 @@ READ_6(uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3, uint8_t b4, uint8_t b5)
  * is also verified.
  */
 static int
-ccmp_decap(struct ieee80211_key *k, struct ieee80211_node *ni, struct mbuf *m,
-    int hdrlen)
+bip_gmac_decap(struct ieee80211_key *k, struct ieee80211_node *ni,
+    struct mbuf *m, int hdrlen)
 {
+#if 0
 	const struct ieee80211_rx_stats *rxs;
-	struct ccmp_ctx *ctx = k->wk_private;
+	struct bip_gmac_ctx *ctx = k->wk_private;
 	struct ieee80211vap *vap = ctx->cc_vap;
 	struct ieee80211_frame *wh;
 	uint8_t *ivp, tid;
@@ -262,7 +257,7 @@ ccmp_decap(struct ieee80211_key *k, struct ieee80211_node *ni, struct mbuf *m,
 		 */
 		IEEE80211_NOTE_MAC(vap, IEEE80211_MSG_CRYPTO, wh->i_addr2,
 			"%s", "missing ExtIV for AES-CCM cipher");
-		vap->iv_stats.is_rx_ccmpformat++;
+		vap->iv_stats.is_rx_bipformat++;
 		return 0;
 	}
 	tid = ieee80211_gettid(wh);
@@ -273,7 +268,7 @@ ccmp_decap(struct ieee80211_key *k, struct ieee80211_node *ni, struct mbuf *m,
 		 * Replay violation.
 		 */
 		ieee80211_notify_replay_failure(vap, wh, k, pn, tid);
-		vap->iv_stats.is_rx_ccmpreplay++;
+		vap->iv_stats.is_rx_bipreplay++;
 		return 0;
 	}
 
@@ -285,7 +280,7 @@ ccmp_decap(struct ieee80211_key *k, struct ieee80211_node *ni, struct mbuf *m,
 	 * decryption work.
 	 */
 	if ((k->wk_flags & IEEE80211_KEY_SWDECRYPT) &&
-	    !ccmp_decrypt(k, ni, pn, m, hdrlen))
+	    !bip_gmac_decrypt(k, pn, m, hdrlen))
 		return 0;
 
 finish:
@@ -293,16 +288,16 @@ finish:
 	 * Copy up 802.11 header and strip crypto bits.
 	 */
 	if (! ((rxs != NULL) && (rxs->c_pktflags & IEEE80211_RX_F_IV_STRIP))) {
-		ovbcopy(mtod(m, void *), mtod(m, uint8_t *) + ccmp.ic_header,
+		ovbcopy(mtod(m, void *), mtod(m, uint8_t *) + bip.ic_header,
 		    hdrlen);
-		m_adj(m, ccmp.ic_header);
+		m_adj(m, bip.ic_header);
 	}
 
 	/*
 	 * XXX TODO: see if MMIC_STRIP also covers CCMP MIC trailer.
 	 */
 	if (! ((rxs != NULL) && (rxs->c_pktflags & IEEE80211_RX_F_MMIC_STRIP)))
-		m_adj(m, -ccmp.ic_trailer);
+		m_adj(m, -bip.ic_trailer);
 
 	/*
 	 * Ok to update rsc now.
@@ -310,7 +305,7 @@ finish:
 	if (! ((rxs != NULL) && (rxs->c_pktflags & IEEE80211_RX_F_IV_STRIP))) {
 		k->wk_keyrsc[tid] = pn;
 	}
-
+#endif
 	return 1;
 }
 
@@ -318,173 +313,34 @@ finish:
  * Verify and strip MIC from the frame.
  */
 static int
-ccmp_demic(struct ieee80211_key *k, struct mbuf *m, int force)
+bip_gmac_demic(struct ieee80211_key *k, struct mbuf *m, int force)
 {
 	return 1;
 }
 
-static __inline void
-xor_block(uint8_t *b, const uint8_t *a, size_t len)
-{
-	int i;
-	for (i = 0; i < len; i++)
-		b[i] ^= a[i];
-}
-
-/*
- * Host AP crypt: host-based CCMP encryption implementation for Host AP driver
- *
- * Copyright (c) 2003-2004, Jouni Malinen <jkmaline@cc.hut.fi>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation. See README and COPYING for
- * more details.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- */
-
-static void
-ccmp_init_blocks(rijndael_ctx *ctx, struct ieee80211_frame *wh,
-	u_int64_t pn, size_t dlen, bool is_mfp,
-	uint8_t b0[AES_BLOCK_LEN], uint8_t aad[2 * AES_BLOCK_LEN],
-	uint8_t auth[AES_BLOCK_LEN], uint8_t s0[AES_BLOCK_LEN])
-{
-#define	IS_QOS_DATA(wh)	IEEE80211_QOS_HAS_SEQ(wh)
-	/* CCM Initial Block:
-	 * Flag (Include authentication header, M=3 (8-octet MIC),
-	 *       L=1 (2-octet Dlen))
-	 * Nonce: Nonce flags | A2 | PN
-	 * Nonce Flags: 0..3: priority, 4: MFP mgmt, 5-7: zero
-	 * Dlen */
-	b0[0] = 0x59;
-	/* NB: b0[1] set below */
-	IEEE80211_ADDR_COPY(b0 + 2, wh->i_addr2);
-	b0[8] = pn >> 40;
-	b0[9] = pn >> 32;
-	b0[10] = pn >> 24;
-	b0[11] = pn >> 16;
-	b0[12] = pn >> 8;
-	b0[13] = pn >> 0;
-	b0[14] = (dlen >> 8) & 0xff;
-	b0[15] = dlen & 0xff;
-
-	/* AAD:
-	 * FC with bits 4..6 and 11..13 masked to zero; 14 is always one
-	 * A1 | A2 | A3
-	 * SC with bits 4..15 (seq#) masked to zero
-	 * A4 (if present)
-	 * QC (if present)
-	 */
-	aad[0] = 0;	/* AAD length >> 8 */
-	/* NB: aad[1] set below */
-	aad[2] = wh->i_fc[0] & 0x8f;	/* XXX magic #s */
-	aad[3] = wh->i_fc[1] & 0xc7;	/* XXX magic #s */
-	/* NB: we know 3 addresses are contiguous */
-	memcpy(aad + 4, wh->i_addr1, 3 * IEEE80211_ADDR_LEN);
-	aad[22] = wh->i_seq[0] & IEEE80211_SEQ_FRAG_MASK;
-	aad[23] = 0; /* all bits masked */
-	/*
-	 * Construct variable-length portion of AAD based
-	 * on whether this is a 4-address frame/QOS frame.
-	 * We always zero-pad to 32 bytes before running it
-	 * through the cipher.
-	 *
-	 * We also fill in the priority bits of the CCM
-	 * initial block as we know whether or not we have
-	 * a QOS frame.
-	 */
-	if (IEEE80211_IS_DSTODS(wh)) {
-		IEEE80211_ADDR_COPY(aad + 24,
-			((struct ieee80211_frame_addr4 *)wh)->i_addr4);
-		if (IS_QOS_DATA(wh)) {
-			struct ieee80211_qosframe_addr4 *qwh4 =
-				(struct ieee80211_qosframe_addr4 *) wh;
-			aad[30] = qwh4->i_qos[0] & 0x0f;/* just priority bits */
-			aad[31] = 0;
-			/* Set priority */
-			b0[1] = aad[30] & 0xf;
-			/* Set MFP bit if needed */
-			if (is_mfp)
-			    b0[1] |= 0x10;
-			aad[1] = 22 + IEEE80211_ADDR_LEN + 2;
-		} else {
-			*(uint16_t *)&aad[30] = 0;
-			b0[1] = 0;
-			aad[1] = 22 + IEEE80211_ADDR_LEN;
-		}
-	} else {
-		if (IS_QOS_DATA(wh)) {
-			struct ieee80211_qosframe *qwh =
-				(struct ieee80211_qosframe*) wh;
-			aad[24] = qwh->i_qos[0] & 0x0f;	/* just priority bits */
-			aad[25] = 0;
-			b0[1] = aad[24];
-			aad[1] = 22 + 2;
-		} else {
-			*(uint16_t *)&aad[24] = 0;
-			b0[1] = 0;
-			aad[1] = 22;
-		}
-		*(uint16_t *)&aad[26] = 0;
-		*(uint32_t *)&aad[28] = 0;
-	}
-
-	/* Start with the first block and AAD */
-	rijndael_encrypt(ctx, b0, auth);
-	xor_block(auth, aad, AES_BLOCK_LEN);
-	rijndael_encrypt(ctx, auth, auth);
-	xor_block(auth, &aad[AES_BLOCK_LEN], AES_BLOCK_LEN);
-	rijndael_encrypt(ctx, auth, auth);
-	b0[0] &= 0x07;
-	b0[14] = b0[15] = 0;
-	rijndael_encrypt(ctx, b0, s0);
-#undef	IS_QOS_DATA
-}
-
-#define	CCMP_ENCRYPT(_i, _b, _b0, _pos, _e, _len) do {	\
-	/* Authentication */				\
-	xor_block(_b, _pos, _len);			\
-	rijndael_encrypt(&ctx->cc_aes, _b, _b);		\
-	/* Encryption, with counter */			\
-	_b0[14] = (_i >> 8) & 0xff;			\
-	_b0[15] = _i & 0xff;				\
-	rijndael_encrypt(&ctx->cc_aes, _b0, _e);	\
-	xor_block(_pos, _e, _len);			\
-} while (0)
-
 static int
-ccmp_encrypt(struct ieee80211_key *key, struct ieee80211_node *ni,
-    struct mbuf *m0, int hdrlen)
+bip_gmac_encrypt(struct ieee80211_key *key, struct mbuf *m0, int hdrlen)
 {
-	struct ccmp_ctx *ctx = key->wk_private;
+#if 0
+	struct bip_gmac_ctx *ctx = key->wk_private;
 	struct ieee80211_frame *wh;
 	struct mbuf *m = m0;
 	int data_len, i, space;
 	uint8_t aad[2 * AES_BLOCK_LEN], b0[AES_BLOCK_LEN], b[AES_BLOCK_LEN],
 		e[AES_BLOCK_LEN], s0[AES_BLOCK_LEN];
 	uint8_t *pos;
-	bool is_mfp = false;
 
-	ctx->cc_vap->iv_stats.is_crypto_ccmp++;
+	ctx->cc_vap->iv_stats.is_crypto_bip++;
 
 	wh = mtod(m, struct ieee80211_frame *);
-	data_len = m->m_pkthdr.len - (hdrlen + ccmp.ic_header);
-
-	/* Check if node has MFP negotiated, and this is a mgmt frame */
-	if ((ni->ni_flags & IEEE80211_NODE_MFP) &&
-	    IEEE80211_IS_MGMT(wh)) {
-		is_mfp = true;
-	}
-
-	ccmp_init_blocks(&ctx->cc_aes, wh, key->wk_keytsc,
-		data_len, is_mfp, b0, aad, b, s0);
+	data_len = m->m_pkthdr.len - (hdrlen + bip.ic_header);
+	bip_gmac_init_blocks(&ctx->cc_aes, wh, key->wk_keytsc,
+		data_len, b0, aad, b, s0);
 
 	i = 1;
-	pos = mtod(m, uint8_t *) + hdrlen + ccmp.ic_header;
+	pos = mtod(m, uint8_t *) + hdrlen + bip.ic_header;
 	/* NB: assumes header is entirely in first mbuf */
-	space = m->m_len - (hdrlen + ccmp.ic_header);
+	space = m->m_len - (hdrlen + bip.ic_header);
 	for (;;) {
 		if (space > data_len)
 			space = data_len;
@@ -592,27 +448,18 @@ ccmp_encrypt(struct ieee80211_key *key, struct ieee80211_node *ni,
 	}
 done:
 	/* tack on MIC */
-	xor_block(b, s0, ccmp.ic_trailer);
-	return m_append(m0, ccmp.ic_trailer, b);
-}
-#undef CCMP_ENCRYPT
+	xor_block(b, s0, bip.ic_trailer);
+	return m_append(m0, bip.ic_trailer, b);
+#endif
 
-#define	CCMP_DECRYPT(_i, _b, _b0, _pos, _a, _len) do {	\
-	/* Decrypt, with counter */			\
-	_b0[14] = (_i >> 8) & 0xff;			\
-	_b0[15] = _i & 0xff;				\
-	rijndael_encrypt(&ctx->cc_aes, _b0, _b);	\
-	xor_block(_pos, _b, _len);			\
-	/* Authentication */				\
-	xor_block(_a, _pos, _len);			\
-	rijndael_encrypt(&ctx->cc_aes, _a, _a);		\
-} while (0)
+	return 1;
+}
 
 static int
-ccmp_decrypt(struct ieee80211_key *key, struct ieee80211_node *ni,
-    u_int64_t pn, struct mbuf *m, int hdrlen)
+bip_gmac_decrypt(struct ieee80211_key *key, u_int64_t pn, struct mbuf *m, int hdrlen)
 {
-	struct ccmp_ctx *ctx = key->wk_private;
+#if 0
+	struct bip_gmac_ctx *ctx = key->wk_private;
 	struct ieee80211vap *vap = ctx->cc_vap;
 	struct ieee80211_frame *wh;
 	uint8_t aad[2 * AES_BLOCK_LEN];
@@ -622,26 +469,18 @@ ccmp_decrypt(struct ieee80211_key *key, struct ieee80211_node *ni,
 	int i;
 	uint8_t *pos;
 	u_int space;
-	bool is_mfp = false;
 
-	ctx->cc_vap->iv_stats.is_crypto_ccmp++;
+	ctx->cc_vap->iv_stats.is_crypto_bip++;
 
 	wh = mtod(m, struct ieee80211_frame *);
-	data_len = m->m_pkthdr.len - (hdrlen + ccmp.ic_header + ccmp.ic_trailer);
-
-	/* Check if node has MFP negotiated, and this is a mgmt frame */
-	if ((ni->ni_flags & IEEE80211_NODE_MFP) &&
-	    IEEE80211_IS_MGMT(wh)) {
-		is_mfp = true;
-	}
-
-	ccmp_init_blocks(&ctx->cc_aes, wh, pn, data_len, is_mfp, b0, aad, a, b);
-	m_copydata(m, m->m_pkthdr.len - ccmp.ic_trailer, ccmp.ic_trailer, mic);
-	xor_block(mic, b, ccmp.ic_trailer);
+	data_len = m->m_pkthdr.len - (hdrlen + bip.ic_header + bip.ic_trailer);
+	bip_gmac_init_blocks(&ctx->cc_aes, wh, pn, data_len, b0, aad, a, b);
+	m_copydata(m, m->m_pkthdr.len - bip.ic_trailer, bip.ic_trailer, mic);
+	xor_block(mic, b, bip.ic_trailer);
 
 	i = 1;
-	pos = mtod(m, uint8_t *) + hdrlen + ccmp.ic_header;
-	space = m->m_len - (hdrlen + ccmp.ic_header);
+	pos = mtod(m, uint8_t *) + hdrlen + bip.ic_header;
+	space = m->m_len - (hdrlen + bip.ic_header);
 	for (;;) {
 		if (space > data_len)
 			space = data_len;
@@ -693,17 +532,17 @@ ccmp_decrypt(struct ieee80211_key *key, struct ieee80211_node *ni,
 			space = m->m_len;
 		}
 	}
-	if (memcmp(mic, a, ccmp.ic_trailer) != 0) {
+	if (memcmp(mic, a, bip.ic_trailer) != 0) {
 		IEEE80211_NOTE_MAC(vap, IEEE80211_MSG_CRYPTO, wh->i_addr2,
 		    "%s", "AES-CCM decrypt failed; MIC mismatch");
-		vap->iv_stats.is_rx_ccmpmic++;
+		vap->iv_stats.is_rx_bipmic++;
 		return 0;
 	}
+#endif
 	return 1;
 }
-#undef CCMP_DECRYPT
 
 /*
  * Module glue.
  */
-IEEE80211_CRYPTO_MODULE(ccmp, 1);
+IEEE80211_CRYPTO_MODULE(bip_gmac_128, 1);

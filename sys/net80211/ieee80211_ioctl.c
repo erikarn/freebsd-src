@@ -1209,6 +1209,7 @@ ieee80211_ioctl_setkey(struct ieee80211vap *vap, struct ieee80211req *ireq)
 	if (ik.ik_keylen > sizeof(ik.ik_keydata))
 		return E2BIG;
 	kid = ik.ik_keyix;
+	if_printf(vap->iv_ifp, "%s: called; kid=%d\n", __func__, kid);
 	if (kid == IEEE80211_KEYIX_NONE) {
 		/* XXX unicast keys currently must be tx/rx */
 		if (ik.ik_flags != (IEEE80211_KEY_XMIT | IEEE80211_KEY_RECV))
@@ -1307,6 +1308,7 @@ ieee80211_ioctl_delkey(struct ieee80211vap *vap, struct ieee80211req *ireq)
 	if (error)
 		return error;
 	kid = dk.idk_keyix;
+	if_printf(vap->iv_ifp, "%s: called; kid=%d\n", __func__, kid);
 	/* XXX uint8_t -> uint16_t */
 	if (dk.idk_keyix == (uint8_t) IEEE80211_KEYIX_NONE) {
 		struct ieee80211_node *ni;
@@ -2505,6 +2507,7 @@ ieee80211_ioctl_setappie_locked(struct ieee80211vap *vap,
 		break;
 	case (IEEE80211_APPIE_WPA & IEEE80211_FC0_SUBTYPE_MASK):
 		error = setappie(&vap->iv_appie_wpa, ireq);
+
 		if (error == 0) {
 			/*
 			 * Must split single blob of data into separate
@@ -2519,10 +2522,31 @@ ieee80211_ioctl_setappie_locked(struct ieee80211vap *vap,
 				    vap->iv_appie_wpa;
 				uint8_t *data = appie->ie_data;
 
+				if_printf(vap->iv_ifp, "%s: APPIE_WPA: %*D\n",
+				    __func__,
+				    vap->iv_appie_wpa->ie_len,
+				    vap->iv_appie_wpa->ie_data,
+				    ":");
+
 				/* XXX ie length validate is painful, cheat */
 				setwparsnie(vap, data, appie->ie_len);
 				setwparsnie(vap, data + 2 + data[1],
 				    appie->ie_len - (2 + data[1]));
+
+				if (vap->iv_wpa_ie != NULL) {
+					if_printf(vap->iv_ifp, "%s: WPA_IE: %*D\n",
+					    __func__,
+					    vap->iv_wpa_ie[1] + 2,
+					    vap->iv_wpa_ie,
+					    ":");
+				}
+				if (vap->iv_rsn_ie != NULL) {
+					if_printf(vap->iv_ifp, "%s: RSN_IE: %*D\n",
+					    __func__,
+					    vap->iv_rsn_ie[1] + 2,
+					    vap->iv_rsn_ie,
+					    ":");
+				}
 			}
 			if (vap->iv_opmode == IEEE80211_M_HOSTAP ||
 			    vap->iv_opmode == IEEE80211_M_IBSS) {

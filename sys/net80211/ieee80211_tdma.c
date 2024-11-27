@@ -395,6 +395,7 @@ tdma_recv_mgmt(struct ieee80211_node *ni, struct mbuf *m0,
 		 *     2x parsing of the frame but should happen infrequently
 		 */
 	}
+	/* XXX MFP? */
 	ts->tdma_recv_mgmt(ni, m0, subtype, rxs, rssi, nf);
 }
 

@@ -657,6 +657,7 @@ adhoc_input(struct ieee80211_node *ni, struct mbuf *m,
 			vap->iv_stats.is_rx_mgtdiscard++; /* XXX */
 			goto out;
 		}
+		/* XXX MFP */
 		vap->iv_recv_mgmt(ni, m, subtype, rxs, rssi, nf);
 		goto out;
 

@@ -1218,6 +1218,8 @@ again:
  * Process a BAR ctl frame.  Dispatch all frames up to
  * the sequence number of the frame.  If this frame is
  * out of range it's discarded.
+ *
+ * XXX TODO: protected MFP block-ack? (10.24.9)
  */
 void
 ieee80211_recv_bar(struct ieee80211_node *ni, struct mbuf *m0)
@@ -2905,6 +2907,9 @@ ieee80211_bar_response(struct ieee80211_node *ni,
  * state associated with the node.
  *
  * NB: we only handle immediate ACK w/ compressed bitmap.
+ *
+ * XXX TODO: protected MFP block-ack? (10.24.9)
+ *
  */
 int
 ieee80211_send_bar(struct ieee80211_node *ni,
