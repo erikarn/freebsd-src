@@ -1086,7 +1086,6 @@ ieee80211_crypto_init_aad(const struct ieee80211_frame *wh, uint8_t *aad,
 	aad[2] = wh->i_fc[0];
 	if (IEEE80211_IS_DATA(wh))
 		aad[2] &= 0x8f; /* see above for bitfields */
-
 	aad[3] = wh->i_fc[1] & 0xc7;	/* see above for bitfields */
 	/* mask aad[3] b7 if frame is data frame w/ QoS control field */
 	if (IEEE80211_IS_QOS_ANY(wh))
@@ -1130,6 +1129,14 @@ ieee80211_crypto_init_aad(const struct ieee80211_frame *wh, uint8_t *aad,
 		}
 		*(uint16_t *)&aad[26] = 0;
 		*(uint32_t *)&aad[28] = 0;
+	}
+
+	if (aad_len == 22) {
+		printf("%s: wh=%*D\n", __func__,
+		    (int) sizeof(struct ieee80211_frame),
+		    (const u_char *)wh, ":");
+		printf("%s: aad=%*D (len %d)\n",
+		    __func__, len, (const u_char *)aad, ":", aad_len);
 	}
 
 	return (aad_len);

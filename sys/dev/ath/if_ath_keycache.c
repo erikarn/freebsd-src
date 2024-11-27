@@ -445,16 +445,33 @@ ath_key_alloc(struct ieee80211vap *vap, struct ieee80211_key *k,
 {
 	struct ath_softc *sc = vap->iv_ic->ic_softc;
 
+	device_printf(sc->sc_dev, "%s: called\n", __func__);
+
 	/*
 	 * Skip IGTK keys; they're global but not used
 	 * in the normal hardware keyix slots.
+	 *
+	 * TODO: these will end up needing to use the
+	 * host based keycache slots, so we may want
+	 * to jump to the end of the function..
 	 */
 	if (ieee80211_is_key_igtk(vap, k)) {
-		DPRINTF(sc, ATH_DEBUG_KEYCACHE,
+		device_printf(sc->sc_dev,
 		    "%s: iGTK key; skipping\n", __func__);
 		k->wk_flags |= IEEE80211_KEY_SWCRYPT;
 		*keyix = *rxkeyix = IEEE80211_KEYIX_NONE;
 		return 1;
+	}
+
+	/*
+	 * If the given node is trying to do MFP then let's
+	 * experiment by doing software keycache entries.
+	 */
+	if (k->wk_flags & IEEE80211_KEY_MFP) {
+		device_printf(sc->sc_dev,
+		    "%s: called for MFP key\n", __func__);
+		k->wk_flags |= IEEE80211_KEY_SWCRYPT;
+		goto keyalloc;
 	}
 
 	/*
@@ -507,6 +524,7 @@ ath_key_alloc(struct ieee80211vap *vap, struct ieee80211_key *k,
 	 * not support pass-through cache entries and we map all
 	 * those requests to slot 0.
 	 */
+keyalloc:
 	if (k->wk_flags & IEEE80211_KEY_SWCRYPT) {
 		return key_alloc_single(sc, keyix, rxkeyix);
 	} else if (k->wk_cipher->ic_cipher == IEEE80211_CIPHER_TKIP &&
