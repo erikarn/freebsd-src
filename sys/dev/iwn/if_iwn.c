@@ -6444,6 +6444,8 @@ iwn_check_rx_recovery(struct iwn_softc *sc, struct iwn_stats *rs)
 	    (delta_msec + delta_cck + delta_ofdm + delta_ht),
 	    thresh);
 
+	(void) thresh; /* sigh */
+
 #if 0
 	/*
 	 * If we need a retune, then schedule a single channel scan
