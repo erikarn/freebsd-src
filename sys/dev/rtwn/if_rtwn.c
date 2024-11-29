@@ -336,6 +336,11 @@ rtwn_sysctlattach(struct rtwn_softc *sc)
 	    "ena_phystatus", CTLFLAG_RWTUN, &sc->sc_ena_phystatus,
 	    sc->sc_ena_phystatus, "Enable/disable PHYSTATUS reporting");
 
+	sc->sc_ena_tsf64 = 1;
+	SYSCTL_ADD_INT(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
+	    "ena_tsf64", CTLFLAG_RWTUN, &sc->sc_ena_tsf64,
+	    sc->sc_ena_tsf64, "Enable/disable per-packet TSF64 reporting");
+
 
 #ifdef RTWN_DEBUG
 	SYSCTL_ADD_U32(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,

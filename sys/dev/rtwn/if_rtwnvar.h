@@ -172,6 +172,7 @@ struct rtwn_softc {
 	device_t		sc_dev;
 
 	int			sc_ht40;
+	int			sc_ena_tsf64;
 	int			sc_ena_phystatus;
 	uint32_t		sc_debug;
 	int			sc_hwcrypto;
