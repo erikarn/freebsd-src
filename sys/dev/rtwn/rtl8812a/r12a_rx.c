@@ -132,7 +132,7 @@ r12a_ratectl_tx_complete(struct rtwn_softc *sc, uint8_t *buf, int len)
 		} else if (RTWN_RATE_IS_VHT(rpt->final_rate)) {
 			txs.flags &= ~IEEE80211_RATECTL_STATUS_FINAL_RATE;
 			txs.final_rate = 0;
-			txs.flags = IEEE80211_RATECTL_STATUS_MCS |
+			txs.flags |= IEEE80211_RATECTL_STATUS_MCS |
 			    IEEE80211_RATECTL_STATUS_NSS;
 			/* XXX eww, turn into a macro */
 			txs.mcs = (rpt->final_rate - RTWN_RIDX_VHT_MCS_SHIFT) / 10;
