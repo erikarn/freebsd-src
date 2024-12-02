@@ -328,6 +328,17 @@ r12a_fill_tx_desc(struct rtwn_softc *sc, struct ieee80211_node *ni,
 	    (ridx <= RTWN_RIDX_HT_MCS(7))) {
 		ridx = RTWN_RIDX_VHT_MCS(0, (ridx - RTWN_RIDX_HT_MCS_SHIFT));
 	}
+#if 0
+	else if ((type == IEEE80211_FC0_TYPE_DATA) &&
+	    (ni->ni_flags & IEEE80211_NODE_VHT) &&
+	    (RTWN_RATE_IS_HT(ridx)) &&
+	    (ridx >= RTWN_RIDX_HT_MCS(8)) &&
+	    (ridx <= RTWN_RIDX_HT_MCS(15))) {
+		ridx = RTWN_RIDX_VHT_MCS(0, (ridx - RTWN_RIDX_HT_MCS_SHIFT));
+		ridx = RTWN_RIDX_VHT_MCS(1, (ridx - (RTWN_RIDX_HT_MCS_SHIFT + 8)));
+	}
+#endif
+
 #endif
 
 	if (!ismcast) {
