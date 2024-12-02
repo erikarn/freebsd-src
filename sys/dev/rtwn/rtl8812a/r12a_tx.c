@@ -60,6 +60,7 @@ static int
 r12a_get_primary_channel(struct rtwn_softc *sc, struct ieee80211_channel *c)
 {
 	/* XXX 80 MHz */
+	/* XXX TODO: figure this out adrian */
 	if (IEEE80211_IS_CHAN_HT40U(c))
 		return (R12A_TXDW5_PRIM_CHAN_20_80_2);
 	else
@@ -72,6 +73,7 @@ r12a_tx_set_ht40(struct rtwn_softc *sc, void *buf, struct ieee80211_node *ni)
 	struct r12a_tx_desc *txd = (struct r12a_tx_desc *)buf;
 
 	/* XXX VHT 80 Mhz */
+	/* XXX TODO: figure this out adrian */
 	if (ni->ni_chan != IEEE80211_CHAN_ANYC &&
 	    IEEE80211_IS_CHAN_HT40(ni->ni_chan)) {
 		int prim_chan;
@@ -301,6 +303,17 @@ r12a_fill_tx_desc(struct rtwn_softc *sc, struct ieee80211_node *ni,
 	    (ridx <= RTWN_RIDX_HT_MCS(7))) {
 		ridx = RTWN_RIDX_VHT_MCS(0, (ridx - RTWN_RIDX_HT_MCS_SHIFT));
 	}
+#if 0
+	else if ((type == IEEE80211_FC0_TYPE_DATA) &&
+	    (ni->ni_flags & IEEE80211_NODE_VHT) &&
+	    (RTWN_RATE_IS_HT(ridx)) &&
+	    (ridx >= RTWN_RIDX_HT_MCS(8)) &&
+	    (ridx <= RTWN_RIDX_HT_MCS(15))) {
+		ridx = RTWN_RIDX_VHT_MCS(0, (ridx - RTWN_RIDX_HT_MCS_SHIFT));
+		ridx = RTWN_RIDX_VHT_MCS(1, (ridx - (RTWN_RIDX_HT_MCS_SHIFT + 8)));
+	}
+#endif
+
 #endif
 
 	if (!ismcast) {
