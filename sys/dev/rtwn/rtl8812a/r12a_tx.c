@@ -70,16 +70,28 @@ static void
 r12a_tx_set_ht40(struct rtwn_softc *sc, void *buf, struct ieee80211_node *ni)
 {
 	struct r12a_tx_desc *txd = (struct r12a_tx_desc *)buf;
+	int prim_chan;
 
-	/* XXX VHT80; VHT40; VHT20 */
+	if (ni->ni_chan == IEEE80211_CHAN_ANYC)
+		return;
+
+	prim_chan = r12a_get_primary_channel(sc, ni->ni_chan);
+
+	if (IEEE80211_IS_CHAN_VHT80(ni->ni_chan)) {
+		txd->txdw5 |= htole32(SM(R12A_TXDW5_DATA_BW,
+		    R12A_TXDW5_DATA_BW80));
+		txd->txdw5 |= htole32(SM(R12A_TXDW5_DATA_PRIM_CHAN,
+		    prim_chan));
+
+		return;
+	}
 	if (ieee80211_ht_check_tx_ht40(ni)) {
-		int prim_chan;
-
-		prim_chan = r12a_get_primary_channel(sc, ni->ni_chan);
 		txd->txdw5 |= htole32(SM(R12A_TXDW5_DATA_BW,
 		    R12A_TXDW5_DATA_BW40));
 		txd->txdw5 |= htole32(SM(R12A_TXDW5_DATA_PRIM_CHAN,
 		    prim_chan));
+
+		return;
 	}
 }
 
@@ -241,6 +253,13 @@ r12a_tx_set_sgi(struct rtwn_softc *sc, void *buf, struct ieee80211_node *ni)
 		if (ieee80211_ht_check_tx_shortgi_20(ni))
 			txd->txdw5 |= htole32(R12A_TXDW5_DATA_SHORT);
 	}
+
+	if (IEEE80211_IS_CHAN_VHT80(ni->ni_chan))
+		return;
+	if (IEEE80211_IS_CHAN_VHT40(ni->ni_chan))
+		return;
+	if (IEEE80211_IS_CHAN_VHT20(ni->ni_chan))
+		return;
 }
 
 /*
@@ -254,6 +273,13 @@ r12a_tx_set_ldpc(struct rtwn_softc *sc, struct r12a_tx_desc *txd,
     struct ieee80211_node *ni)
 {
 	struct ieee80211vap *vap = ni->ni_vap;
+
+	if (IEEE80211_IS_CHAN_VHT80(ni->ni_chan))
+		return;
+	if (IEEE80211_IS_CHAN_VHT40(ni->ni_chan))
+		return;
+	if (IEEE80211_IS_CHAN_VHT20(ni->ni_chan))
+		return;
 
 	if ((vap->iv_flags_ht & IEEE80211_FHT_LDPC_TX) &&
 	    (ni->ni_htcap & IEEE80211_HTCAP_LDPC))
