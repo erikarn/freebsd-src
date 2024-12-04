@@ -59,30 +59,48 @@
 static int
 r12a_get_primary_channel(struct rtwn_softc *sc, struct ieee80211_channel *c)
 {
+#if 0
 	/* XXX 80 MHz */
 	/* XXX TODO: figure this out adrian */
 	if (IEEE80211_IS_CHAN_HT40U(c))
 		return (R12A_TXDW5_PRIM_CHAN_20_80_2);
 	else
 		return (R12A_TXDW5_PRIM_CHAN_20_80_3);
+#endif
+	return 0;
 }
 
 static void
 r12a_tx_set_ht40(struct rtwn_softc *sc, void *buf, struct ieee80211_node *ni)
 {
 	struct r12a_tx_desc *txd = (struct r12a_tx_desc *)buf;
+	int prim_chan;
 
 	/* XXX VHT 80 Mhz */
 	/* XXX TODO: figure this out adrian */
+
+	if (ni->ni_chan == IEEE80211_CHAN_ANYC)
+		return;
+
+	prim_chan = r12a_get_primary_channel(sc, ni->ni_chan);
+
+	if (IEEE80211_IS_CHAN_VHT80(ni->ni_chan)) {
+		txd->txdw5 |= htole32(SM(R12A_TXDW5_DATA_BW,
+		    R12A_TXDW5_DATA_BW80));
+		txd->txdw5 |= htole32(SM(R12A_TXDW5_DATA_PRIM_CHAN,
+		    prim_chan));
+
+		return;
+	}
+
 	if (ni->ni_chan != IEEE80211_CHAN_ANYC &&
 	    IEEE80211_IS_CHAN_HT40(ni->ni_chan)) {
-		int prim_chan;
-
-		prim_chan = r12a_get_primary_channel(sc, ni->ni_chan);
 		txd->txdw5 |= htole32(SM(R12A_TXDW5_DATA_BW,
 		    R12A_TXDW5_DATA_BW40));
 		txd->txdw5 |= htole32(SM(R12A_TXDW5_DATA_PRIM_CHAN,
 		    prim_chan));
+
+		return;
 	}
 }
 
@@ -230,6 +248,13 @@ r12a_tx_set_sgi(struct rtwn_softc *sc, void *buf, struct ieee80211_node *ni)
 	struct r12a_tx_desc *txd = (struct r12a_tx_desc *)buf;
 	struct ieee80211vap *vap = ni->ni_vap;
 
+	if (IEEE80211_IS_CHAN_VHT80(ni->ni_chan))
+		return;
+	if (IEEE80211_IS_CHAN_VHT40(ni->ni_chan))
+		return;
+	if (IEEE80211_IS_CHAN_VHT20(ni->ni_chan))
+		return;
+
 	if ((vap->iv_flags_ht & IEEE80211_FHT_SHORTGI20) &&	/* HT20 */
 	    (ni->ni_htcap & IEEE80211_HTCAP_SHORTGI20))
 		txd->txdw5 |= htole32(R12A_TXDW5_DATA_SHORT);
@@ -251,6 +276,13 @@ r12a_tx_set_ldpc(struct rtwn_softc *sc, struct r12a_tx_desc *txd,
     struct ieee80211_node *ni)
 {
 	struct ieee80211vap *vap = ni->ni_vap;
+
+	if (IEEE80211_IS_CHAN_VHT80(ni->ni_chan))
+		return;
+	if (IEEE80211_IS_CHAN_VHT40(ni->ni_chan))
+		return;
+	if (IEEE80211_IS_CHAN_VHT20(ni->ni_chan))
+		return;
 
 	if ((vap->iv_flags_ht & IEEE80211_FHT_LDPC_TX) &&
 	    (ni->ni_htcap & IEEE80211_HTCAP_LDPC))
