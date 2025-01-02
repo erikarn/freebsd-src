@@ -3445,11 +3445,13 @@ iwm_rx_tx_cmd_single(struct iwm_softc *sc, struct iwm_rx_packet *pkt,
 	struct ieee80211_node *ni = &in->in_ni;
 	struct ieee80211vap *vap = ni->ni_vap;
 	int status = le16toh(tx_resp->status.status) & IWM_TX_STATUS_MSK;
-	int new_rate, cur_rate = vap->iv_bss->ni_txrate;
+	int new_rate, cur_rate;
 	boolean_t rate_matched;
 	uint8_t tx_resp_rate;
 
 	KASSERT(tx_resp->frame_count == 1, ("too many frames"));
+
+	cur_rate = ieee80211_node_get_txrate_dot11rate(vap->iv_bss);
 
 	/* Update rate control statistics. */
 	IWM_DPRINTF(sc, IWM_DEBUG_XMIT, "%s: status=0x%04x, seq=%d, fc=%d, btc=%d, frts=%d, ff=%d, irate=%08x, wmt=%d\n",
@@ -3502,7 +3504,7 @@ iwm_rx_tx_cmd_single(struct iwm_softc *sc, struct iwm_rx_packet *pkt,
 		ieee80211_ratectl_tx_complete(ni, txs);
 
 		int rix = ieee80211_ratectl_rate(vap->iv_bss, NULL, 0);
-		new_rate = vap->iv_bss->ni_txrate;
+		new_rate = ieee80211_node_get_txrate_dot11rate(vap->iv_bss);
 		if (new_rate != 0 && new_rate != cur_rate) {
 			struct iwm_node *in = IWM_NODE(vap->iv_bss);
 			iwm_setrates(sc, in, rix);
@@ -3695,7 +3697,8 @@ iwm_tx_fill_cmd(struct iwm_softc *sc, struct iwm_node *in,
 	} else {
 		/* for data frames, use RS table */
 		IWM_DPRINTF(sc, IWM_DEBUG_TXRATE, "%s: DATA\n", __func__);
-		ridx = iwm_rate2ridx(sc, ni->ni_txrate);
+		ridx = iwm_rate2ridx(sc,
+		    ieee80211_node_get_txrate_dot11rate(ni));
 		if (ridx == -1)
 			ridx = 0;
 
