@@ -3137,3 +3137,57 @@ ieee80211_getsignal(struct ieee80211vap *vap, int8_t *rssi, int8_t *noise)
 	if (vap->iv_opmode != IEEE80211_M_STA)
 		*rssi = ieee80211_getrssi(vap);
 }
+
+uint8_t
+ieee80211_node_get_txrate_dot11rate(struct ieee80211_node *ni)
+{
+
+	return (ni->ni_txrate);
+}
+
+void
+ieee80211_node_set_txrate_dot11rate(struct ieee80211_node *ni,
+    uint8_t dot11Rate)
+{
+
+	ni->ni_txrate = dot11Rate;
+}
+
+void
+ieee80211_node_set_txrate_ht_mcsrate(struct ieee80211_node *ni,
+    uint8_t mcs)
+{
+
+	ni->ni_txrate = IEEE80211_RATE_MCS | mcs;
+}
+
+
+/*
+ * Fetch the rate in the net80211 units of 1/2 mbit/sec.
+ *
+ * This currently only works for CCK, OFDM and HT rates.
+ */
+uint16_t
+ieee80211_node_get_txrate_mbit(struct ieee80211_node *ni)
+{
+	uint16_t mbps;
+
+	if (ni->ni_txrate & IEEE80211_RATE_MCS) {
+		const struct ieee80211_mcs_rates *mcs =
+		    &ieee80211_htrates[ni->ni_txrate &~ IEEE80211_RATE_MCS];
+		if (IEEE80211_IS_CHAN_HT40(ni->ni_chan)) {
+			if (ni->ni_flags & IEEE80211_NODE_SGI40)
+				mbps = mcs->ht40_rate_800ns;
+			else
+				mbps = mcs->ht40_rate_400ns;
+		} else {
+			if (ni->ni_flags & IEEE80211_NODE_SGI20)
+				mbps = mcs->ht20_rate_800ns;
+			else
+				mbps = mcs->ht20_rate_400ns;
+		}
+	} else
+		mbps = ni->ni_txrate;
+
+	return (mbps);
+}
