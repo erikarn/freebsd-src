@@ -3474,11 +3474,11 @@ iwm_rx_tx_cmd_single(struct iwm_softc *sc, struct iwm_rx_packet *pkt,
 	if (rate_matched) {
 		ieee80211_ratectl_tx_complete(ni, txs);
 
-		int rix = ieee80211_ratectl_rate(vap->iv_bss, NULL, 0);
+		ieee80211_ratectl_rate(vap->iv_bss, NULL, 0);
 		new_rate = ieee80211_node_get_txrate_dot11rate(vap->iv_bss);
 		if (new_rate != 0 && new_rate != cur_rate) {
 			struct iwm_node *in = IWM_NODE(vap->iv_bss);
-			iwm_setrates(sc, in, rix);
+			iwm_setrates(sc, in, new_rate);
 			iwm_send_lq_cmd(sc, &in->in_lq, FALSE);
 		}
  	}
@@ -4242,16 +4242,31 @@ iwm_rate2ridx(struct iwm_softc *sc, uint8_t rate)
 
 
 static void
-iwm_setrates(struct iwm_softc *sc, struct iwm_node *in, int rix)
+iwm_setrates(struct iwm_softc *sc, struct iwm_node *in, int dot11rate)
 {
+	struct ieee80211com *ic = &sc->sc_ic;
 	struct ieee80211_node *ni = &in->in_ni;
 	struct iwm_lq_cmd *lq = &in->in_lq;
 	struct ieee80211_rateset *rs = &ni->ni_rates;
 	int nrates = rs->rs_nrates;
 	int i, ridx, tab = 0;
 //	int txant = 0;
+	int rix;
 
-	KASSERT(rix >= 0 && rix < nrates, ("invalid rix"));
+	/*
+	 * Look up the rate index for the given legacy rate.
+	 *
+	 * This code path isn't currently looking at the ni_htrates
+	 * array for setting MCS rates.  It also doesn't have
+	 * any knowledge of VHT rates.
+	 */
+	rix = ieee80211_legacy_rate_lookup(ic->ic_rt, dot11rate);
+	if (rix < 0) {
+		device_printf(sc->sc_dev,
+		    "%s: failed to lookup dot11rate (%d)\n",
+		    __func__, dot11rate);
+		rix = 0;
+	}
 
 	if (nrates > nitems(lq->rs_table)) {
 		device_printf(sc->sc_dev,
@@ -4531,8 +4546,9 @@ iwm_newstate(struct ieee80211vap *vap, enum ieee80211_state nstate, int arg)
 		iwm_enable_beacon_filter(sc, ivp);
 		iwm_power_update_mac(sc);
 		iwm_update_quotas(sc, ivp);
-		int rix = ieee80211_ratectl_rate(&in->in_ni, NULL, 0);
-		iwm_setrates(sc, in, rix);
+		ieee80211_ratectl_rate(&in->in_ni, NULL, 0);
+		int dot11rate = ieee80211_node_get_txrate_dot11rate(&in->in_ni);
+		iwm_setrates(sc, in, dot11rate);
 
 		if ((error = iwm_send_lq_cmd(sc, &in->in_lq, TRUE)) != 0) {
 			device_printf(sc->sc_dev,
