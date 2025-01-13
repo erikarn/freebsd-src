@@ -284,6 +284,33 @@ ieee80211_vht_updateparams(struct ieee80211_node *ni,
 	return (0);
 }
 
+/**
+ * @brief calculate the supported MCS rates for this node
+ *
+ * This is called once a node has finished association /
+ * joined a BSS.  The vhtcap / vhtop IEs are from the
+ * peer.  The transmit rate tables need to be combined
+ * together to setup the list of available rates.
+ *
+ * This does not take into account the channel bandwidth,
+ * which (a) may change during operation, and (b) depends
+ * upon packet to packet rate transmission selection.
+ * There are various rate combinations which are not
+ * available in various channel widths and those will
+ * need to be masked off separately.
+ *
+ * (See 802.11-2020 21.5 Parameters for VHT-MCSs for the
+ * tables and supported rates.)
+ *
+ * ALSO: i need to do some filtering based on the HT set too.
+ * (That should be done here too, and in the negotiation, sigh.)
+ * (See 802.11-2016 10.7.12.3 Additional rate selection constraints
+ * for VHT PPDUs)
+ *
+ * @param ni	struct ieee80211_node to configure
+ * @param vhtcap_ie	vhtcap IE from peer / BSS
+ * @param vhtop_ie	vhtop IE from peer / BSS
+ */
 void
 ieee80211_setup_vht_rates(struct ieee80211_node *ni,
     const uint8_t *vhtcap_ie,
