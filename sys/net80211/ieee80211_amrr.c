@@ -49,6 +49,7 @@
 
 #include <net80211/ieee80211_var.h>
 #include <net80211/ieee80211_ht.h>
+#include <net80211/ieee80211_vht.h>
 #include <net80211/ieee80211_amrr.h>
 #include <net80211/ieee80211_ratectl.h>
 
@@ -139,6 +140,24 @@ amrr_deinit(struct ieee80211vap *vap)
 }
 
 static void
+amrr_node_init_vht(struct ieee80211_node *ni)
+{
+	struct ieee80211_amrr_node *amn = ni->ni_rctls;
+
+	/* Default to VHT MCS 2 for now */
+	amn->amn_vht_mcs = 2;
+	amn->amn_vht_nss = 1;
+	ieee80211_node_set_txrate_vht_rate(ni, amn->amn_vht_nss,
+	    amn->amn_vht_mcs);
+	amn->amn_ticks = ticks;
+
+	IEEE80211_NOTE(ni->ni_vap, IEEE80211_MSG_RATECTL, ni,
+	    "AMRR: VHT: initial rate NSS %d MCS %d",
+	    amn->amn_vht_nss,
+	    amn->amn_vht_mcs);
+}
+
+static void
 amrr_node_init(struct ieee80211_node *ni)
 {
 	const struct ieee80211_rateset *rs = NULL;
@@ -168,6 +187,11 @@ amrr_node_init(struct ieee80211_node *ni)
 	amn->amn_recovery = 0;
 	amn->amn_txcnt = amn->amn_retrycnt = 0;
 	amn->amn_success_threshold = amrr->amrr_min_success_threshold;
+
+	if (ieee80211_vht_check_tx_vht(ni)) {
+		amrr_node_init_vht(ni);
+		return;
+	}
 
 	/* 11n or not? Pick the right rateset */
 	if (ieee80211_ht_check_tx_ht(ni)) {
@@ -225,6 +249,84 @@ amrr_node_deinit(struct ieee80211_node *ni)
 	IEEE80211_FREE(ni->ni_rctls, M_80211_RATECTL);
 }
 
+/*
+ * A placeholder / temporary hack VHT rate control.
+ *
+ * For now, stick to one spatial stream so I can keep the
+ * logic simple.
+ *
+ * Use the available MCS rates at the current node bandwidth
+ * and configured / negotiated MCS rates.
+ */
+static int
+amrr_update_vht(struct ieee80211_node *ni)
+{
+	struct ieee80211_amrr_node *amn = ni->ni_rctls;
+	struct ieee80211_amrr *amrr = ni->ni_vap->iv_rs;
+
+	IEEE80211_NOTE(ni->ni_vap, IEEE80211_MSG_RATECTL, ni,
+	    "AMRR: VHT: current rate NSS %d MCS %d, txcnt=%d, retrycnt=%d",
+	    amn->amn_vht_nss,
+	    amn->amn_vht_mcs,
+	    amn->amn_txcnt,
+	    amn->amn_retrycnt);
+
+	if (is_success(amn)) {
+		amn->amn_success++;
+		if (amn->amn_success >= amn->amn_success_threshold) {
+			amn->amn_recovery = 1;
+			amn->amn_success = 0;
+
+			IEEE80211_NOTE(ni->ni_vap, IEEE80211_MSG_RATECTL, ni,
+			    "AMRR: VHT: increase rate (txcnt=%d retrycnt=%d)",
+			    amn->amn_txcnt, amn->amn_retrycnt);
+
+			/*
+			 * TODO: all of this!
+			 *
+			 * Increase the MCS, but need to take into account
+			 * the allowable MCS rates for the NIC, peer and
+			 * at the current NSS/BW.
+			 */
+			if (amn->amn_vht_mcs < 9)
+				amn->amn_vht_mcs++;
+
+			/* TODO: >1 spatial stream */
+		} else {
+			amn->amn_recovery = 0;
+		}
+	} else if (is_failure(amn)) {
+		amn->amn_success = 0;
+
+		if (amn->amn_recovery) {
+			amn->amn_success_threshold *= 2;
+			if (amn->amn_success_threshold >
+			    amrr->amrr_max_success_threshold)
+				amn->amn_success_threshold =
+				    amrr->amrr_max_success_threshold;
+		} else {
+			amn->amn_success_threshold =
+			    amrr->amrr_min_success_threshold;
+		}
+		IEEE80211_NOTE(ni->ni_vap, IEEE80211_MSG_RATECTL, ni,
+		    "AMRR: VHT: decreasing rate (txcnt=%d retrycnt=%d)",
+		    amn->amn_txcnt, amn->amn_retrycnt);
+		/* TODO: again, actually check the available MCS mask */
+		/* TODO: again, >1 spatial stream */
+		if (amn->amn_vht_mcs > 0)
+			amn->amn_vht_mcs--;
+
+		amn->amn_recovery = 0;
+	}
+
+	/* reset counters */
+	amn->amn_txcnt = 0;
+	amn->amn_retrycnt = 0;
+
+	/* Return 0, not useful anymore */
+	return (0);
+}
+
 static int
 amrr_update(struct ieee80211_amrr *amrr, struct ieee80211_amrr_node *amn,
     struct ieee80211_node *ni)
@@ -233,6 +335,9 @@ amrr_update(struct ieee80211_amrr *amrr, struct ieee80211_amrr_node *amn,
 	const struct ieee80211_rateset *rs = NULL;
 
 	KASSERT(is_enough(amn), ("txcnt %d", amn->amn_txcnt));
+
+	if (ieee80211_vht_check_tx_vht(ni))
+		return amrr_update_vht(ni);
 
 	/* 11n or not? Pick the right rateset */
 	if (ieee80211_ht_check_tx_ht(ni)) {
@@ -305,6 +410,23 @@ amrr_update(struct ieee80211_amrr *amrr, struct ieee80211_amrr_node *amn,
 	return rix;
 }
 
+static int
+amrr_rate_vht(struct ieee80211_node *ni)
+{
+	struct ieee80211_amrr *amrr = ni->ni_vap->iv_rs;
+	struct ieee80211_amrr_node *amn = ni->ni_rctls;
+
+	if (is_enough(amn) && (ticks - amn->amn_ticks) > amrr->amrr_interval) {
+		amrr_update_vht(ni);
+	}
+
+	ieee80211_node_set_txrate_vht_rate(ni, amn->amn_vht_nss,
+	    amn->amn_vht_mcs);
+
+	/* There's no need for it anymore */
+	return (0);
+}
+
 /*
  * Return the rate index to use in sending a data frame.
  * Update our internal state if it's been long enough.
@@ -325,6 +447,9 @@ amrr_rate(struct ieee80211_node *ni, void *arg __unused, uint32_t iarg __unused)
 		    ni->ni_rates.rs_rates[0]);
 		return 0;
 	}
+
+	if (ieee80211_vht_check_tx_vht(ni))
+		return amrr_rate_vht(ni);
 
 	amrr = amn->amn_amrr;
 
