@@ -1,0 +1,12 @@
+#!/bin/sh -e
+
+WORKDIR=/data/1/adrian/build/freebsd-router
+REPODIR=/data/1/freebsd/router/pkgs/
+
+env MAKEOBJDIRPREFIX=${WORKDIR}/freebsd-obj \
+    make -s -j12 buildworld buildkernel KERNCONF=GENERIC
+
+mkdir -p ${REPODIR}
+env MAKEOBJDIRPREFIX=${WORKDIR}/freebsd-obj \
+    REPODIR=${REPODIR} \
+    make -s -j12 packages
