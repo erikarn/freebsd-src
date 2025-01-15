@@ -3272,40 +3272,37 @@ ieee80211_node_get_txrate_mbit(struct ieee80211_node *ni)
 {
 	uint16_t mbps;
 
-	/*
-	 * TODO: only handle legacy/HT rates, VHT will need
-	 * to use other logic.
-	 */
 	switch (ni->ni_txrate.type) {
 	case IEEE80211_NODE_TXRATE_LEGACY:
+		if (ni->ni_txrate.dot11rate & IEEE80211_RATE_MCS) {
+			/* Note: Valid for MCS 0..76 */
+			const struct ieee80211_mcs_rates *mcs =
+			    &ieee80211_htrates[ni->ni_txrate.dot11rate &~
+			    IEEE80211_RATE_MCS];
+			if (IEEE80211_IS_CHAN_HT40(ni->ni_chan)) {
+				if (ni->ni_flags & IEEE80211_NODE_SGI40)
+					mbps = mcs->ht40_rate_800ns;
+				else
+					mbps = mcs->ht40_rate_400ns;
+			} else {
+				if (ni->ni_flags & IEEE80211_NODE_SGI20)
+					mbps = mcs->ht20_rate_800ns;
+				else
+					mbps = mcs->ht20_rate_400ns;
+			}
+		} else
+			mbps = ni->ni_txrate.dot11rate;
 		break;
 	case IEEE80211_NODE_TXRATE_VHT:
+		/* Note: valid for VHT rates, assumes long-GI for now */
+		mbps = ieee80211_phy_vht_get_mcs_kbit(ni->ni_chw,
+		    ni->ni_txrate.nss, ni->ni_txrate.mcs, false) / 500;
+		break;
 	default:
-		printf("%s: called for VHT / unknown rate (type %d)!\n",
+		printf("%s: called for unknown rate (type %d)!\n",
 		    __func__, ni->ni_txrate.type);
 		return (0);
 	}
-
-
-	/* Legacy / MCS rates */
-
-	if (ni->ni_txrate.dot11rate & IEEE80211_RATE_MCS) {
-		const struct ieee80211_mcs_rates *mcs =
-		    &ieee80211_htrates[ni->ni_txrate.dot11rate &~
-		    IEEE80211_RATE_MCS];
-		if (IEEE80211_IS_CHAN_HT40(ni->ni_chan)) {
-			if (ni->ni_flags & IEEE80211_NODE_SGI40)
-				mbps = mcs->ht40_rate_800ns;
-			else
-				mbps = mcs->ht40_rate_400ns;
-		} else {
-			if (ni->ni_flags & IEEE80211_NODE_SGI20)
-				mbps = mcs->ht20_rate_800ns;
-			else
-				mbps = mcs->ht20_rate_400ns;
-		}
-	} else
-		mbps = ni->ni_txrate.dot11rate;
 
 	return (mbps);
 }
