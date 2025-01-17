@@ -149,6 +149,24 @@ struct ieee80211_node_txrate {
 	uint8_t		dot11rate;	/* Legacy/HT - dot11rate / ratecode */
 };
 
+#define	IEEE80211_NODE_TXRATE_INIT_LEGACY(rate) \
+	(struct ieee80211_node_txrate) { .type = IEEE80211_NODE_TXRATE_LEGACY, \
+	  .nss = 0, \
+	  .mcs = 0, \
+	  .dot11rate = (rate) }
+
+#define	IEEE80211_NODE_TXRATE_INIT_HT(rate) \
+	(struct ieee80211_node_txrate) { .type = IEEE80211_NODE_TXRATE_LEGACY, \
+	  .nss = 0, \
+	  .mcs = 0, \
+	  .dot11rate = (rate) | IEEE80211_RATE_MCS }
+
+#define	IEEE80211_NODE_TXRATE_INIT_VHT(nss, mcs) \
+	(struct ieee80211_node_txrate) { .type = IEEE80211_NODE_TXRATE_VHT, \
+	  .nss = (nss), \
+	  .mcs = (mcs), \
+	  .dot11rate = 0 }
+
 /*
  * Node specific information.  Note that drivers are expected
  * to derive from this structure to add device-specific per-node
