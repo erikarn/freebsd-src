@@ -70,3 +70,7 @@ options 	MD_ROOT
 options 	MD_ROOT_SIZE=8192
 options 	ROOTDEVNAME=\"ufs:md0.uzip\"
 makeoptions 	MFS_IMAGE=/tftpboot/mfs-arm.uzip
+
+# networking
+
+device 		qcom_ess_edma
