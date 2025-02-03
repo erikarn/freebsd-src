@@ -125,7 +125,7 @@ qcom_ess_edma_tx_queue_xmit(struct qcom_ess_edma_softc *sc, int queue_id)
 	 * transmit ring pointer until we're done.
 	 */
 	while (! buf_ring_empty(txs->br)) {
-		struct ifnet *ifp;
+		if_t ifp;
 		struct qcom_ess_edma_gmac *gmac;
 		struct mbuf *m;
 
@@ -134,7 +134,7 @@ qcom_ess_edma_tx_queue_xmit(struct qcom_ess_edma_softc *sc, int queue_id)
 			break;
 
 		ifp = m->m_pkthdr.rcvif;
-		gmac = ifp->if_softc;
+		gmac = if_getsoftc(ifp);
 
 		/*
 		 * The only way we'll know if we have space is to

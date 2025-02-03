@@ -203,7 +203,7 @@ struct qcom_ess_edma_gmac {
 	/* MAC address for this ifnet (from device tree) */
 	struct ether_addr		eaddr;
 	/* ifnet interface! */
-	struct ifnet			*ifp;
+	if_t				ifp;
 	/* media interface */
 	struct ifmedia			ifm;
 };

@@ -426,7 +426,7 @@ qcom_ess_edma_rx_ring_complete(struct qcom_ess_edma_softc *sc, int queue,
 			    port_id, gmac->id);
 			if (gmac->enabled == true) {
 				m->m_pkthdr.rcvif = gmac->ifp;
-				if ((gmac->ifp->if_capenable & IFCAP_RXCSUM) != 0)
+				if ((if_getcapenable(gmac->ifp) & IFCAP_RXCSUM) != 0)
 					rx_checksum = true;
 			}
 			port_vlan = gmac->vlan_id;

@@ -77,9 +77,9 @@ __FBSDID("$FreeBSD$");
 #include <dev/qcom_ess_edma/qcom_ess_edma_gmac.h>
 
 static int
-qcom_ess_edma_gmac_mediachange(struct ifnet *ifp)
+qcom_ess_edma_gmac_mediachange(if_t ifp)
 {
-	struct qcom_ess_edma_gmac *gmac = ifp->if_softc;
+	struct qcom_ess_edma_gmac *gmac = if_getsoftc(ifp);
 	struct qcom_ess_edma_softc *sc = gmac->sc;
 	struct ifmedia *ifm = &gmac->ifm;
 	struct ifmedia_entry *ife = ifm->ifm_cur;
@@ -100,7 +100,7 @@ qcom_ess_edma_gmac_mediachange(struct ifnet *ifp)
 }
 
 static void
-qcom_ess_edma_gmac_mediastatus(struct ifnet *ifp, struct ifmediareq *ifmr)
+qcom_ess_edma_gmac_mediastatus(if_t ifp, struct ifmediareq *ifmr)
 {
 
 	ifmr->ifm_status = IFM_AVALID | IFM_ACTIVE;
@@ -108,28 +108,28 @@ qcom_ess_edma_gmac_mediastatus(struct ifnet *ifp, struct ifmediareq *ifmr)
 }
 
 static int
-qcom_ess_edma_gmac_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
+qcom_ess_edma_gmac_ioctl(if_t ifp, u_long command, caddr_t data)
 {
-	struct qcom_ess_edma_gmac *gmac = ifp->if_softc;
+	struct qcom_ess_edma_gmac *gmac = if_getsoftc(ifp);
 	struct qcom_ess_edma_softc *sc = gmac->sc;
 	struct ifreq *ifr = (struct ifreq *) data;
 	int error, mask;
 
 	switch (command) {
 	case SIOCSIFFLAGS:
-		if ((ifp->if_flags & IFF_UP) != 0) {
+		if ((if_getflags(ifp) & IFF_UP) != 0) {
 			/* up */
 			QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_STATE,
 			    "%s: gmac%d: IFF_UP\n",
 			    __func__,
 			    gmac->id);
-			ifp->if_drv_flags |= IFF_DRV_RUNNING;
-			ifp->if_drv_flags &= ~IFF_DRV_OACTIVE;
+			if_setdrvflagbits(ifp, IFF_DRV_RUNNING,
+			    IFF_DRV_OACTIVE);
 			if_link_state_change(ifp, LINK_STATE_UP);
 
-		} else if ((ifp->if_drv_flags & IFF_DRV_RUNNING) != 0) {
+		} else if ((if_getdrvflags(ifp) & IFF_DRV_RUNNING) != 0) {
 			/* down */
-			ifp->if_drv_flags &= ~IFF_DRV_RUNNING;
+			if_setdrvflagbits(ifp, 0, IFF_DRV_RUNNING);
 			QCOM_ESS_EDMA_DPRINTF(sc, QCOM_ESS_EDMA_DBG_STATE,
 			    "%s: gmac%d: IF down\n",
 			    __func__,
@@ -143,16 +143,16 @@ qcom_ess_edma_gmac_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 		error = ifmedia_ioctl(ifp, ifr, &gmac->ifm, command);
 		break;
 	case SIOCSIFCAP:
-		mask = ifr->ifr_reqcap ^ ifp->if_capenable;
+		mask = ifr->ifr_reqcap ^ if_getcapenable(ifp);
 		error = 0;
 
 		if ((mask & IFCAP_RXCSUM) != 0 &&
-		    (ifp->if_capabilities & IFCAP_RXCSUM) != 0)
-			ifp->if_capenable ^= IFCAP_RXCSUM;
+		    (if_getcapabilities(ifp) & IFCAP_RXCSUM) != 0)
+			if_togglecapenable(ifp, IFCAP_RXCSUM);
 
 		if ((mask & IFCAP_VLAN_HWTAGGING) != 0 &&
-		    (ifp->if_capabilities & IFCAP_VLAN_HWTAGGING) != 0)
-			ifp->if_capenable ^= IFCAP_VLAN_HWTAGGING;
+		    (if_getcapabilities(ifp) & IFCAP_VLAN_HWTAGGING) != 0)
+			if_togglecapenable(ifp, IFCAP_VLAN_HWTAGGING);
 
 		VLAN_CAPABILITIES(ifp);
 		break;
@@ -175,15 +175,14 @@ qcom_ess_edma_gmac_init(void *arg)
 	    __func__,
 	    gmac->id);
 
-	gmac->ifp->if_drv_flags |= IFF_DRV_RUNNING;
-	gmac->ifp->if_drv_flags &= ~IFF_DRV_OACTIVE;
+	if_setdrvflagbits(gmac->ifp, IFF_DRV_RUNNING, IFF_DRV_OACTIVE);
 	if_link_state_change(gmac->ifp, LINK_STATE_UP);
 }
 
 static int
-qcom_ess_edma_gmac_transmit(struct ifnet *ifp, struct mbuf *m)
+qcom_ess_edma_gmac_transmit(if_t ifp, struct mbuf *m)
 {
-	struct qcom_ess_edma_gmac *gmac = ifp->if_softc;
+	struct qcom_ess_edma_gmac *gmac = if_getsoftc(ifp);
 	struct qcom_ess_edma_softc *sc = gmac->sc;
 	struct qcom_ess_edma_tx_state *txs;
 	int ret;
@@ -242,9 +241,9 @@ qcom_ess_edma_gmac_transmit(struct ifnet *ifp, struct mbuf *m)
 }
 
 static void
-qcom_ess_edma_gmac_qflush(struct ifnet *ifp)
+qcom_ess_edma_gmac_qflush(if_t ifp)
 {
-	struct qcom_ess_edma_gmac *gmac = ifp->if_softc;
+	struct qcom_ess_edma_gmac *gmac = if_getsoftc(ifp);
 	struct qcom_ess_edma_softc *sc = gmac->sc;
 
 	/* XXX TODO */
@@ -347,7 +346,7 @@ qcom_ess_edma_gmac_create_ifnet(struct qcom_ess_edma_softc *sc, int gmac_id)
 		return (ENOSPC);
 	}
 
-	gmac->ifp->if_softc = gmac;
+	if_setsoftc(gmac->ifp, gmac);
 
 	if_initname(gmac->ifp, "gmac", gmac_id);
 
@@ -357,18 +356,20 @@ qcom_ess_edma_gmac_create_ifnet(struct qcom_ess_edma_softc *sc, int gmac_id)
 		ether_gen_addr(gmac->ifp, (void *) &gmac->eaddr.octet);
 	}
 
-	gmac->ifp->if_flags = IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST;
+	if_setflags(gmac->ifp, IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST);
 
-	gmac->ifp->if_ioctl = qcom_ess_edma_gmac_ioctl;
-	gmac->ifp->if_init = qcom_ess_edma_gmac_init;
-	gmac->ifp->if_transmit = qcom_ess_edma_gmac_transmit;
-	gmac->ifp->if_qflush = qcom_ess_edma_gmac_qflush;
+	if_setioctlfn(gmac->ifp, qcom_ess_edma_gmac_ioctl);
+	if_setinitfn(gmac->ifp, qcom_ess_edma_gmac_init);
+	if_settransmitfn(gmac->ifp, qcom_ess_edma_gmac_transmit);
+	if_setqflushfn(gmac->ifp, qcom_ess_edma_gmac_qflush);
 
-	gmac->ifp->if_capabilities |= IFCAP_VLAN_MTU | IFCAP_VLAN_HWTAGGING;
+	if_setcapabilitiesbit(gmac->ifp, IFCAP_VLAN_MTU |
+	    IFCAP_VLAN_HWTAGGING, 0);
 
-	gmac->ifp->if_capabilities |= IFCAP_RXCSUM;
+	if_setcapabilitiesbit(gmac->ifp, IFCAP_RXCSUM, 0);
+
 	/* CSUM_TCP | CSUM_UDP for TX checksum offload */
-	gmac->ifp->if_hwassist = 0;
+	if_clearhwassist(gmac->ifp);
 
 	/* Configure a hard-coded media */
 	ifmedia_init(&gmac->ifm, 0, qcom_ess_edma_gmac_mediachange,
@@ -378,7 +379,7 @@ qcom_ess_edma_gmac_create_ifnet(struct qcom_ess_edma_softc *sc, int gmac_id)
 
 	ether_ifattach(gmac->ifp, (char *) &gmac->eaddr);
 
-	gmac->ifp->if_capenable = gmac->ifp->if_capabilities;
+	if_setcapenable(gmac->ifp, if_getcapabilities(gmac->ifp));
 
 	return (0);
 }
@@ -440,7 +441,7 @@ qcom_ess_edma_gmac_receive_frames(struct qcom_ess_edma_softc *sc,
 	struct qcom_ess_edma_desc_ring *ring;
 	struct epoch_tracker et;
 	struct mbuf *m;
-	struct ifnet *ifp;
+	if_t ifp;
 
 	ring = &sc->sc_rx_ring[rx_queue];
 
@@ -453,7 +454,7 @@ qcom_ess_edma_gmac_receive_frames(struct qcom_ess_edma_softc *sc,
 			ring->stats.num_rx_ok++;
 			ifp = m->m_pkthdr.rcvif;
 			if_inc_counter(ifp, IFCOUNTER_IPACKETS, 1);
-			ifp->if_input(ifp, m);
+			if_input(ifp, m);
 		}
 	}
 	NET_EPOCH_EXIT(et);
