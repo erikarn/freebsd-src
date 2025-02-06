@@ -1670,8 +1670,23 @@ uath_txfrag_setup(struct uath_softc *sc, uath_datahead *frags,
 	return !STAILQ_EMPTY(frags);
 }
 
+/**
+ * @brief entry point into transmit from the net80211 stack.
+ *
+ * Note that for fragmented MSDUs the MPDUs will be chained together via
+ * m->m_nextpkt; there will be no M_SEQNO assigned to each, and there
+ * isn't a node reference.  uath_txfrag_setup() handles the latter,
+ * however we need to handle the former before adding it to the mbuf
+ * queue.
+ *
+ * @param ic	struct ieee80211com * representing the driver/wifi context
+ * @param m	a single 802.11 MSDU, represented by one MPDU or a list of
+ *     MPDU fragments.
+ * @returns 0 if OK and buffer consumed, errno if error, node/buffer not
+ * consumed.
+ */
 static int
-uath_transmit(struct ieee80211com *ic, struct mbuf *m)   
+uath_transmit(struct ieee80211com *ic, struct mbuf *m)
 {
 	struct uath_softc *sc = ic->ic_softc;
 	int error;
@@ -1681,6 +1696,11 @@ uath_transmit(struct ieee80211com *ic, struct mbuf *m)
 		UATH_UNLOCK(sc);
 		return (ENXIO);
 	}
+
+	/*
+	 * TODO: we can't mbufq_enqueue a packet with frags because
+	 * then things get chained extremely poorly, sigh.
+	 */
 	error = mbufq_enqueue(&sc->sc_snd, m);
 	if (error) {
 		UATH_UNLOCK(sc);
