@@ -127,6 +127,7 @@ ieee80211_seq	ieee80211_output_seqno_assign(struct ieee80211_node *,
 		    int, struct mbuf *);
 ieee80211_seq	ieee80211_output_beacon_seqno_assign(struct ieee80211_node *,
 		    struct mbuf *);
+void	ieee80211_fragment_seqno_assign(struct ieee80211vap *, struct mbuf *);
 
 /*
  * The formation of ProbeResponse frames requires guidance to
