@@ -2051,6 +2051,45 @@ bad:
 	return 0;
 }
 
+/**
+ * @brief Assign sequence numbers to the given list of fragments.
+ *
+ * Loop over the fragment list and assign fragment IDs to the provided
+ * sequence number.
+ *
+ * The packet list starting with m0 is expecting to have the fragment
+ * flags set appropriately.  The first frame (m0) is expected to have
+ * a sequence number in the header and via M_SEQNO_SET().
+ *
+ * The 802.11 seqno and fragment fields will be populated, and
+ * M_SEQNO_SET() will be called on each fragment.
+ *
+ * This does NOT update the fragment node references.
+ *
+ * @param vap	VAP for transmission
+ * @param m0	802.11 frame, a list of 802.11 fragments chained via m_nextpkt
+ */
+void
+ieee80211_fragment_seqno_assign(struct ieee80211vap *vap, struct mbuf *m0)
+{
+	struct mbuf *m;
+	struct ieee80211_frame *wh;
+	int fragno;
+	ieee80211_seq seqno;
+
+	seqno = M_SEQNO_GET(m0);
+
+	for (fragno = 0, m = m0; m != NULL; fragno++, m = m->m_nextpkt) {
+		wh = mtod(m, struct ieee80211_frame *);
+		*(uint16_t *)&wh->i_seq[0] =
+		    htole16(seqno << IEEE80211_SEQ_SEQ_SHIFT);
+		*(uint16_t *)&wh->i_seq[0] |= htole16(
+			(fragno & IEEE80211_SEQ_FRAG_MASK) <<
+				IEEE80211_SEQ_FRAG_SHIFT);
+		M_SEQNO_SET(m, seqno);
+	}
+}
+
 /*
  * Add a supported rates element id to a frame.
  */
