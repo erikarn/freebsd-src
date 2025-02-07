@@ -61,6 +61,11 @@
 
 #include "hid_if.h"
 
+#if 1
+#  define IICHID_DEBUG 1
+#  define IICHID_SAMPLING 1
+#endif
+
 #ifdef IICHID_DEBUG
 static int iichid_debug = 0;
 
@@ -270,42 +275,29 @@ iichid_cmd_read(struct iichid_softc* sc, void *buf, iichid_size_t maxlen,
 	 * 6.1.3 - Retrieval of Input Reports
 	 * DEVICE returns the length (2 Bytes) and the entire Input Report.
 	 */
-	uint8_t actbuf[2] = { 0, 0 };
-	/* Read actual input report length. */
+
+	memset(buf, 0xaa, 2);	// In case nothing is read
 	struct iic_msg msgs[] = {
-	    { sc->addr, IIC_M_RD | IIC_M_NOSTOP, sizeof(actbuf), actbuf },
+	    { sc->addr, IIC_M_RD, maxlen, buf },
 	};
-	uint16_t actlen;
 	int error;
 
 	error = iicbus_transfer(sc->dev, msgs, nitems(msgs));
 	if (error != 0)
 		return (error);
 
-	actlen = actbuf[0] | actbuf[1] << 8;
-	if (actlen <= 2 || actlen == 0xFFFF || maxlen == 0) {
-		/* Read and discard 1 byte to send I2C STOP condition. */
-		msgs[0] = (struct iic_msg)
-		    { sc->addr, IIC_M_RD | IIC_M_NOSTART, 1, actbuf };
+	uint16_t actlen = le16dec(buf);
+	if (actlen <= 2 || actlen > maxlen || maxlen == 0) {
 		actlen = 0;
 	} else {
 		actlen -= 2;
-		if (actlen > maxlen) {
-			DPRINTF(sc, "input report too big. requested=%d "
-			    "received=%d\n", maxlen, actlen);
-			actlen = maxlen;
-		}
-		/* Read input report itself. */
-		msgs[0] = (struct iic_msg)
-		    { sc->addr, IIC_M_RD | IIC_M_NOSTART, actlen, buf };
 	}
+	*actual_len = actlen;
 
-	error = iicbus_transfer(sc->dev, msgs, 1);
-	if (error == 0 && actual_len != NULL)
-		*actual_len = actlen;
-
-	DPRINTFN(sc, 5,
-	    "%*D - %*D\n", 2, actbuf, " ", msgs[0].len, msgs[0].buf, " ");
+	if (actlen) {
+		DPRINTFN(sc, 5,
+		    "%d - %*D\n", actlen + 2, actlen + 2, buf, " ");
+	}
 
 	return (error);
 }
@@ -541,12 +533,12 @@ iichid_sampling_task(void *context, int pending)
 	error = iichid_cmd_read(sc, sc->intr_buf, sc->intr_bufsize, &actual);
 	if (error == 0) {
 		if (actual > 0) {
-			sc->intr_handler(sc->intr_ctx, sc->intr_buf, actual);
+			sc->intr_handler(sc->intr_ctx, sc->intr_buf + 2, actual);
 			sc->missing_samples = 0;
 			if (sc->dup_size != actual ||
-			    memcmp(sc->dup_buf, sc->intr_buf, actual) != 0) {
+			    memcmp(sc->dup_buf, sc->intr_buf, actual + 2) != 0) {
 				sc->dup_size = actual;
-				memcpy(sc->dup_buf, sc->intr_buf, actual);
+				memcpy(sc->dup_buf, sc->intr_buf, actual + 2);
 				sc->dup_samples = 0;
 			} else
 				++sc->dup_samples;
@@ -606,7 +598,7 @@ iichid_intr(void *context)
 	if (error == 0) {
 		if (sc->power_on) {
 			if (actual != 0)
-				sc->intr_handler(sc->intr_ctx, sc->intr_buf,
+				sc->intr_handler(sc->intr_ctx, sc->intr_buf + 2,
 				    actual);
 			else
 				DPRINTF(sc, "no data received\n");
@@ -815,8 +807,9 @@ iichid_intr_setup(device_t dev, device_t child __unused, hid_intr_t intr,
 
 	sc = device_get_softc(dev);
 	/*
-	 * Do not rely on wMaxInputLength, as some devices may set it to
-	 * a wrong length. Find the longest input report in report descriptor.
+	 * Do not just rely on wMaxInputLength, it could be wrong,
+	 * also find the longest input report in report descriptor.
+	 * Add two for the length field.
 	 */
 	rdesc->rdsize = rdesc->isize;
 	/* Write and get/set_report sizes are limited by I2C-HID protocol. */
@@ -825,10 +818,10 @@ iichid_intr_setup(device_t dev, device_t child __unused, hid_intr_t intr,
 
 	sc->intr_handler = intr;
 	sc->intr_ctx = context;
-	sc->intr_buf = malloc(rdesc->rdsize, M_DEVBUF, M_WAITOK | M_ZERO);
-	sc->intr_bufsize = rdesc->rdsize;
+	sc->intr_bufsize = 2 + MAX(rdesc->rdsize, le16dec(&sc->desc.wMaxInputLength));
+	sc->intr_buf = malloc(sc->intr_bufsize, M_DEVBUF, M_WAITOK | M_ZERO);
 #ifdef IICHID_SAMPLING
-	sc->dup_buf = malloc(rdesc->rdsize, M_DEVBUF, M_WAITOK | M_ZERO);
+	sc->dup_buf = malloc(sc->intr_bufsize, M_DEVBUF, M_WAITOK | M_ZERO);
 	taskqueue_start_threads(&sc->taskqueue, 1, PI_TTY,
 	    "%s taskq", device_get_nameunit(sc->dev));
 #endif
@@ -887,7 +880,7 @@ iichid_intr_poll(device_t dev, device_t child __unused)
 	sc = device_get_softc(dev);
 	error = iichid_cmd_read(sc, sc->intr_buf, sc->intr_bufsize, &actual);
 	if (error == 0 && actual != 0)
-		sc->intr_handler(sc->intr_ctx, sc->intr_buf, actual);
+		sc->intr_handler(sc->intr_ctx, sc->intr_buf + 2, actual);
 }
 
 /*
@@ -914,17 +907,23 @@ iichid_read(device_t dev, device_t child __unused, void *buf,
 {
 	struct iichid_softc *sc;
 	device_t parent;
+	uint8_t *tmpbuf;
 	int error;
 
 	if (maxlen > IICHID_SIZE_MAX)
 		return (EMSGSIZE);
 	sc = device_get_softc(dev);
 	parent = device_get_parent(sc->dev);
+	tmpbuf = malloc(maxlen + 2, M_DEVBUF, M_WAITOK | M_ZERO);
 	error = iicbus_request_bus(parent, sc->dev, IIC_WAIT);
 	if (error == 0) {
-		error = iichid_cmd_read(sc, buf, maxlen, actlen);
+		error = iichid_cmd_read(sc, tmpbuf, maxlen + 2, actlen);
 		iicbus_release_bus(parent, sc->dev);
+		if (*actlen > 0)
+			memcpy(buf, tmpbuf + 2, *actlen);
+
 	}
+	free(tmpbuf, M_DEVBUF);
 	return (iic2errno(error));
 }
 
@@ -1156,6 +1155,7 @@ iichid_attach(device_t dev)
 		device_printf(sc->dev,
 		    "Using sampling mode\n");
 		sc->sampling_rate_slow = IICHID_SAMPLING_RATE_SLOW;
+		iichid_setup_callout(sc);
 #else
 		device_printf(sc->dev, "Interrupt setup failed\n");
 		if (sc->irq_res != NULL)
@@ -1186,7 +1186,6 @@ iichid_attach(device_t dev)
 
 	if (sc->sampling_rate_slow >= 0) {
 		pause("iichid", (hz + 999) / 1000);
-		(void)iichid_cmd_read(sc, NULL, 0, NULL);
 	}
 #endif /* IICHID_SAMPLING */
 
@@ -1206,6 +1205,8 @@ done:
 	if (!sc->open) {
 		(void)iichid_set_power(sc, I2C_HID_POWER_OFF);
 		sc->power_on = false;
+	} else if (sc->sampling_rate_slow > 0) {
+		iichid_reset_callout(sc);
 	}
 	iicbus_release_bus(device_get_parent(dev), dev);
 	return (error);
