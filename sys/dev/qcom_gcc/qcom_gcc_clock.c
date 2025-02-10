@@ -36,6 +36,7 @@
 
 #include <machine/bus.h>
 #include <machine/resource.h>
+#include <sys/rman.h>
 #include <sys/bus.h>
 
 #include <dev/fdt/fdt_common.h>
