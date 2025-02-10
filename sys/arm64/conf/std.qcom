@@ -6,6 +6,7 @@
 device		qcom_gcc		# Global Clock Controller
 device		qcom_rpmh		# Some Other Clock Controller
 device		qcom_mdio		# MDIO support
+device		qcom_cmd_db
 
 # Serial (COM) ports
 device		uart_msm		# Qualcomm MSM UART driver
