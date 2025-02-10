@@ -25,37 +25,7 @@
  * SUCH DAMAGE.
  */
 
-#ifndef	__QCOM_CLK_RPMH_H__
-#define	__QCOM_CLK_RPMH_H__
+#ifndef	__QCOM_CLK_RPMH_BCM_REG_H__
+#define	__QCOM_CLK_RPMH_BCM_REG_H__
 
-#include "qcom_clk_freqtbl.h"
-
-typedef enum {
-	QCOM_CLK_RPMH_SLEEP_STATE = 0,		/* Nothing using it */
-	QCOM_CLK_RPMH_WAKE_ONLY_STATE = 1,	/* Resume pre power-down */
-	QCOM_CLK_RPMH_ACTIVE_ONLY_STATE = 2,	/* Active/AMC mode */
-} qcom_rpmh_state_t;
-
-struct qcom_clk_rpmh_def {
-	struct clknode_init_def clkdef;
-
-	uint8_t div;
-	const char *res_name;
-	uint32_t res_addr;
-	uint32_t res_on_val;
-	uint32_t state;
-	uint32_t aggr_state;
-	uint32_t last_sent_aggr_state;
-	uint32_t valid_state_mask;
-	uint32_t unit;
-	const char *peer_name;
-
-	/* TODO: peer/sibling clock pointer */
-
-	const struct qcom_clk_freq_tbl *freq_tbl;
-};
-
-extern	int qcom_clk_rpmh_register(struct clkdom *clkdom,
-	    struct qcom_clk_rpmh_def *clkdef);
-
-#endif	/* __QCOM_CLK_RPMH_H__ */
+#endif	/* __QCOM_CLK_RPMH_BCM_REG_H__ */

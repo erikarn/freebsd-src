@@ -25,7 +25,7 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/* Driver for Qualcomm RPMH clock, found in Snapdragon SoCs */
+/* Driver for Qualcomm RPM, found in Snapdragon SoCs */
 
 #include <sys/param.h>
 #include <sys/kernel.h>
@@ -41,6 +41,8 @@
 #include <sys/rman.h>
 #include <sys/bus.h>
 
+#include <dev/fdt/simplebus.h>
+
 #include <dev/fdt/fdt_common.h>
 #include <dev/ofw/ofw_bus.h>
 #include <dev/ofw/ofw_bus_subr.h>
@@ -54,19 +56,6 @@ static int	qcom_rpmh_modevent(module_t, int, void *);
 static int	qcom_rpmh_probe(device_t);
 static int	qcom_rpmh_attach(device_t);
 static int	qcom_rpmh_detach(device_t);
-
-struct qcom_rpmh_chipset_list_entry {
-	const char *ofw;
-	const char *desc;
-	qcom_rpmh_chipset_t chipset;
-};
-
-static struct qcom_rpmh_chipset_list_entry qcom_rpmh_chipset_list[] = {
-	{ "qcom,x1e80100-rpmh-clk",
-	    "Qualcomm Snapdragon X1E80100 RPMH Clock Controller",
-	    QCOM_RPMH_CHIPSET_X1E80100 },
-	{ NULL, NULL, 0 },
-};
 
 static int
 qcom_rpmh_modevent(module_t mod, int type, void *unused)
@@ -92,67 +81,42 @@ static int
 qcom_rpmh_probe(device_t dev)
 {
 	struct qcom_rpmh_softc *sc;
-	int i;
 
 	sc = device_get_softc(dev);
+	(void) sc;
 
 	if (! ofw_bus_status_okay(dev))
 		return (ENXIO);
 
-	for (i = 0; qcom_rpmh_chipset_list[i].ofw != NULL; i++) {
-		const struct qcom_rpmh_chipset_list_entry *ce;
+	if (ofw_bus_is_compatible(dev, "qcom,rpmh-rsc") != 1)
+		return (ENXIO);
 
-		ce = &qcom_rpmh_chipset_list[i];
-		if (ofw_bus_is_compatible(dev, ce->ofw) == 0)
-			continue;
-		device_set_desc(dev, ce->desc);
-		sc->sc_chipset = ce->chipset;
-		return (0);
-	}
-
-	return (ENXIO);
+	device_set_desc(dev, "Qualcomm Snapdragon RPMH bus/provider");
+	device_printf(dev, "%s: found!\n", __func__);
+	return (0);
 }
 
 static int
 qcom_rpmh_attach(device_t dev)
 {
 	struct qcom_rpmh_softc *sc;
+	phandle_t node, child;
 
 	sc = device_get_softc(dev);
+
+	device_printf(dev, "%s: called!\n", __func__);
 
 	/* Found a compatible device! */
 	sc->dev = dev;
 
-#if 0
-	/*
-	 * Setup the hardware callbacks, before any further initialisation
-	 * is performed.
-	 */
-	switch (sc->sc_chipset) {
-	case QCOM_RPMH_CHIPSET_X1E80100:
-		qcom_rpmh_x1e80100_init(sc);
-		break;
-	case QCOM_RPMH_CHIPSET_NONE:
-		device_printf(dev, "Invalid chipset (%d)\n", sc->sc_chipset);
-		return (ENXIO);
-	}
-#endif
-
 	mtx_init(&sc->mtx, device_get_nameunit(dev), NULL, MTX_DEF);
 
-#if 0
-	/*
-	 * Setup and register as a clock provider.
-	 */
-	switch (sc->sc_chipset) {
-	case QCOM_RPMH_CHIPSET_X1E80100:
-		qcom_rpmh_x1e80100_clock_setup(sc);
-		break;
-	case QCOM_RPMH_CHIPSET_NONE:
-		device_printf(dev, "Invalid chipset (%d)\n", sc->sc_chipset);
-		return (ENXIO);
+	node = ofw_bus_get_node(dev);
+	simplebus_init(dev, node);
+	for (child = OF_child(node); child > 0; child = OF_peer(child)) {
+		simplebus_add_device(dev, child, 0, NULL, -1, NULL);
 	}
-#endif
+	bus_attach_children(dev);
 
 	return (0);
 }
@@ -161,14 +125,19 @@ static int
 qcom_rpmh_detach(device_t dev)
 {
 	struct qcom_rpmh_softc *sc;
+	int error;
 
 	sc = device_get_softc(dev);
 
+	error = bus_generic_detach(dev);
+	if (error)
+		return (error);
+
 	(void) sc;
 
-	/*
-	 * TBD - deregistering clock resources.
-	 */
+	/* TBD - deregistering child/bus */
+
+	/* TBD - deregister resources */
 
 	return (0);
 }
@@ -189,7 +158,7 @@ static driver_t qcom_rpmh_driver = {
 };
 
 EARLY_DRIVER_MODULE(qcom_rpmh, simplebus, qcom_rpmh_driver,
-    qcom_rpmh_modevent, NULL, BUS_PASS_CPU + BUS_PASS_ORDER_EARLY);
+    qcom_rpmh_modevent, NULL, BUS_PASS_BUS + BUS_PASS_ORDER_MIDDLE);
 EARLY_DRIVER_MODULE(qcom_rpmh, ofwbus, qcom_rpmh_driver,
-    qcom_rpmh_modevent, NULL, BUS_PASS_CPU + BUS_PASS_ORDER_EARLY);
+    qcom_rpmh_modevent, NULL, BUS_PASS_BUS + BUS_PASS_ORDER_MIDDLE);
 MODULE_VERSION(qcom_rpmh, 1);
