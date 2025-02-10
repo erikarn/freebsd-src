@@ -80,7 +80,7 @@ void do_el0_error(struct trapframe *);
 void do_serror(struct trapframe *);
 void unhandled_exception(struct trapframe *);
 
-static void print_gp_register(const char *name, uint64_t value);
+static void print_gp_register(const char *name, uint64_t value, bool nl);
 static void print_registers(struct trapframe *frame);
 
 int (*dtrace_invop_jump_addr)(struct trapframe *);
@@ -210,7 +210,7 @@ align_abort(struct thread *td, struct trapframe *frame, uint64_t esr,
 {
 	if (!lower) {
 		print_registers(frame);
-		print_gp_register("far", far);
+		print_gp_register("far", far, true);
 		printf(" esr: 0x%.16lx\n", esr);
 		panic("Misaligned access from kernel space!");
 	}
@@ -242,7 +242,8 @@ external_abort(struct thread *td, struct trapframe *frame, uint64_t esr,
 	}
 
 	print_registers(frame);
-	print_gp_register("far", far);
+	print_gp_register("esr", far, true);
+	print_gp_register("far", far, true);
 	panic("Unhandled external data abort");
 }
 
@@ -340,7 +341,7 @@ data_abort(struct thread *td, struct trapframe *frame, uint64_t esr,
 #ifdef INVARIANTS
 	if (td->td_md.md_spinlock_count != 0) {
 		print_registers(frame);
-		print_gp_register("far", far);
+		print_gp_register("far", far, true);
 		printf(" esr: 0x%.16lx\n", esr);
 		panic("data abort with spinlock held (spinlock count %d != 0)",
 		    td->td_md.md_spinlock_count);
@@ -350,7 +351,7 @@ data_abort(struct thread *td, struct trapframe *frame, uint64_t esr,
 	    (td->td_critnest != 0 || WITNESS_CHECK(WARN_SLEEPOK |
 	    WARN_GIANTOK, NULL, "Kernel page fault") != 0)) {
 		print_registers(frame);
-		print_gp_register("far", far);
+		print_gp_register("far", far, true);
 		printf(" esr: 0x%.16lx\n", esr);
 		panic("data abort in critical section or under mutex");
 	}
@@ -390,7 +391,7 @@ bad_far:
 
 			printf("Fatal data abort:\n");
 			print_registers(frame);
-			print_gp_register("far", far);
+			print_gp_register("far", far, true);
 			printf(" esr: 0x%.16lx\n", esr);
 
 #ifdef KDB
@@ -413,7 +414,7 @@ bad_far:
 }
 
 static void
-print_gp_register(const char *name, uint64_t value)
+print_gp_register(const char *name, uint64_t value, bool newline)
 {
 #if defined(DDB)
 	c_db_sym_t sym;
@@ -433,7 +434,8 @@ print_gp_register(const char *name, uint64_t value)
 		}
 	}
 #endif
-	printf("\n");
+	if (newline)
+		printf("\n");
 }
 
 static void
@@ -445,11 +447,12 @@ print_registers(struct trapframe *frame)
 	for (reg = 0; reg < nitems(frame->tf_x); reg++) {
 		snprintf(name, sizeof(name), "%sx%d", (reg < 10) ? " " : "",
 		    reg);
-		print_gp_register(name, frame->tf_x[reg]);
+		print_gp_register(name, frame->tf_x[reg], reg % 4 == 3);
 	}
+	printf("\n");
 	printf("  sp: 0x%.16lx\n", frame->tf_sp);
-	print_gp_register(" lr", frame->tf_lr);
-	print_gp_register("elr", frame->tf_elr);
+	print_gp_register(" lr", frame->tf_lr, true);
+	print_gp_register("elr", frame->tf_elr, true);
 	printf("spsr: 0x%.16lx\n", frame->tf_spsr);
 }
 
@@ -539,7 +542,7 @@ do_el1h_sync(struct thread *td, struct trapframe *frame)
 			abort_handlers[dfsc](td, frame, esr, far, 0);
 		} else {
 			print_registers(frame);
-			print_gp_register("far", far);
+			print_gp_register("far", far, true);
 			printf(" esr: 0x%.16lx\n", esr);
 			panic("Unhandled EL1 %s abort: 0x%x",
 			    exception == EXCP_INSN_ABORT ? "instruction" :
@@ -571,25 +574,25 @@ do_el1h_sync(struct thread *td, struct trapframe *frame)
 	case EXCP_FPAC:
 		/* We can see this if the authentication on PAC fails */
 		print_registers(frame);
-		print_gp_register("far", far);
+		print_gp_register("far", far, true);
 		panic("FPAC kernel exception");
 		break;
 	case EXCP_UNKNOWN:
 		if (undef_insn(1, frame))
 			break;
 		print_registers(frame);
-		print_gp_register("far", far);
+		print_gp_register("far", far, true);
 		panic("Undefined instruction: %08x",
 		    *(uint32_t *)frame->tf_elr);
 		break;
 	case EXCP_BTI:
 		print_registers(frame);
-		print_gp_register("far", far);
+		print_gp_register("far", far, true);
 		panic("Branch Target exception");
 		break;
 	default:
 		print_registers(frame);
-		print_gp_register("far", far);
+		print_gp_register("far", far, true);
 		panic("Unknown kernel exception 0x%x esr_el1 0x%lx", exception,
 		    esr);
 	}
@@ -665,7 +668,7 @@ do_el0_sync(struct thread *td, struct trapframe *frame)
 			abort_handlers[dfsc](td, frame, esr, far, 1);
 		else {
 			print_registers(frame);
-			print_gp_register("far", far);
+			print_gp_register("far", far, true);
 			printf(" esr: 0x%.16lx\n", esr);
 			panic("Unhandled EL0 %s abort: 0x%x",
 			    exception == EXCP_INSN_ABORT_L ? "instruction" :
@@ -766,7 +769,7 @@ do_serror(struct trapframe *frame)
 	esr = frame->tf_esr;
 
 	print_registers(frame);
-	print_gp_register("far", far);
+	print_gp_register("far", far, true);
 	printf(" esr: 0x%.16lx\n", esr);
 	panic("Unhandled System Error");
 }
@@ -783,7 +786,7 @@ unhandled_exception(struct trapframe *frame)
 	esr = frame->tf_esr;
 
 	print_registers(frame);
-	print_gp_register("far", far);
+	print_gp_register("far", far, true);
 	printf(" esr: 0x%.16lx\n", esr);
 	panic("Unhandled exception");
 }

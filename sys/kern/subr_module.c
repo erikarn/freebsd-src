@@ -543,15 +543,14 @@ preload_dump_internal(struct sbuf *sbp)
 	bptr = (uint32_t *)preload_metadata;
 	sbuf_putc(sbp, '\n');
 	while (bptr[0] != MODINFO_END || bptr[1] != MODINFO_END) {
-		sbuf_printf(sbp, " %p:\n", bptr);
+		sbuf_printf(sbp, " %p: ", bptr);
 		type = *bptr++;
 		len = *bptr++;
 
-		sbuf_printf(sbp, "\ttype:\t(%#04x) ", type);
+		sbuf_printf(sbp, " type: (%#04x)", type);
 		preload_modinfo_type(sbp, type);
-		sbuf_putc(sbp, '\n');
-		sbuf_printf(sbp, "\tlen:\t%u\n", len);
-		sbuf_cat(sbp, "\tvalue:\t");
+		sbuf_printf(sbp, " len: %u", len);
+		sbuf_cat(sbp, " value: ");
 		preload_modinfo_value(sbp, bptr, type, len);
 		sbuf_putc(sbp, '\n');
 

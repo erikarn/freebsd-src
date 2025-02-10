@@ -406,6 +406,15 @@ init_proc0(vm_offset_t kstack)
 #endif
 	thread0.td_pcb = (struct pcb *)(thread0.td_kstack +
 	    thread0.td_kstack_pages * PAGE_SIZE) - 1;
+
+	printf("%s: KSTACK_PAGES=%d, thread0=%p, td_pcb=%p, td_kstack=0x%lx, PAGE_SIZE=%d\n",
+	    __func__,
+	    KSTACK_PAGES,
+	    &thread0,
+	    thread0.td_pcb,
+	    thread0.td_kstack,
+	    PAGE_SIZE);
+
 	thread0.td_pcb->pcb_flags = 0;
 	thread0.td_pcb->pcb_fpflags = 0;
 	thread0.td_pcb->pcb_fpusaved = &thread0.td_pcb->pcb_fpustate;
@@ -722,6 +731,29 @@ memory_mapping_mode(vm_paddr_t pa)
 	return (VM_MEMATTR_DEVICE);
 }
 
+static void
+adrian_dump_mem_info(void)
+{
+	vm_paddr_t size;
+	int i;
+
+	printf("real memory  = %ju (%ju MB)\n", ptoa((uintmax_t)realmem),
+	    ptoa((uintmax_t)realmem) / 1024 / 1024);
+
+	printf("Physical memory chunk(s):\n");
+	for (i = 0; phys_avail[i + 1] != 0; i += 2) {
+		size = phys_avail[i + 1] - phys_avail[i];
+		printf("%#016jx - %#016jx, %ju bytes (%ju pages)\n",
+		    (uintmax_t)phys_avail[i],
+		    (uintmax_t)phys_avail[i + 1] - 1,
+		    (uintmax_t)size, (uintmax_t)size / PAGE_SIZE);
+	}
+
+	printf("avail memory = %ju (%ju MB)\n",
+	    ptoa((uintmax_t)vm_free_count()),
+	    ptoa((uintmax_t)vm_free_count()) / 1024 / 1024);
+}
+
 void
 initarm(struct arm64_bootparams *abp)
 {
@@ -845,10 +877,22 @@ initarm(struct arm64_bootparams *abp)
 	 * output is required. If it's grossly incorrect the kernel will never
 	 * make it this far.
 	 */
-	if (getenv_is_true("debug.dump_modinfo_at_boot"))
+	if (1 || getenv_is_true("debug.dump_modinfo_at_boot"))
 		preload_dump();
 
+	// ok to here
+	printf("[adrian] abp=%p, modulep=0x%lx, kern_stack=0x%lx, kern_ttbr0=0x%lx, boot_el=0x%x, pad=0x%x\n",
+	    abp,
+	    abp->modulep,
+	    abp->kern_stack,
+	    abp->kern_ttbr0,
+	    abp->boot_el,
+	    abp->pad);
+
+	adrian_dump_mem_info();
+
 	init_proc0(abp->kern_stack);
+
 	msgbufinit(msgbufp, msgbufsize);
 	mutex_init();
 	init_param2(physmem);
