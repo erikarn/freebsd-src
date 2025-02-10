@@ -97,6 +97,7 @@ qcom_tlmm_probe(device_t dev)
 		device_printf(dev, "%s: checking %s\n", __func__, ql->ofw_str);
 		if (ofw_bus_is_compatible(dev, ql->ofw_str) == 1) {
 			sc->sc_chipset = ql->id;
+			sc->sc_attach_func = ql->attach_func;
 			device_set_desc(dev, ql->desc_str);
 			return (0);
 		}
@@ -168,8 +169,8 @@ qcom_tlmm_attach(device_t dev)
 	sc->dev = dev;
 	sc->sc_debug = 0;
 
-	/* TODO: make this platform specific */
-	qcom_tlmm_ipq4018_attach(sc);
+	/* Call platform specific attach function */
+	sc->sc_attach_func(sc);
 
 	qcom_tlmm_debug_sysctl_attach(sc);
 

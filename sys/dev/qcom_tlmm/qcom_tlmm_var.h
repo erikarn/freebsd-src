@@ -198,6 +198,7 @@ struct qcom_tlmm_softc {
 	struct gpio_pin		*gpio_pins;
 	uint32_t		sc_debug;
 	qcom_tlmm_chipset_t	sc_chipset;
+	void			(*sc_attach_func)(struct qcom_tlmm_softc *);
 
 	struct qcom_tlmm_hw_callbacks	*sc_hw;
 
