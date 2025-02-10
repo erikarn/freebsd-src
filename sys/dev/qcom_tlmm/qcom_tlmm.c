@@ -63,6 +63,7 @@
 
 /* TODO: put in a header file */
 extern	void qcom_tlmm_ipq4018_attach(struct qcom_tlmm_softc *sc);
+extern	void qcom_tlmm_x1e_attach(struct qcom_tlmm_softc *sc);
 
 struct qcom_tlmm_chipset_list {
 	qcom_tlmm_chipset_t id;
@@ -75,6 +76,9 @@ static struct qcom_tlmm_chipset_list qcom_tlmm_chipsets[] = {
 	{ QCOM_TLMM_CHIPSET_IPQ4018, "qcom,ipq4019-pinctrl",
 	    "Qualcomm Atheros TLMM IPQ4018/IPQ4019 GPIO/Pinmux driver",
 	    qcom_tlmm_ipq4018_attach },
+	{ QCOM_TLMM_CHIPSET_X1E, "qcom,x1e80100-tlmm",
+	    "Qualcomm Snapdragon X1E Pinmux driver",
+	    qcom_tlmm_x1e_attach },
 	{ 0, NULL, NULL, NULL },
 };
 

@@ -52,6 +52,7 @@
 typedef enum {
 	QCOM_TLMM_CHIPSET_NONE = 0,
 	QCOM_TLMM_CHIPSET_IPQ4018 = 1,
+	QCOM_TLMM_CHIPSET_X1E = 2,
 } qcom_tlmm_chipset_t;
 
 enum prop_id {
