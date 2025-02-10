@@ -4,13 +4,14 @@
 
 # Qualcomm Snapdragon drivers
 device		qcom_gcc		# Global Clock Controller
+device		qcom_rpmh		# Some Other Clock Controller
 device		qcom_mdio		# MDIO support
 
 # Serial (COM) ports
 device		uart_msm		# Qualcomm MSM UART driver
 
 # TLMM driver
-device		qcom_tlmm
+device		qcom_tlmm		# pinmux/GPIO driver
 
 # MMC/SD/SDIO Card slot support
 device		sdhci
