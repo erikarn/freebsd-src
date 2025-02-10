@@ -16,3 +16,9 @@ device		uart_msm		# Qualcomm MSM UART driver
 device		sdhci
 
 options 	FDT
+
+# DTBs
+makeoptions	MODULES_EXTRA+="dtb/qcom"
+
+# options 	FDT_DTB_STATIC
+# makeoptions	FDT_DTS_FILE=qcom/x1e78100-lenovo-thinkpad-t14s.dts
