@@ -63,21 +63,46 @@
 
 /* TODO: put in a header file */
 extern	void qcom_tlmm_ipq4018_attach(struct qcom_tlmm_softc *sc);
+extern	void qcom_tlmm_x1e_attach(struct qcom_tlmm_softc *sc);
+
+struct qcom_tlmm_chipset_list {
+	qcom_tlmm_chipset_t id;
+	const char *ofw_str;
+	const char *desc_str;
+	void (*attach_func)(struct qcom_tlmm_softc *);
+};
+
+static struct qcom_tlmm_chipset_list qcom_tlmm_chipsets[] = {
+	{ QCOM_TLMM_CHIPSET_IPQ4018, "qcom,ipq4019-pinctrl",
+	    "Qualcomm Atheros TLMM IPQ4018/IPQ4019 GPIO/Pinmux driver",
+	    qcom_tlmm_ipq4018_attach },
+	{ QCOM_TLMM_CHIPSET_X1E, "qcom,x1e80100-tlmm",
+	    "Qualcomm Snapdragon X1E Pinmux driver",
+	    qcom_tlmm_x1e_attach },
+	{ 0, NULL, NULL, NULL },
+};
 
 static int
 qcom_tlmm_probe(device_t dev)
 {
+	struct qcom_tlmm_softc *sc = device_get_softc(dev);
+	struct qcom_tlmm_chipset_list *ql;
+	int i;
 
 	if (! ofw_bus_status_okay(dev))
 		return (ENXIO);
 
-	/* TODO: need to store this somewhere useful for attach */
-	if (ofw_bus_is_compatible(dev, "qcom,ipq4019-pinctrl") == 0)
-		return (ENXIO);
+	for (i = 0; qcom_tlmm_chipsets[i].id != 0; i++) {
+		ql = &qcom_tlmm_chipsets[i];
+		device_printf(dev, "%s: checking %s\n", __func__, ql->ofw_str);
+		if (ofw_bus_is_compatible(dev, ql->ofw_str) == 1) {
+			sc->sc_chipset = ql->id;
+			device_set_desc(dev, ql->desc_str);
+			return (0);
+		}
+	}
 
-	device_set_desc(dev,
-	    "Qualcomm Atheross TLMM IPQ4018/IPQ4019 GPIO/Pinmux driver");
-	return (0);
+	return (ENXIO);
 }
 
 static int

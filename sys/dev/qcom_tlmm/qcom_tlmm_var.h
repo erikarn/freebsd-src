@@ -49,6 +49,11 @@
 #define GPIO_CLEAR_BITS(sc, reg, bits)	\
 	GPIO_WRITE(sc, reg, GPIO_READ(sc, (reg)) & ~(bits))
 
+typedef enum {
+	QCOM_TLMM_CHIPSET_NONE = 0,
+	QCOM_TLMM_CHIPSET_IPQ4018 = 1,
+	QCOM_TLMM_CHIPSET_X1E = 2,
+} qcom_tlmm_chipset_t;
 
 enum prop_id {
 	PIN_ID_BIAS_DISABLE = 0,
@@ -192,6 +197,7 @@ struct qcom_tlmm_softc {
 	int			gpio_npins;
 	struct gpio_pin		*gpio_pins;
 	uint32_t		sc_debug;
+	qcom_tlmm_chipset_t	sc_chipset;
 
 	struct qcom_tlmm_hw_callbacks	*sc_hw;
 

@@ -430,7 +430,8 @@ SUBDIR=	\
 	xdr \
 	xl \
 	xz \
-	zlib
+	zlib \
+	qcom_tlmm
 
 .if ${MK_AUTOFS} != "no" || defined(ALL_MODULES)
 _autofs=	autofs
