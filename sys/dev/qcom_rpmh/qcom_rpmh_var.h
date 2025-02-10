@@ -28,16 +28,12 @@
 #ifndef	__QCOM_RPMH_VAR_H__
 #define	__QCOM_RPMH_VAR_H__
 
-typedef enum {
-	QCOM_RPMH_CHIPSET_NONE = 0,
-	QCOM_RPMH_CHIPSET_X1E80100 = 1,
-} qcom_rpmh_chipset_t;
-
 struct qcom_rpmh_softc {
+	/* Note: needs to be first */
+	struct simplebus_softc	simplebus_sc;
 	device_t		dev;
 	struct mtx		mtx;
 	struct clkdom		*clkdom;
-	qcom_rpmh_chipset_t	sc_chipset;
 };
 
 #endif	/* __QCOM_RPMH_VAR_H__ */
