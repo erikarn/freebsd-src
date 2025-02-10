@@ -782,10 +782,14 @@ dev/qcom_clk/qcom_clk_fdiv.c			optional qcom_gcc
 dev/qcom_clk/qcom_clk_apssdiv.c			optional qcom_gcc
 dev/qcom_clk/qcom_clk_freqtbl.c			optional qcom_gcc
 dev/qcom_clk/qcom_clk_rcg2.c			optional qcom_gcc
+dev/qcom_clk/qcom_clk_rpmh.c			optional qcom_gcc
+dev/qcom_clk/qcom_clk_rpmh_bcm.c		optional qcom_gcc
 dev/qcom_clk/qcom_clk_branch2.c			optional qcom_gcc
 dev/qcom_clk/qcom_clk_ro_div.c			optional qcom_gcc
 dev/qcom_mdio/qcom_mdio_ipq4018.c		optional qcom_mdio fdt mdio mii
 dev/qcom_rpmh/qcom_rpmh_main.c			optional qcom_rpmh
+dev/qcom_rpmh/qcom_rpmh_clk.c			optional qcom_rpmh_clk
+dev/qcom_rpmh/qcom_rpmh_x1e80100.c		optional qcom_rpmh_clk
 dev/qcom_tlmm/qcom_tlmm_debug.c			optional qcom_tlmm gpio
 dev/qcom_tlmm/qcom_tlmm_pin.c			optional qcom_tlmm gpio
 dev/qcom_tlmm/qcom_tlmm_pinmux.c		optional qcom_tlmm gpio

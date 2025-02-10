@@ -25,18 +25,18 @@
  * SUCH DAMAGE.
  */
 
-#ifndef	__QCOM_CLK_RPMH_H__
-#define	__QCOM_CLK_RPMH_H__
+#ifndef	__QCOM_CLK_RPMH_BCM_H__
+#define	__QCOM_CLK_RPMH_BCM_H__
 
 #include "qcom_clk_freqtbl.h"
 
 typedef enum {
-	QCOM_CLK_RPMH_SLEEP_STATE = 0,		/* Nothing using it */
-	QCOM_CLK_RPMH_WAKE_ONLY_STATE = 1,	/* Resume pre power-down */
-	QCOM_CLK_RPMH_ACTIVE_ONLY_STATE = 2,	/* Active/AMC mode */
-} qcom_rpmh_state_t;
+	QCOM_CLK_RPMH_BCM_SLEEP_STATE = 0,		/* Nothing using it */
+	QCOM_CLK_RPMH_BCM_WAKE_ONLY_STATE = 1,	/* Resume pre power-down */
+	QCOM_CLK_RPMH_BCM_ACTIVE_ONLY_STATE = 2,	/* Active/AMC mode */
+} qcom_rpmh_bcm_state_t;
 
-struct qcom_clk_rpmh_def {
+struct qcom_clk_rpmh_bcm_def {
 	struct clknode_init_def clkdef;
 
 	uint8_t div;
@@ -55,7 +55,7 @@ struct qcom_clk_rpmh_def {
 	const struct qcom_clk_freq_tbl *freq_tbl;
 };
 
-extern	int qcom_clk_rpmh_register(struct clkdom *clkdom,
-	    struct qcom_clk_rpmh_def *clkdef);
+extern	int qcom_clk_rpmh_bcm_register(struct clkdom *clkdom,
+	    struct qcom_clk_rpmh_bcm_def *clkdef);
 
-#endif	/* __QCOM_CLK_RPMH_H__ */
+#endif	/* __QCOM_CLK_RPMH_BCM_H__ */

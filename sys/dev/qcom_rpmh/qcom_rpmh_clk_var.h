@@ -1,7 +1,7 @@
 /*-
  * SPDX-License-Identifier: BSD-2-Clause
  *
- * Copyright (c) 2026 Adrian Chadd <adrian@FreeBSD.org>
+ * Copyright (c) 2025 Adrian Chadd <adrian@FreeBSD.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,37 +25,21 @@
  * SUCH DAMAGE.
  */
 
-#ifndef	__QCOM_CLK_RPMH_H__
-#define	__QCOM_CLK_RPMH_H__
-
-#include "qcom_clk_freqtbl.h"
+#ifndef	__QCOM_RPMH_CLK_VAR_H__
+#define	__QCOM_RPMH_CLK_VAR_H__
 
 typedef enum {
-	QCOM_CLK_RPMH_SLEEP_STATE = 0,		/* Nothing using it */
-	QCOM_CLK_RPMH_WAKE_ONLY_STATE = 1,	/* Resume pre power-down */
-	QCOM_CLK_RPMH_ACTIVE_ONLY_STATE = 2,	/* Active/AMC mode */
-} qcom_rpmh_state_t;
+	QCOM_RPMH_CHIPSET_NONE = 0,
+	QCOM_RPMH_CHIPSET_X1E80100 = 1,
+} qcom_rpmh_clk_chipset_t;
 
-struct qcom_clk_rpmh_def {
-	struct clknode_init_def clkdef;
-
-	uint8_t div;
-	const char *res_name;
-	uint32_t res_addr;
-	uint32_t res_on_val;
-	uint32_t state;
-	uint32_t aggr_state;
-	uint32_t last_sent_aggr_state;
-	uint32_t valid_state_mask;
-	uint32_t unit;
-	const char *peer_name;
-
-	/* TODO: peer/sibling clock pointer */
-
-	const struct qcom_clk_freq_tbl *freq_tbl;
+struct qcom_rpmh_clk_softc {
+	device_t		dev;
+	struct mtx		mtx;
+	struct clkdom		*clkdom;
+	qcom_rpmh_clk_chipset_t	sc_chipset;
 };
 
-extern	int qcom_clk_rpmh_register(struct clkdom *clkdom,
-	    struct qcom_clk_rpmh_def *clkdef);
+extern	int qcom_rpmh_x1e80100_init(struct qcom_rpmh_clk_softc *);
 
-#endif	/* __QCOM_CLK_RPMH_H__ */
+#endif	/* __QCOM_RPMH_CLK_VAR_H__ */
