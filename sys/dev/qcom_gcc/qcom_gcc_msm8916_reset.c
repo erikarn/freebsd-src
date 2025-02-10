@@ -52,14 +52,14 @@
 static int
 qcom_gcc_msm8916_hwreset_assert(device_t dev, intptr_t id, bool reset)
 {
-	device_printf(dev, "%s: invalid id (%d)\n", __func__, id);
+	device_printf(dev, "%s: invalid id (%d)\n", __func__, (uint32_t) id);
 	return (EINVAL);
 }
 
 static int
 qcom_gcc_msm8916_hwreset_is_asserted(device_t dev, intptr_t id, bool *reset)
 {
-	device_printf(dev, "%s: invalid id (%d)\n", __func__, id);
+	device_printf(dev, "%s: invalid id (%d)\n", __func__, (uint32_t) id);
 	return (EINVAL);
 }
 
