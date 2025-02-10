@@ -201,15 +201,21 @@ clk_fixed_init_fixed_factor(struct clk_fixed_softc *sc, phandle_t node,
 
 	def->clkdef.id = 1;
 	rv = OF_getencprop(node, "clock-mult", &def->mult,  sizeof(def->mult));
-	if (rv <= 0)
+	if (rv <= 0) {
+		device_printf(sc->dev, "%s: OF_getencprop (clock-mult) failed: (%d)\n", __func__, rv);
 		return (ENXIO);
+	}
 	rv = OF_getencprop(node, "clock-div", &def->div,  sizeof(def->div));
-	if (rv <= 0)
+	if (rv <= 0) {
+		device_printf(sc->dev, "%s: OF_getencprop (clock-div) failed: (%d)\n", __func__, rv);
 		return (ENXIO);
+	}
 	/* Get name of parent clock */
 	rv = clk_get_by_ofw_index(sc->dev, 0, 0, &parent);
-	if (rv != 0)
+	if (rv != 0) {
+		device_printf(sc->dev, "%s: clk_get_by_ofw_index failed (%d)\n", __func__, rv);
 		return (ENXIO);
+	}
 	def->clkdef.parent_names = malloc(sizeof(char *), M_OFWPROP, M_WAITOK);
 	def->clkdef.parent_names[0] = clk_get_name(parent);
 	def->clkdef.parent_cnt  = 1;
@@ -239,7 +245,7 @@ clk_fixed_attach(device_t dev)
 	else
 		rv = ENXIO;
 	if (rv != 0) {
-		device_printf(sc->dev, "Cannot FDT parameters.\n");
+		device_printf(sc->dev, "Cannot FDT parameters (clk_type=%d).\n", (uint32_t) clk_type);
 		goto fail;
 	}
 	rv = clk_parse_ofw_clk_name(dev, node, &def.clkdef.name);
@@ -264,7 +270,7 @@ clk_fixed_attach(device_t dev)
 		goto fail;
 	}
 
-	if (bootverbose)
+	if (1 || bootverbose)
 		clkdom_dump(sc->clkdom);
 
 	OF_prop_free(__DECONST(char *, def.clkdef.name));
