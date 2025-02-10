@@ -53,6 +53,7 @@
 #include "qcom_gcc_var.h"
 #include "qcom_gcc_ipq4018.h"
 #include "qcom_gcc_msm8916.h"
+#include "qcom_gcc_x1e80100.h"
 
 static int	qcom_gcc_modevent(module_t, int, void *);
 
@@ -71,6 +72,9 @@ static struct qcom_gcc_chipset_list_entry qcom_gcc_chipset_list[] = {
 	    QCOM_GCC_CHIPSET_IPQ4018 },
 	{ "qcom,gcc-msm8916", "Qualcomm MSM8916 Clock/Reset Controller",
 	    QCOM_GCC_CHIPSET_MSM8916 },
+	{ "qcom,gcc-x1e80100",
+	    "Qualcomm Snapdragon X1E80100 Clock/Reset Controller",
+	    QCOM_GCC_CHIPSET_X1E80100 },
 	{ NULL, NULL, 0 },
 };
 
@@ -143,6 +147,10 @@ qcom_gcc_attach(device_t dev)
 		qcom_gcc_msm8916_hwreset_init(sc);
 		mem_sz = 0x0;
 		break;
+	case QCOM_GCC_CHIPSET_X1E80100:
+		qcom_gcc_x1e80100_hwreset_init(sc);
+		mem_sz = 0x0;
+		break;
 	case QCOM_GCC_CHIPSET_NONE:
 		device_printf(dev, "Invalid chipset (%d)\n", sc->sc_chipset);
 		return (ENXIO);
@@ -178,6 +186,9 @@ qcom_gcc_attach(device_t dev)
 		break;
 	case QCOM_GCC_CHIPSET_MSM8916:
 		qcom_gcc_msm8916_clock_setup(sc);
+		break;
+	case QCOM_GCC_CHIPSET_X1E80100:
+		qcom_gcc_x1e80100_clock_setup(sc);
 		break;
 	case QCOM_GCC_CHIPSET_NONE:
 		device_printf(dev, "Invalid chipset (%d)\n", sc->sc_chipset);

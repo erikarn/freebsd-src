@@ -724,6 +724,8 @@ dev/qcom_gcc/qcom_gcc_ipq4018_reset.c		optional qcom_gcc
 dev/qcom_gcc/qcom_gcc_ipq4018_clock.c		optional qcom_gcc
 dev/qcom_gcc/qcom_gcc_msm8916_reset.c		optional qcom_gcc
 dev/qcom_gcc/qcom_gcc_msm8916_clock.c		optional qcom_gcc
+dev/qcom_gcc/qcom_gcc_x1e80100_reset.c		optional qcom_gcc
+dev/qcom_gcc/qcom_gcc_x1e80100_clock.c		optional qcom_gcc
 dev/qcom_clk/qcom_clk_fepll.c			optional qcom_gcc
 dev/qcom_clk/qcom_clk_fdiv.c			optional qcom_gcc
 dev/qcom_clk/qcom_clk_apssdiv.c			optional qcom_gcc
