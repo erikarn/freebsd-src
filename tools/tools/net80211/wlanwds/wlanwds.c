@@ -275,7 +275,7 @@ static int
 getlladdr(const char *ifname, uint8_t macaddr[ETHER_ADDR_LEN])
 {
 	struct ifaddrs *ifap, *ifa;
-	struct sockaddr_dl *sdl;
+	struct sockaddr_dl sdl;
 
 	if (getifaddrs(&ifap) < 0) {
 		warn("%s: getifaddrs", __func__);
@@ -294,25 +294,27 @@ getlladdr(const char *ifname, uint8_t macaddr[ETHER_ADDR_LEN])
 			goto err;
 		}
 
+		memcpy(&sdl, ifa->ifa_addr, MIN(sizeof(sdl),
+		    sizeof(struct sockaddr)));
+
 		/* Check address family */
-		sdl = (struct sockaddr_dl *) ifa->ifa_addr;
-		if (sdl->sdl_type != IFT_ETHER) {
+		if (sdl.sdl_type != IFT_ETHER) {
 			syslog(LOG_CRIT, "%s: %s: unknown aftype (%d)\n",
 			    __func__,
 			    ifname,
-			    sdl->sdl_type);
+			    sdl.sdl_type);
 			goto err;
 		}
-		if (sdl->sdl_alen != ETHER_ADDR_LEN) {
+		if (sdl.sdl_alen != ETHER_ADDR_LEN) {
 			syslog(LOG_CRIT, "%s: %s: aflen too short (%d)\n",
 			    __func__,
 			    ifname,
-			    sdl->sdl_alen);
+			    sdl.sdl_alen);
 			goto err;
 		}
 
 		/* Ok, found it */
-		memcpy(macaddr, (void *) LLADDR(sdl), ETHER_ADDR_LEN);
+		memcpy(macaddr, (void *) LLADDR(&sdl), ETHER_ADDR_LEN);
 		goto ok;
 	}
 	syslog(LOG_CRIT, "%s: couldn't find ifname %s\n", __func__, ifname);
