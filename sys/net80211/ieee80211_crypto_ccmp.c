@@ -311,14 +311,18 @@ ccmp_decap(struct ieee80211_key *k, struct mbuf *m, int hdrlen)
 	struct ccmp_ctx *ctx = k->wk_private;
 	struct ieee80211vap *vap = ctx->cc_vap;
 	struct ieee80211_frame *wh;
-	uint8_t *ivp, tid;
-	uint64_t pn;
+	uint8_t *ivp, tid = 0;
+	uint64_t pn = 0;
 	bool noreplaycheck;
+	bool do_update = true, do_replay = false;
 
 	rxs = ieee80211_get_rx_params_ptr(m);
 
-	if ((rxs != NULL) && (rxs->c_pktflags & IEEE80211_RX_F_IV_STRIP) != 0)
+	if ((rxs != NULL) &&
+	    (rxs->c_pktflags & IEEE80211_RX_F_IV_STRIP) != 0) {
+		do_update = false;
 		goto finish;
+	}
 
 	/*
 	 * Header should have extended IV and sequence number;
@@ -340,7 +344,23 @@ ccmp_decap(struct ieee80211_key *k, struct mbuf *m, int hdrlen)
 
 	noreplaycheck = (k->wk_flags & IEEE80211_KEY_NOREPLAY) != 0;
 	noreplaycheck |= (rxs != NULL) && (rxs->c_pktflags & IEEE80211_RX_F_PN_VALIDATED) != 0;
-	if (pn <= k->wk_keyrsc[tid] && !noreplaycheck) {
+
+	/*
+	 * Check whether the PN is suspect or a replay.
+	 *
+	 * This will do the vendor workaround if required, or just the normal
+	 * check if not required.
+	 */
+	if (ieee80211_crypto_pn_suspect_check(vap, k, wh, tid, pn,
+	    &do_update, &do_replay) != 0) {
+		IEEE80211_NOTE_MAC(vap, IEEE80211_MSG_CRYPTO, wh->i_addr2,
+		    "%s", "Failed suspect PN check");
+		/* XXX statistics */
+		return (0);
+	}
+
+	/* Check for a replay violation. */
+	if (do_replay == true && !noreplaycheck) {
 		/*
 		 * Replay violation.
 		 */
@@ -377,15 +397,20 @@ finish:
 	/*
 	 * Ok to update rsc now.
 	 */
-	if ((rxs == NULL) || (rxs->c_pktflags & IEEE80211_RX_F_IV_STRIP) == 0) {
+	if ((do_update == true) &&
+	    ((rxs == NULL) ||
+	     (rxs->c_pktflags & IEEE80211_RX_F_IV_STRIP) == 0)) {
 		/*
 		 * Do not go backwards in the IEEE80211_KEY_NOREPLAY cases
 		 * or in case hardware has checked but frames are arriving
 		 * reordered (e.g., LinuxKPI drivers doing RSS which we are
 		 * not prepared for at all).
 		 */
-		if (pn > k->wk_keyrsc[tid])
+		if (pn > k->wk_keyrsc[tid]) {
+			/* Update RSC and override suspect RSC tracking. */
 			k->wk_keyrsc[tid] = pn;
+			k->wk_suspect_keyrsc[tid] = 0;
+		}
 	}
 
 	return 1;
