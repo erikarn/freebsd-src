@@ -1270,6 +1270,12 @@ ath_attach(u_int16_t devid, struct ath_softc *sc)
 	ic->ic_flags |= IEEE80211_F_DATAPAD;
 
 	/*
+	 * Indicate that we need the PN workaround for hardware
+	 * corruption.
+	 */
+	ic->ic_flags_ext |= IEEE80211_FEXT_CRYPTO_PN_SUSPECT;
+
+	/*
 	 * Query the hal about antenna support.
 	 */
 	sc->sc_defant = ath_hal_getdefantenna(ah);
