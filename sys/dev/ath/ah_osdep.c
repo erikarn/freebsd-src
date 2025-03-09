@@ -31,7 +31,9 @@
 #include "opt_ah.h"
 
 #include <sys/param.h>
+#include <sys/types.h>
 #include <sys/systm.h>
+#include <sys/syslog.h>
 #include <sys/kernel.h>
 #include <sys/module.h>
 #include <sys/sysctl.h>
@@ -159,12 +161,17 @@ ath_hal_reg_whilst_asleep(struct ath_hal *ah, uint32_t reg)
 void
 DO_HALDEBUG(struct ath_hal *ah, u_int mask, const char* fmt, ...)
 {
+	int log_pri = LOG_DEBUG;
+
+	if (mask == HAL_DEBUG_UNMASKABLE)
+		log_pri = LOG_CRIT;
+
 	if ((mask == HAL_DEBUG_UNMASKABLE) ||
 	    (ah != NULL && ah->ah_config.ah_debug & mask) ||
 	    (ath_hal_debug & mask)) {
 		__va_list ap;
 		va_start(ap, fmt);
-		ath_hal_vprintf(ah, fmt, ap);
+		vlog(log_pri, fmt, ap);
 		va_end(ap);
 	}
 }
