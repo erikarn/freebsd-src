@@ -100,6 +100,8 @@ struct ieee80211_key {
 #define	wk_rxmic	wk_key+IEEE80211_KEYBUF_SIZE+8	/* XXX can't () right */
 					/* key receive sequence counter */
 	uint64_t	wk_keyrsc[IEEE80211_TID_SIZE];
+					/* Suspect key receive seq counter */
+	uint64_t	wk_suspect_keyrsc[IEEE80211_TID_SIZE];
 	uint64_t	wk_keytsc;	/* key transmit sequence counter */
 	const struct ieee80211_cipher *wk_cipher;
 	void		*wk_private;	/* private cipher state */
@@ -198,6 +200,9 @@ void	ieee80211_crypto_delglobalkeys(struct ieee80211vap *);
 void	ieee80211_crypto_reload_keys(struct ieee80211com *);
 void	ieee80211_crypto_set_deftxkey(struct ieee80211vap *,
 	    ieee80211_keyix kid);
+int	ieee80211_crypto_pn_suspect_check(struct ieee80211vap *,
+	    struct ieee80211_key *, const struct ieee80211_frame *,
+	    uint8_t, uint64_t, bool *, bool *);
 
 /*
  * Template for a supported cipher.  Ciphers register with the
