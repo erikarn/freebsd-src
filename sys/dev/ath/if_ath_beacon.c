@@ -446,10 +446,21 @@ ath_beacon_proc(void *arg, int pending)
 	 * many consecutive beacons reset the device.
 	 */
 	if (ath_hal_numtxpending(ah, sc->sc_bhalq) != 0) {
+		uint32_t nav;
 
 		sc->sc_bmisscount++;
 		sc->sc_stats.ast_be_missed++;
 		ath_beacon_miss(sc);
+
+		/* check nav; override if invalid */
+		nav = ath_hal_getnav(ah);
+		if (nav > 0x7fff) { /* 32767uS */
+			device_printf(sc->sc_dev,
+			    "Invalid NAV (0x%x); resetting NAV\n",
+			    nav);
+			ath_hal_setnav(ah, 0);
+			/* XXX counter? */
+		}
 
 		DPRINTF(sc, ATH_DEBUG_BEACON,
 			"%s: missed %u consecutive beacons\n",
