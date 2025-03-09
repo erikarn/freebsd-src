@@ -1081,3 +1081,167 @@ ieee80211_crypto_init_aad(const struct ieee80211_frame *wh, uint8_t *aad,
 
 	return (aad_len);
 }
+
+/*
+ * Optionally check whether the given PN falls within a "suspect"
+ * range that some chips (notably the Atheros 11abgn hardware)
+ * can corrupt.
+ *
+ * Expects do_update/do_replay to be setup appropriately; this
+ * routine will simply override them.
+ *
+ * Returns 0 if OK, an errno if error.
+ */
+int
+ieee80211_crypto_pn_suspect_check(struct ieee80211vap *vap,
+    struct ieee80211_key *k, const struct ieee80211_frame *wh,
+    uint8_t tid, uint64_t pn, bool *do_update, bool *do_replay)
+{
+
+	/*
+	 * Check if this NIC needs this particular workaround.
+	 * If not then just skip the workaround checks and simply
+	 * check the PN against the last seen.
+	 */
+	if ((vap->iv_flags_ext & IEEE80211_FEXT_CRYPTO_PN_SUSPECT) == 0) {
+		if (pn <= k->wk_keyrsc[tid])
+			*do_replay = true;
+		else
+			*do_replay = false;
+		return 0;
+	}
+
+	/*
+	 * Handle a chipset specific bug in some (all?) Atheros chips
+	 * doing hardware CCMP decryption - the PN gets corrupted in a frame.
+	 *
+	 * It looks like a /huge/ jump in the PN as some high bits in the
+	 * IV get flipped to 1 somehow.  The next decrypted frame is likely
+	 * fine with the old PN but all subsequent frames are ignored.
+	 */
+
+	/*
+	 * First part - is this a potentially garbage high PN.
+	 * This could be a garbage PN, it could be a valid PN
+	 * with a bunch of missing frames in the PN space after
+	 * a garbage PN.  So, we handle all of those cases below.
+	 */
+
+	if (k->wk_suspect_keyrsc[tid] != 0) {
+		/* Handle replay with the same suspect PN; tsk */
+		if (pn == k->wk_suspect_keyrsc[tid]) {
+			IEEE80211_NOTE_MAC(vap, IEEE80211_MSG_CRYPTO,
+			  wh->i_addr2,
+			  "Suspect PN equal/replay; tid=%d, "
+			  "pn=0x%jx, rsc=0x%jx, suspect_rsc=0x%jx",
+			    tid, (uintmax_t) pn,
+			    (uintmax_t) k->wk_keyrsc[tid],
+			    (uintmax_t) k->wk_suspect_keyrsc[tid]);
+			*do_replay = true;
+			*do_update = false;
+		}
+
+		/*
+		 * Handle it being bigger than the suspected PN.
+		 * It's quite possible we'll get a SECOND invalid
+		 * frame after the first, and if that's the case
+		 * this logic will need adjusting.
+		 */
+		else if (pn > k->wk_suspect_keyrsc[tid]) {
+			IEEE80211_NOTE_MAC(vap, IEEE80211_MSG_CRYPTO,
+			  wh->i_addr2,
+			  "Suspect PN not a suspect; tid=%d, "
+			  "pn=0x%jx, rsc=0x%jx, suspect_rsc=0x%jx",
+			    tid, (uintmax_t) pn,
+			    (uintmax_t) k->wk_keyrsc[tid],
+			    (uintmax_t) k->wk_suspect_keyrsc[tid]);
+			/*
+			 * This isn't technically needed, but let's
+			 * just be explicit here - if it passes
+			 * the rest of the checks then we'll
+			 * update the rsc and clear the suspect
+			 * rsc counter.
+			 */
+			*do_update = true;
+		}
+
+		/*
+		 * It's smaller than the suspect rsc but bigger
+		 * than the rsc.  We're back to normal.
+		 */
+		else if (pn > k->wk_keyrsc[tid]) {
+			IEEE80211_NOTE_MAC(vap, IEEE80211_MSG_CRYPTO,
+			  wh->i_addr2,
+			  "Suspect PN; back to normal; tid=%d, "
+			  "pn=0x%jx, rsc=0x%jx, suspect_rsc=0x%jx",
+			    tid, (uintmax_t) pn,
+			    (uintmax_t) k->wk_keyrsc[tid],
+			    (uintmax_t) k->wk_suspect_keyrsc[tid]);
+			*do_update = true;
+		} else {
+			/*
+			 * pn is less or equal to the suspect rsc,
+			 * but greater than the last seen rsc.
+			 * We don't know whether this is another
+			 * corrupted frame with a lower bit corrupted,
+			 * or a replay attack.
+			 *
+			 * Mark it as a replay attack and clear
+			 * ths suspect PN.  This may result in some
+			 * incorrectly dropped frames but that's
+			 * better than mucking up the valid-y looking
+			 * RSC and potentially leaving a replay attack
+			 * vector open.
+			 */
+			IEEE80211_NOTE_MAC(vap, IEEE80211_MSG_CRYPTO,
+			  wh->i_addr2,
+			  "Suspect PN is a replay attack; tid=%d, "
+			  "pn=0x%jx, rsc=0x%jx, suspect_rsc=0x%jx",
+			    tid, (uintmax_t) pn,
+			    (uintmax_t) k->wk_keyrsc[tid],
+			    (uintmax_t) k->wk_suspect_keyrsc[tid]);
+			k->wk_suspect_keyrsc[tid] = 0;
+			*do_update = false;
+			*do_replay = true;
+		}
+	}
+
+	/*
+	 * Next, check if we have a garbage looking PN and we need to
+	 * set the suspect PN track.
+	 */
+	else if ((k->wk_keyrsc[tid] > 1) && (pn > (k->wk_keyrsc[tid] + 32))) {
+		/*
+		 * This is a suspected invalid PN.  This may be because
+		 * of a hole in the sender side (eg multicast frame
+		 * or non-aggregate frames with holes in their transmit
+		 * sequence counters - typically the latter is net80211
+		 * style stacks with sequence numbers assigned BEFORE
+		 * actual transmit!).
+		 *
+		 * Track it in the per-key suspected key array.
+		 * Then let it through, but don't update the rsc yet.
+		 * If the next frame seen resumes the normal sequence
+		 * count then we'll use it; else we'll use this suspect one.
+		 */
+		IEEE80211_NOTE_MAC(vap, IEEE80211_MSG_CRYPTO,
+		  wh->i_addr2, "Suspect PN; tid=%d, pn=0x%jx, rsc=0x%jx",
+		    tid, (uintmax_t) pn, (uintmax_t) k->wk_keyrsc[tid]);
+		k->wk_suspect_keyrsc[tid] = pn;
+		/* XXX TODO: statistics, etc */
+		*do_update = false;
+	}
+
+	/*
+	 * Check if the PN is invalid / replay attack.
+	 *
+	 * Note that if we have a suspect rsc here then the checks
+	 * are being done above; this would have to be ALSO before
+	 * the last non-suspect rsc to trigger it here!
+	 */
+	if (pn <= k->wk_keyrsc[tid]) {
+		*do_replay = true;
+	}
+
+	return (0);
+}
