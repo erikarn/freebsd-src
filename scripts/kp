@@ -1,0 +1,11 @@
+#!/bin/sh -e
+
+WORKDIR=/data/1/adrian/build/freebsd-router
+REPODIR=/data/1/freebsd/router/pkgs/
+
+# Note: this doesn't populate REPODIR with the updated
+# kernel package, as for now it'd be created in a separate
+# repo and a pkg update / upgrade won't find it.
+
+env MAKEOBJDIRPREFIX=${WORKDIR}/freebsd-obj \
+    make -s stage-packages-kernel create-packages-kernel
