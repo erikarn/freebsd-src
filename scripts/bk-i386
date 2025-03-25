@@ -1,0 +1,13 @@
+#!/bin/sh -e
+
+# env MAKEOBJDIRPREFIX=/data/1/adrian/build/freebsd-router/freebsd-obj DESTDIR=/data/1/adrian/build/freebsd-router/freebsd-root/i386 make -s -j12 buildkernel installkernel TARGET_ARCH=i386 KERNCONF=GENERIC NO_ROOT=yes
+
+WORKDIR=/data/1/adrian/build/freebsd-router
+REPODIR=/data/1/freebsd/router/pkgs/
+X_DESTDIR=/data/1/adrian/build/freebsd-router/freebsd-root/i386
+X_KERNCONF=GENERIC
+
+env MAKEOBJDIRPREFIX=${WORKDIR}/freebsd-obj \
+    DESTDIR="${X_DESTDIR}" \
+    make -s -j12 buildkernel KERNCONF=${X_KERNCONF} TARGET_ARCH=i386 NO_ROOT=yes
+
