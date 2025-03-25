@@ -6,4 +6,5 @@ REPODIR=/data/1/freebsd/router/pkgs/
 mkdir -p ${REPODIR}
 env MAKEOBJDIRPREFIX=${WORKDIR}/freebsd-obj \
     REPODIR=${REPODIR} \
+    KERNCONF=ROUTER \
     make -s -j12 packages
