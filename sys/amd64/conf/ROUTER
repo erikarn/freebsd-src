@@ -18,7 +18,7 @@
 #
 
 cpu		HAMMER
-ident		GENERIC
+ident		ROUTER
 
 makeoptions	DEBUG=-g		# Build kernel with gdb(1) debug symbols
 makeoptions	WITH_CTF=1		# Run ctfconvert(1) for DTrace support
@@ -278,27 +278,39 @@ device		vr			# VIA Rhine, Rhine II
 device		xl			# 3Com 3c90x (``Boomerang'', ``Cyclone'')
 
 # Wireless NIC cards
-device		wlan			# 802.11 support
+#device		wlan			# 802.11 support
 options 	IEEE80211_DEBUG		# enable debug msgs
 options 	IEEE80211_SUPPORT_MESH	# enable 802.11s draft support
-device		wlan_wep		# 802.11 WEP support
-device		wlan_ccmp		# 802.11 CCMP support
-device		wlan_gcmp		# 802.11 GCMP support
-device		wlan_tkip		# 802.11 TKIP support
-device		wlan_amrr		# AMRR transmit rate control algorithm
-device		ath			# Atheros CardBus/PCI NICs
-device		ath_hal			# Atheros CardBus/PCI chip support
+options 	IEEE80211_SUPPORT_TDMA
+options 	IEEE80211_SUPPORT_SUPERG
+options 	IEEE80211_ALQ
+
+#device		wlan_wep		# 802.11 WEP support
+#device		wlan_ccmp		# 802.11 CCMP support
+#device		wlan_gcmp		# 802.11 GCMP support
+#device		wlan_tkip		# 802.11 TKIP support
+#device		wlan_amrr		# AMRR transmit rate control algorithm
+#device		ath			# Atheros CardBus/PCI NICs
+options 	ATH_DEBUG
+options 	ATH_DIAGAPI
+options 	ATH_ENABLE_DFS
+options 	ATH_DEBUG_ALQ
+options 	ATH_KTR_INTR_DEBUG
+#device		ath_hal			# Atheros CardBus/PCI chip support
+options 	AH_DEBUG
 options 	AH_AR5416_INTERRUPT_MITIGATION # AR5416 interrupt mitigation
-device		ath_rate_sample		# SampleRate tx rate control for ath
+options 	AH_DEBUG_ALQ
+
+#device		ath_rate_sample		# SampleRate tx rate control for ath
 #device		bwi			# Broadcom BCM430x/BCM431x wireless NICs.
 #device		bwn			# Broadcom BCM43xx wireless NICs.
-device		ipw			# Intel 2100 wireless NICs.
-device		iwi			# Intel 2200BG/2225BG/2915ABG wireless NICs.
-device		iwn			# Intel 4965/1000/5000/6000 wireless NICs.
-device		malo			# Marvell Libertas wireless NICs.
-device		mwl			# Marvell 88W8363 802.11n wireless NICs.
-device		ral			# Ralink Technology RT2500 wireless NICs.
-device		wpi			# Intel 3945ABG wireless NICs.
+#device		ipw			# Intel 2100 wireless NICs.
+#device		iwi			# Intel 2200BG/2225BG/2915ABG wireless NICs.
+#device		iwn			# Intel 4965/1000/5000/6000 wireless NICs.
+#device		malo			# Marvell Libertas wireless NICs.
+#device		mwl			# Marvell 88W8363 802.11n wireless NICs.
+#device		ral			# Ralink Technology RT2500 wireless NICs.
+#device		wpi			# Intel 3945ABG wireless NICs.
 
 # Pseudo devices.
 device		crypto			# core crypto support
