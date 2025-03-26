@@ -2672,11 +2672,14 @@ ieee80211_getcapinfo(struct ieee80211vap *vap, struct ieee80211_channel *chan)
 	if (vap->iv_flags & IEEE80211_F_PRIVACY)
 		capinfo |= IEEE80211_CAPINFO_PRIVACY;
 	if ((vap->iv_flags & IEEE80211_F_SHPREAMBLE) &&
+	    chan != IEEE80211_CHAN_ANYC &&
 	    IEEE80211_IS_CHAN_2GHZ(chan))
 		capinfo |= IEEE80211_CAPINFO_SHORT_PREAMBLE;
 	if (vap->iv_flags & IEEE80211_F_SHSLOT)
 		capinfo |= IEEE80211_CAPINFO_SHORT_SLOTTIME;
-	if (IEEE80211_IS_CHAN_5GHZ(chan) && (vap->iv_flags & IEEE80211_F_DOTH))
+	if (chan != IEEE80211_CHAN_ANYC &&
+	    IEEE80211_IS_CHAN_5GHZ(chan) &&
+	    (vap->iv_flags & IEEE80211_F_DOTH))
 		capinfo |= IEEE80211_CAPINFO_SPECTRUM_MGMT;
 	return capinfo;
 }
