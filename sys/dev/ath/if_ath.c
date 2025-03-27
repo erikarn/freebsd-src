@@ -1305,6 +1305,11 @@ ath_attach(u_int16_t devid, struct ath_softc *sc)
 	ic->ic_getradiocaps = ath_getradiocaps;
 	sc->sc_opmode = HAL_M_STA;
 
+	/* Note: this has to happen AFTER ieee80211_ifattach() */
+	ieee80211_set_software_ciphers(ic, IEEE80211_CRYPTO_WEP |
+	    IEEE80211_CRYPTO_TKIP | IEEE80211_CRYPTO_AES_CCM |
+	    IEEE80211_CRYPTO_AES_GCM_128);
+
 	/* override default methods */
 	ic->ic_ioctl = ath_ioctl;
 	ic->ic_parent = ath_parent;
