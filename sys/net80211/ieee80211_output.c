@@ -2667,20 +2667,24 @@ ieee80211_getcapinfo(struct ieee80211vap *vap, struct ieee80211_channel *chan)
 
 	KASSERT(vap->iv_opmode != IEEE80211_M_STA, ("station mode"));
 
+	/* XXX TODO: chan != IEEE80211_CHAN_ANYC ? */
+
 	if (vap->iv_opmode == IEEE80211_M_HOSTAP)
 		capinfo = IEEE80211_CAPINFO_ESS;
 	else if (vap->iv_opmode == IEEE80211_M_IBSS)
 		capinfo = IEEE80211_CAPINFO_IBSS;
 	else
 		capinfo = 0;
+
 	if (vap->iv_flags & IEEE80211_F_PRIVACY)
 		capinfo |= IEEE80211_CAPINFO_PRIVACY;
 	if ((vap->iv_flags & IEEE80211_F_SHPREAMBLE) &&
-	    IEEE80211_IS_CHAN_2GHZ(chan))
+	    chan != IEEE80211_CHAN_ANYC && IEEE80211_IS_CHAN_2GHZ(chan))
 		capinfo |= IEEE80211_CAPINFO_SHORT_PREAMBLE;
 	if (vap->iv_flags & IEEE80211_F_SHSLOT)
 		capinfo |= IEEE80211_CAPINFO_SHORT_SLOTTIME;
-	if (IEEE80211_IS_CHAN_5GHZ(chan) && (vap->iv_flags & IEEE80211_F_DOTH))
+
+	if (chan != IEEE80211_CHAN_ANYC && IEEE80211_IS_CHAN_5GHZ(chan) && (vap->iv_flags & IEEE80211_F_DOTH))
 		capinfo |= IEEE80211_CAPINFO_SPECTRUM_MGMT;
 	return capinfo;
 }
