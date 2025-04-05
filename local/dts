@@ -1,0 +1,6 @@
+#!/bin/sh
+
+X_SRC_DTB="freebsd-obj/data/1/adrian/freebsd/head-embedded-arm/freebsd-src/arm.armv7/sys/ASUS_AC1300/qcom-ipq4018-rt-ac58u.dtb"
+X_DST_DTS="out.dts"
+
+dtc -I dtb -O dts -o ${X_DST_DTS} ${X_SRC_DTB}
