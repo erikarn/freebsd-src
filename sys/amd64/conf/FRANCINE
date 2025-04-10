@@ -2,10 +2,11 @@ include GENERIC
 ident FRANCINE
 
 options	RTWN_DEBUG
-options	UATH_DEBUG
-
-# Not yet!
 options	IEEE80211_SUPPORT_SUPERG
+options	IEEE80211_SUPPORT_MESH
+options	IEEE80211_ALQ
+options	IEEE80211_DFS_DEBUG
+options	IEEE80211_DEBUG
 
 nodevice wlan
 nodevice wlan_wep
