@@ -1,0 +1,56 @@
+include GENERIC
+ident FRANCINE
+
+options	RTWN_DEBUG
+# options	UATH_DEBUG
+
+# Not yet!
+options	IEEE80211_SUPPORT_SUPERG
+options IEEE80211_DEBUG
+options IEEE80211_SUPPORT_MESH
+options IEEE80211_SUPPORT_TDMA
+options IEEE80211_ALQ
+options IEEE80211_DFS_DEBUG
+
+nodevice rge
+
+nodevice wlan
+nodevice wlan_wep
+nodevice wlan_ccmp
+nodevice wlan_tkip
+nodevice wlan_amrr
+
+nodevice ath
+nodevice ath_hal
+nodevice ath_rate_sample
+nodevice ipw
+nodevice ipi
+nodevice iwi
+nodevice iwn
+nodevice malo
+nodevice mwl
+nodevice ral
+nodevice wpi
+
+options ATH_DEBUG
+options ATH_DIAGAPI
+options ATH_ENABLE_DFS
+options ATH_DEBUG_ALQ
+options ATH_KTR_INTR_DEBUG
+
+options AH_DEBUG
+options AH_DEBUG_ALQ
+options AH_PRIVATE_DIAG
+options AH_INTERRUPT_DEBUGGING
+
+options IWN_DEBUG
+options IWM_DEBUG
+
+nodevice sound
+nodevice snd_cmi
+nodevice snd_csa
+nodevice snd_emu10kx
+nodevice snd_es137x
+nodevice snd_hda
+nodevice snd_ich
+nodevice snd_via8233
