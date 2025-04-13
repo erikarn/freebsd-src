@@ -1,6 +1,6 @@
 #!/bin/sh -e
 
-WORKDIR=/data/1/adrian/build/freebsd-router
+WORKDIR=/data/1/adrian/freebsd/freebsd-router/
 REPODIR=/data/1/freebsd/router/pkgs/
 
 env MAKEOBJDIRPREFIX=${WORKDIR}/freebsd-obj \
