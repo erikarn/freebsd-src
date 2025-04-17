@@ -225,57 +225,57 @@ device		puc			# Multi I/O cards and multi-channel UARTs
 # PCI/PCI-X/PCIe Ethernet NICs that use iflib infrastructure
 device		iflib
 device		em			# Intel PRO/1000 Gigabit Ethernet Family
-device		igc			# Intel I225 2.5G Ethernet
-device		ix			# Intel PRO/10GbE PCIE PF Ethernet
-device		ixv			# Intel PRO/10GbE PCIE VF Ethernet
-device		ixl			# Intel 700 Series Physical Function
-device		iavf			# Intel Adaptive Virtual Function
-device		ice			# Intel 800 Series Physical Function
-device		vmx			# VMware VMXNET3 Ethernet
-device		axp			# AMD EPYC integrated NIC (requires miibus)
+#device		igc			# Intel I225 2.5G Ethernet
+#device		ix			# Intel PRO/10GbE PCIE PF Ethernet
+#device		ixv			# Intel PRO/10GbE PCIE VF Ethernet
+#device		ixl			# Intel 700 Series Physical Function
+#device		iavf			# Intel Adaptive Virtual Function
+#device		ice			# Intel 800 Series Physical Function
+#device		vmx			# VMware VMXNET3 Ethernet
+#device		axp			# AMD EPYC integrated NIC (requires miibus)
 
 # PCI Ethernet NICs.
-device		bxe			# Broadcom NetXtreme II BCM5771X/BCM578XX 10GbE
-device		le			# AMD Am7900 LANCE and Am79C9xx PCnet
-device		ti			# Alteon Networks Tigon I/II gigabit Ethernet
+#device		bxe			# Broadcom NetXtreme II BCM5771X/BCM578XX 10GbE
+#device		le			# AMD Am7900 LANCE and Am79C9xx PCnet
+#device		ti			# Alteon Networks Tigon I/II gigabit Ethernet
 
 # Nvidia/Mellanox Connect-X 4 and later, Ethernet only
 #  o requires COMPAT_LINUXKPI and xz(4)
 #  o mlx5ib requires ibcore infra and is not included by default
-device		mlx5			# Base driver
-device		mlxfw			# Firmware update
-device		mlx5en			# Ethernet driver
+#device		mlx5			# Base driver
+#device		mlxfw			# Firmware update
+#device		mlx5en			# Ethernet driver
 
 # PCI Ethernet NICs that use the common MII bus controller code.
 # NOTE: Be sure to keep the 'device miibus' line in order to use these NICs!
 device		miibus			# MII bus support
-device		ae			# Attansic/Atheros L2 FastEthernet
-device		age			# Attansic/Atheros L1 Gigabit Ethernet
-device		alc			# Atheros AR8131/AR8132 Ethernet
-device		ale			# Atheros AR8121/AR8113/AR8114 Ethernet
-device		bce			# Broadcom BCM5706/BCM5708 Gigabit Ethernet
-device		bfe			# Broadcom BCM440x 10/100 Ethernet
-device		bge			# Broadcom BCM570xx Gigabit Ethernet
-device		cas			# Sun Cassini/Cassini+ and NS DP83065 Saturn
-device		dc			# DEC/Intel 21143 and various workalikes
-device		et			# Agere ET1310 10/100/Gigabit Ethernet
-device		fxp			# Intel EtherExpress PRO/100B (82557, 82558)
-device		gem			# Sun GEM/Sun ERI/Apple GMAC
-device		jme			# JMicron JMC250 Gigabit/JMC260 Fast Ethernet
-device		lge			# Level 1 LXT1001 gigabit Ethernet
-device		msk			# Marvell/SysKonnect Yukon II Gigabit Ethernet
-device		nfe			# nVidia nForce MCP on-board Ethernet
-device		nge			# NatSemi DP83820 gigabit Ethernet
-device		re			# RealTek 8139C+/8169/8169S/8110S
-device		rl			# RealTek 8129/8139
-device		sge			# Silicon Integrated Systems SiS190/191
-device		sis			# Silicon Integrated Systems SiS 900/SiS 7016
-device		sk			# SysKonnect SK-984x & SK-982x gigabit Ethernet
-device		ste			# Sundance ST201 (D-Link DFE-550TX)
-device		stge			# Sundance/Tamarack TC9021 gigabit Ethernet
-device		vge			# VIA VT612x gigabit Ethernet
-device		vr			# VIA Rhine, Rhine II
-device		xl			# 3Com 3c90x (``Boomerang'', ``Cyclone'')
+#device		ae			# Attansic/Atheros L2 FastEthernet
+#device		age			# Attansic/Atheros L1 Gigabit Ethernet
+#device		alc			# Atheros AR8131/AR8132 Ethernet
+#device		ale			# Atheros AR8121/AR8113/AR8114 Ethernet
+#device		bce			# Broadcom BCM5706/BCM5708 Gigabit Ethernet
+#device		bfe			# Broadcom BCM440x 10/100 Ethernet
+#device		bge			# Broadcom BCM570xx Gigabit Ethernet
+#device		cas			# Sun Cassini/Cassini+ and NS DP83065 Saturn
+#device		dc			# DEC/Intel 21143 and various workalikes
+#device		et			# Agere ET1310 10/100/Gigabit Ethernet
+#device		fxp			# Intel EtherExpress PRO/100B (82557, 82558)
+#device		gem			# Sun GEM/Sun ERI/Apple GMAC
+#device		jme			# JMicron JMC250 Gigabit/JMC260 Fast Ethernet
+#device		lge			# Level 1 LXT1001 gigabit Ethernet
+#device		msk			# Marvell/SysKonnect Yukon II Gigabit Ethernet
+#device		nfe			# nVidia nForce MCP on-board Ethernet
+#device		nge			# NatSemi DP83820 gigabit Ethernet
+#device		re			# RealTek 8139C+/8169/8169S/8110S
+#device		rl			# RealTek 8129/8139
+#device		sge			# Silicon Integrated Systems SiS190/191
+#device		sis			# Silicon Integrated Systems SiS 900/SiS 7016
+#device		sk			# SysKonnect SK-984x & SK-982x gigabit Ethernet
+#device		ste			# Sundance ST201 (D-Link DFE-550TX)
+#device		stge			# Sundance/Tamarack TC9021 gigabit Ethernet
+#device		vge			# VIA VT612x gigabit Ethernet
+#device		vr			# VIA Rhine, Rhine II
+#device		xl			# 3Com 3c90x (``Boomerang'', ``Cyclone'')
 
 # Wireless NIC cards
 #device		wlan			# 802.11 support
@@ -344,14 +344,14 @@ device		ukbd			# USB Keyboard
 device		umass			# Disks/Mass storage - Requires scbus and da
 
 # Sound support
-device		sound			# Generic sound driver (required)
-device		snd_cmi			# CMedia CMI8338/CMI8738
-device		snd_csa			# Crystal Semiconductor CS461x/428x
-device		snd_emu10kx		# Creative SoundBlaster Live! and Audigy
-device		snd_es137x		# Ensoniq AudioPCI ES137x
-device		snd_hda			# Intel High Definition Audio
-device		snd_ich			# Intel, NVidia and other ICH AC'97 Audio
-device		snd_via8233		# VIA VT8233x Audio
+#device		sound			# Generic sound driver (required)
+#device		snd_cmi			# CMedia CMI8338/CMI8738
+#device		snd_csa			# Crystal Semiconductor CS461x/428x
+#device		snd_emu10kx		# Creative SoundBlaster Live! and Audigy
+#device		snd_es137x		# Ensoniq AudioPCI ES137x
+#device		snd_hda			# Intel High Definition Audio
+#device		snd_ich			# Intel, NVidia and other ICH AC'97 Audio
+#device		snd_via8233		# VIA VT8233x Audio
 
 # MMC/SD
 device		mmc			# MMC/SD bus
