@@ -36,10 +36,13 @@
 #include "opt_rss.h"
 
 #include "ixgbe.h"
+#include "mdio_if.h"
 #include "ixgbe_sriov.h"
 #include "ifdi_if.h"
+#include "ixgbe_mdio.h"
 
 #include <net/netmap.h>
+#include <dev/mdio/mdio.h>
 #include <dev/netmap/netmap_kern.h>
 
 /************************************************************************
@@ -254,6 +257,42 @@ static void ixgbe_handle_msf(void *);
 static void ixgbe_handle_mod(void *);
 static void ixgbe_handle_phy(void *);
 
+static int
+ixgbe_mdio_readreg(device_t dev, int phy, int reg)
+{
+	if_ctx_t ctx = device_get_softc(dev);
+	struct ixgbe_softc *sc = iflib_get_softc(ctx);
+	struct ixgbe_hw *hw = &sc->hw;
+	uint16_t val = 0;
+	int32_t ret = 0;
+
+	ret = ixgbe_read_mdio_c22(hw, phy, reg, &val);
+
+	if (ret != IXGBE_SUCCESS) {
+		device_printf(dev, "%s: read_mdi_22 failed (%d)\n",
+		    __func__, ret);
+		return (-1);
+	}
+	return (val);
+}
+
+static int
+ixgbe_mdio_writereg(device_t dev, int phy, int reg, int data)
+{
+	if_ctx_t ctx = device_get_softc(dev);
+	struct ixgbe_softc *sc = iflib_get_softc(ctx);
+	struct ixgbe_hw *hw = &sc->hw;
+	int32_t ret;
+
+	ret = ixgbe_write_mdio_c22(hw, phy, reg, data);
+	if (ret != IXGBE_SUCCESS) {
+		device_printf(dev, "%s: write_mdi_22 failed (%d)\n",
+		    __func__, ret);
+		return (-1);
+	}
+	return (0);
+}
+
 /************************************************************************
  *  FreeBSD Device Interface Entry Points
  ************************************************************************/
@@ -271,6 +310,13 @@ static device_method_t ix_methods[] = {
 	DEVMETHOD(pci_iov_uninit, iflib_device_iov_uninit),
 	DEVMETHOD(pci_iov_add_vf, iflib_device_iov_add_vf),
 #endif /* PCI_IOV */
+
+#if 1
+	DEVMETHOD(bus_add_child, device_add_child_ordered),
+	DEVMETHOD(mdio_readreg, ixgbe_mdio_readreg),
+	DEVMETHOD(mdio_writereg, ixgbe_mdio_writereg),
+#endif
+
 	DEVMETHOD_END
 };
 
@@ -278,11 +324,13 @@ static driver_t ix_driver = {
 	"ix", ix_methods, sizeof(struct ixgbe_softc),
 };
 
-DRIVER_MODULE(ix, pci, ix_driver, 0, 0);
+DRIVER_MODULE(mdio, ix, mdio_driver, 0, 0); /* needs to happen before ix */
+DRIVER_MODULE_ORDERED(ix, pci, ix_driver, NULL, NULL, SI_ORDER_ANY); /* needs to be last */
 IFLIB_PNP_INFO(pci, ix_driver, ixgbe_vendor_info_array);
 MODULE_DEPEND(ix, pci, 1, 1, 1);
 MODULE_DEPEND(ix, ether, 1, 1, 1);
 MODULE_DEPEND(ix, iflib, 1, 1, 1);
+MODULE_DEPEND(ix, mdio, 1, 1, 1);
 
 static device_method_t ixgbe_if_methods[] = {
 	DEVMETHOD(ifdi_attach_pre, ixgbe_if_attach_pre),
@@ -1197,6 +1245,12 @@ ixgbe_if_attach_post(if_ctx_t ctx)
 
 	/* Add sysctls */
 	ixgbe_add_device_sysctls(ctx);
+
+	/* Add MDIO bus if required / supported */
+	if (1) {
+		device_add_child(dev, "mdio", DEVICE_UNIT_ANY);
+		bus_attach_children(dev);
+	}
 
 	/* Init recovery mode timer and state variable */
 	if (sc->feat_en & IXGBE_FEATURE_RECOVERY_MODE) {
