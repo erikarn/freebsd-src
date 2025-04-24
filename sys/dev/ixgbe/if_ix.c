@@ -36,10 +36,12 @@
 #include "opt_rss.h"
 
 #include "ixgbe.h"
+#include "mdio_if.h"
 #include "ixgbe_sriov.h"
 #include "ifdi_if.h"
 
 #include <net/netmap.h>
+#include <dev/mdio/mdio.h>
 #include <dev/netmap/netmap_kern.h>
 
 /************************************************************************
@@ -254,6 +256,20 @@ static void ixgbe_handle_msf(void *);
 static void ixgbe_handle_mod(void *);
 static void ixgbe_handle_phy(void *);
 
+static int
+ixgbe_mdio_readreg(device_t dev, int phy, int reg)
+{
+	device_printf(dev, "%s: called (%d / %d)\n", __func__, phy, reg);
+	return (-1);
+}
+
+static int
+ixgbe_mdio_writereg(device_t dev, int phy, int reg, int data)
+{
+	device_printf(dev, "%s: called (%d / %d = %d)\n", __func__, phy, reg, data);
+	return (-1);
+}
+
 /************************************************************************
  *  FreeBSD Device Interface Entry Points
  ************************************************************************/
@@ -271,6 +287,13 @@ static device_method_t ix_methods[] = {
 	DEVMETHOD(pci_iov_uninit, iflib_device_iov_uninit),
 	DEVMETHOD(pci_iov_add_vf, iflib_device_iov_add_vf),
 #endif /* PCI_IOV */
+
+	DEVMETHOD(bus_add_child,	device_add_child_ordered),
+#if 1
+	DEVMETHOD(mdio_readreg, ixgbe_mdio_readreg),
+	DEVMETHOD(mdio_writereg, ixgbe_mdio_writereg),
+#endif
+
 	DEVMETHOD_END
 };
 
@@ -279,10 +302,12 @@ static driver_t ix_driver = {
 };
 
 DRIVER_MODULE(ix, pci, ix_driver, 0, 0);
+DRIVER_MODULE(mdio, ix, mdio_driver, 0, 0);
 IFLIB_PNP_INFO(pci, ix_driver, ixgbe_vendor_info_array);
 MODULE_DEPEND(ix, pci, 1, 1, 1);
 MODULE_DEPEND(ix, ether, 1, 1, 1);
 MODULE_DEPEND(ix, iflib, 1, 1, 1);
+MODULE_DEPEND(ix, mdio, 1, 1, 1);
 
 static device_method_t ixgbe_if_methods[] = {
 	DEVMETHOD(ifdi_attach_pre, ixgbe_if_attach_pre),
