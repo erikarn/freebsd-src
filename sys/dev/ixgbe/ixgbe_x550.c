@@ -520,15 +520,38 @@ s32 ixgbe_shutdown_fw_phy(struct ixgbe_hw *hw)
 static s32 ixgbe_read_phy_reg_x550em(struct ixgbe_hw *hw, u32 reg_addr,
 				     u32 device_type, u16 *phy_data)
 {
-	UNREFERENCED_4PARAMETER(*hw, reg_addr, device_type, *phy_data);
-	return IXGBE_NOT_IMPLEMENTED;
+	s32 status;
+	u32 mask = hw->phy.phy_semaphore_mask | IXGBE_GSSR_TOKEN_SM;
+
+	DEBUGFUNC("ixgbe_read_phy_reg_x550em");
+
+	if (hw->mac.ops.acquire_swfw_sync(hw, mask))
+		return IXGBE_ERR_SWFW_SYNC;
+
+	status = hw->phy.ops.read_reg_mdi(hw, reg_addr, device_type, phy_data);
+
+	hw->mac.ops.release_swfw_sync(hw, mask);
+
+	return status;
 }
 
 static s32 ixgbe_write_phy_reg_x550em(struct ixgbe_hw *hw, u32 reg_addr,
 				      u32 device_type, u16 phy_data)
 {
-	UNREFERENCED_4PARAMETER(*hw, reg_addr, device_type, phy_data);
-	return IXGBE_NOT_IMPLEMENTED;
+	s32 status;
+	u32 mask = hw->phy.phy_semaphore_mask | IXGBE_GSSR_TOKEN_SM;
+
+	DEBUGFUNC("ixgbe_write_phy_reg_x550em");
+
+	if (hw->mac.ops.acquire_swfw_sync(hw, mask) == IXGBE_SUCCESS) {
+		status = hw->phy.ops.write_reg_mdi(hw, reg_addr, device_type,
+							phy_data);
+		hw->mac.ops.release_swfw_sync(hw, mask);
+	} else {
+		status = IXGBE_ERR_SWFW_SYNC;
+	}
+
+	return status;
 }
 
 /**
@@ -2280,6 +2303,8 @@ s32 ixgbe_init_phy_ops_X550em(struct ixgbe_hw *hw)
 		phy->ops.write_reg = ixgbe_write_phy_reg_x550em;
 		break;
 	case ixgbe_phy_x550em_kr:
+		phy->ops.read_reg_mdi = ixgbe_read_phy_reg_mdi;
+		phy->ops.write_reg_mdi = ixgbe_write_phy_reg_mdi;
 		phy->ops.setup_link = ixgbe_setup_kr_x550em;
 		phy->ops.read_reg = ixgbe_read_phy_reg_x550em;
 		phy->ops.write_reg = ixgbe_write_phy_reg_x550em;
