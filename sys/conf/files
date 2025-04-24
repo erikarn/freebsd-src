@@ -2281,6 +2281,8 @@ dev/ixgbe/if_ix.c		optional ix inet \
 	compile-with "${NORMAL_C} -I$S/dev/ixgbe -DSMP"
 dev/ixgbe/if_ixv.c		optional ixv inet \
 	compile-with "${NORMAL_C} -I$S/dev/ixgbe -DSMP"
+dev/ixgbe/if_ix_mdio.c		optional ix inet mdio \
+	compile-with "${NORMAL_C} -I$S/dev/ixgbe"
 dev/ixgbe/if_bypass.c		optional ix inet \
 	compile-with "${NORMAL_C} -I$S/dev/ixgbe"
 dev/ixgbe/if_fdir.c		optional ix inet | ixv inet \
@@ -2316,6 +2318,8 @@ dev/ixgbe/ixgbe_dcb.c		optional ix inet | ixv inet \
 dev/ixgbe/ixgbe_dcb_82598.c	optional ix inet | ixv inet \
 	compile-with "${NORMAL_C} -I$S/dev/ixgbe"
 dev/ixgbe/ixgbe_dcb_82599.c	optional ix inet | ixv inet \
+	compile-with "${NORMAL_C} -I$S/dev/ixgbe"
+dev/ixgbe/ixgbe_mdio.c	optional ix inet mdio \
 	compile-with "${NORMAL_C} -I$S/dev/ixgbe"
 dev/jedec_dimm/jedec_dimm.c	optional jedec_dimm smbus
 dev/jme/if_jme.c		optional jme pci
