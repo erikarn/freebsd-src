@@ -256,18 +256,137 @@ static void ixgbe_handle_msf(void *);
 static void ixgbe_handle_mod(void *);
 static void ixgbe_handle_phy(void *);
 
+static s32
+ixgbe_read_phy_reg_mdi_22(struct ixgbe_hw *hw, u16 phy, u16 reg, u16 *phy_data)
+{
+	u32 i, data, command;
+
+        /* Setup and write the read command */
+        command = (reg << IXGBE_MSCA_DEV_TYPE_SHIFT) |
+                  (phy << IXGBE_MSCA_PHY_ADDR_SHIFT) |
+                  IXGBE_MSCA_OLD_PROTOCOL | IXGBE_MSCA_READ_AUTOINC |
+                  IXGBE_MSCA_MDI_COMMAND;
+
+        IXGBE_WRITE_REG(hw, IXGBE_MSCA, command);
+
+        /* Check every 10 usec to see if the access completed.
+         * The MDI Command bit will clear when the operation is
+         * complete
+         */
+        for (i = 0; i < IXGBE_MDIO_COMMAND_TIMEOUT; i++) {
+                usec_delay(10);
+
+                command = IXGBE_READ_REG(hw, IXGBE_MSCA);
+                if (!(command & IXGBE_MSCA_MDI_COMMAND))
+                        break;
+        }
+
+        if (command & IXGBE_MSCA_MDI_COMMAND) {
+                ERROR_REPORT1(IXGBE_ERROR_POLLING,
+                              "PHY read command did not complete.\n");
+                return IXGBE_ERR_PHY;
+        }
+
+        /* Read operation is complete.  Get the data from MSRWD */
+        data = IXGBE_READ_REG(hw, IXGBE_MSRWD);
+        data >>= IXGBE_MSRWD_READ_DATA_SHIFT;
+        *phy_data = (u16)data;
+
+        return IXGBE_SUCCESS;
+}
+
+
+static s32
+ixgbe_write_phy_reg_mdi_22(struct ixgbe_hw *hw, u16 phy, u16 reg, u16 phy_data)
+{
+        u32 i, command;
+
+        /* Put the data in the MDI single read and write data register*/
+        IXGBE_WRITE_REG(hw, IXGBE_MSRWD, (u32)phy_data);
+
+        /* Setup and write the write command */
+        command = (reg << IXGBE_MSCA_DEV_TYPE_SHIFT) |
+                  (phy << IXGBE_MSCA_PHY_ADDR_SHIFT) |
+                  IXGBE_MSCA_OLD_PROTOCOL | IXGBE_MSCA_WRITE |
+                  IXGBE_MSCA_MDI_COMMAND;
+
+        IXGBE_WRITE_REG(hw, IXGBE_MSCA, command);
+
+        /* Check every 10 usec to see if the access completed.
+         * The MDI Command bit will clear when the operation is
+         * complete
+         */
+        for (i = 0; i < IXGBE_MDIO_COMMAND_TIMEOUT; i++) {
+                usec_delay(10);
+
+                command = IXGBE_READ_REG(hw, IXGBE_MSCA);
+                if (!(command & IXGBE_MSCA_MDI_COMMAND))
+                        break;
+        }
+
+        if (command & IXGBE_MSCA_MDI_COMMAND) {
+                ERROR_REPORT1(IXGBE_ERROR_POLLING,
+                              "PHY write cmd didn't complete\n");
+                return IXGBE_ERR_PHY;
+        }
+
+        return IXGBE_SUCCESS;
+}
+
 static int
 ixgbe_mdio_readreg(device_t dev, int phy, int reg)
 {
-	device_printf(dev, "%s: called (%d / %d)\n", __func__, phy, reg);
-	return (-1);
+	if_ctx_t ctx = device_get_softc(dev);
+	struct ixgbe_softc *sc = iflib_get_softc(ctx);
+	struct ixgbe_hw *hw = &sc->hw;
+	uint16_t val = 0;
+	int32_t ret = 0;
+
+#if 0
+	/* The interface takes a register, clause 45 devtype and data */
+	ret = hw->phy.ops.read_reg_mdi(hw, reg, phy, &val);
+#else
+	u32 gssr = hw->phy.phy_semaphore_mask | IXGBE_GSSR_PHY0_SM | IXGBE_GSSR_TOKEN_SM;
+
+	if (hw->mac.ops.acquire_swfw_sync(hw, gssr)) {
+		device_printf(dev, "%s: failed to acquire lock\n", __func__);
+		return (-1);
+	}
+	ret = ixgbe_read_phy_reg_mdi_22(hw, phy, reg, &val);
+	if (ret != IXGBE_SUCCESS) {
+		device_printf(dev, "%s: read_mdi_22 failed (%d)\n", __func__, ret);
+	}
+	hw->mac.ops.release_swfw_sync(hw, gssr);
+	(void) ret; // XXX return a suitable error if this is non-zero
+#endif
+	return (val);
 }
 
 static int
 ixgbe_mdio_writereg(device_t dev, int phy, int reg, int data)
 {
-	device_printf(dev, "%s: called (%d / %d = %d)\n", __func__, phy, reg, data);
-	return (-1);
+	if_ctx_t ctx = device_get_softc(dev);
+	struct ixgbe_softc *sc = iflib_get_softc(ctx);
+	struct ixgbe_hw *hw = &sc->hw;
+	int32_t ret;
+
+#if 0
+	ret = hw->phy.ops.write_reg_mdi(hw, reg, phy, data);
+#else
+	u32 gssr = hw->phy.phy_semaphore_mask | IXGBE_GSSR_PHY0_SM | IXGBE_GSSR_TOKEN_SM;
+
+	if (hw->mac.ops.acquire_swfw_sync(hw, gssr)) {
+		device_printf(dev, "%s: failed to acquire lock\n", __func__);
+		return (-1);
+	}
+	ret = ixgbe_write_phy_reg_mdi_22(hw, phy, reg, data);
+	if (ret != IXGBE_SUCCESS) {
+		device_printf(dev, "%s: write_mdi_22 failed (%d)\n", __func__, ret);
+	}
+	hw->mac.ops.release_swfw_sync(hw, gssr);
+	(void) ret; // XXX return a suitable error if this is non-zero
+#endif
+	return (0);
 }
 
 /************************************************************************

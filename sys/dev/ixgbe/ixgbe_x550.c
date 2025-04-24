@@ -2298,11 +2298,13 @@ s32 ixgbe_init_phy_ops_X550em(struct ixgbe_hw *hw)
 	/* Set functions pointers based on phy type */
 	switch (hw->phy.type) {
 	case ixgbe_phy_x550em_kx4:
+		printf("%s: x550em_kx4\n", __func__);
 		phy->ops.setup_link = NULL;
 		phy->ops.read_reg = ixgbe_read_phy_reg_x550em;
 		phy->ops.write_reg = ixgbe_write_phy_reg_x550em;
 		break;
 	case ixgbe_phy_x550em_kr:
+		printf("%s: x550em_kr\n", __func__);
 		phy->ops.read_reg_mdi = ixgbe_read_phy_reg_mdi;
 		phy->ops.write_reg_mdi = ixgbe_write_phy_reg_mdi;
 		phy->ops.setup_link = ixgbe_setup_kr_x550em;
@@ -2315,12 +2317,14 @@ s32 ixgbe_init_phy_ops_X550em(struct ixgbe_hw *hw)
 		phy->ops.reset = NULL;
 		break;
 	case ixgbe_phy_x550em_xfi:
+		printf("%s: x550em_xfi\n", __func__);
 		/* link is managed by HW */
 		phy->ops.setup_link = NULL;
 		phy->ops.read_reg = ixgbe_read_phy_reg_x550em;
 		phy->ops.write_reg = ixgbe_write_phy_reg_x550em;
 		break;
 	case ixgbe_phy_x550em_ext_t:
+		printf("%s: x550em_ext_t\n", __func__);
 		/* If internal link mode is XFI, then setup iXFI internal link,
 		 * else setup KR now.
 		 */
@@ -2337,13 +2341,16 @@ s32 ixgbe_init_phy_ops_X550em(struct ixgbe_hw *hw)
 		phy->ops.reset = ixgbe_reset_phy_t_X550em;
 		break;
 	case ixgbe_phy_sgmii:
+		printf("%s: phy_sgmii\n", __func__);
 		phy->ops.setup_link = NULL;
 		break;
 	case ixgbe_phy_fw:
+		printf("%s: phy_fw\n", __func__);
 		phy->ops.setup_link = ixgbe_setup_fw_link;
 		phy->ops.reset = ixgbe_reset_phy_fw;
 		break;
 	default:
+		printf("%s: default\n", __func__);
 		break;
 	}
 	return ret_val;
@@ -2356,6 +2363,8 @@ s32 ixgbe_init_phy_ops_X550em(struct ixgbe_hw *hw)
 static void ixgbe_set_mdio_speed(struct ixgbe_hw *hw)
 {
 	u32 hlreg0;
+
+	printf("%s: called, device_id=%04x\n", __func__, hw->device_id);
 
 	switch (hw->device_id) {
 	case IXGBE_DEV_ID_X550EM_X_10G_T:
@@ -2379,6 +2388,9 @@ static void ixgbe_set_mdio_speed(struct ixgbe_hw *hw)
 	default:
 		break;
 	}
+
+	printf("%s: HLREG0=0x%08x\n", __func__,
+	    IXGBE_READ_REG(hw, IXGBE_HLREG0));
 }
 
 /**

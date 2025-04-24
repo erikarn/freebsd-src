@@ -599,6 +599,8 @@ s32 ixgbe_read_phy_reg_mdi(struct ixgbe_hw *hw, u32 reg_addr, u32 device_type,
 {
 	u32 i, data, command;
 
+	printf("%s: called; reg_addr=%d, type=%d, phy.addr=%d\n", __func__, reg_addr, device_type, hw->phy.addr);
+
 	/* Setup and write the address cycle command */
 	command = ((reg_addr << IXGBE_MSCA_NP_ADDR_SHIFT)  |
 		   (device_type << IXGBE_MSCA_DEV_TYPE_SHIFT) |
@@ -636,6 +638,7 @@ s32 ixgbe_read_phy_reg_mdi(struct ixgbe_hw *hw, u32 reg_addr, u32 device_type,
 		   (hw->phy.addr << IXGBE_MSCA_PHY_ADDR_SHIFT) |
 		   (IXGBE_MSCA_READ | IXGBE_MSCA_MDI_COMMAND));
 
+	printf("%s: writing 0x%08x -> MSCA\n", __func__, command);
 	IXGBE_WRITE_REG(hw, IXGBE_MSCA, command);
 
 	/*
@@ -652,6 +655,7 @@ s32 ixgbe_read_phy_reg_mdi(struct ixgbe_hw *hw, u32 reg_addr, u32 device_type,
 	}
 
 	if ((command & IXGBE_MSCA_MDI_COMMAND) != 0) {
+		printf("%s: timeout!\n", __func__);
 		ERROR_REPORT1(IXGBE_ERROR_POLLING, "PHY read command didn't complete\n");
 		DEBUGOUT("PHY read command didn't complete, returning IXGBE_ERR_PHY\n");
 		return IXGBE_ERR_PHY;
@@ -662,6 +666,7 @@ s32 ixgbe_read_phy_reg_mdi(struct ixgbe_hw *hw, u32 reg_addr, u32 device_type,
 	 * from MSRWD
 	 */
 	data = IXGBE_READ_REG(hw, IXGBE_MSRWD);
+	printf("%s: read 0x%08x <- MSRWD\n", __func__, data);
 	data >>= IXGBE_MSRWD_READ_DATA_SHIFT;
 	*phy_data = (u16)(data);
 
@@ -707,6 +712,8 @@ s32 ixgbe_write_phy_reg_mdi(struct ixgbe_hw *hw, u32 reg_addr,
 {
 	u32 i, command;
 
+	printf("%s: called; reg_addr=%d, type=%d, phy.addr=%d\n", __func__, reg_addr, device_type, hw->phy.addr);
+
 	/* Put the data in the MDI single read and write data register*/
 	IXGBE_WRITE_REG(hw, IXGBE_MSRWD, (u32)phy_data);
 
@@ -716,6 +723,7 @@ s32 ixgbe_write_phy_reg_mdi(struct ixgbe_hw *hw, u32 reg_addr,
 		   (hw->phy.addr << IXGBE_MSCA_PHY_ADDR_SHIFT) |
 		   (IXGBE_MSCA_ADDR_CYCLE | IXGBE_MSCA_MDI_COMMAND));
 
+	printf("%s: (1) writing 0x%08x -> MSCA\n", __func__, command);
 	IXGBE_WRITE_REG(hw, IXGBE_MSCA, command);
 
 	/*
@@ -732,6 +740,7 @@ s32 ixgbe_write_phy_reg_mdi(struct ixgbe_hw *hw, u32 reg_addr,
 	}
 
 	if ((command & IXGBE_MSCA_MDI_COMMAND) != 0) {
+		printf("%s: timeout (1)!\n", __func__);
 		ERROR_REPORT1(IXGBE_ERROR_POLLING, "PHY address cmd didn't complete\n");
 		return IXGBE_ERR_PHY;
 	}
@@ -745,6 +754,7 @@ s32 ixgbe_write_phy_reg_mdi(struct ixgbe_hw *hw, u32 reg_addr,
 		   (hw->phy.addr << IXGBE_MSCA_PHY_ADDR_SHIFT) |
 		   (IXGBE_MSCA_WRITE | IXGBE_MSCA_MDI_COMMAND));
 
+	printf("%s: (2) writing 0x%08x -> MSCA\n", __func__, command);
 	IXGBE_WRITE_REG(hw, IXGBE_MSCA, command);
 
 	/*
@@ -761,6 +771,7 @@ s32 ixgbe_write_phy_reg_mdi(struct ixgbe_hw *hw, u32 reg_addr,
 	}
 
 	if ((command & IXGBE_MSCA_MDI_COMMAND) != 0) {
+		printf("%s: timeout (2)!\n", __func__);
 		ERROR_REPORT1(IXGBE_ERROR_POLLING, "PHY write cmd didn't complete\n");
 		return IXGBE_ERR_PHY;
 	}
