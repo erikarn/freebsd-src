@@ -540,6 +540,8 @@ struct debugnet80211_methods {
 #define DEBUGNET80211_SET(ic, driver)
 #endif /* DEBUGNET */
 
+void ieee80211_vap_sync_mac_address(struct ieee80211vap *);
+
 #endif /* _KERNEL */
 
 /* XXX this stuff belongs elsewhere */
