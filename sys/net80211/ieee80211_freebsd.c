@@ -1192,6 +1192,33 @@ ieee80211_debugnet_poll(struct ifnet *ifp, int count)
 }
 #endif
 
+/**
+ * Check if the MAC address was changed by the upper layer.
+ *
+ * This is specifically to handle cases like the MAC address
+ * being changed via an ioctl (eg SIOCSIFLLADDR).
+ */
+void
+ieee80211_vap_sync_mac_address(struct ieee80211vap *vap)
+{
+	struct epoch_tracker et;
+	const struct ifnet *ifp = vap->iv_ifp;
+
+	/*
+	 * Check if the MAC address was changed
+	 * via SIOCSIFLLADDR ioctl.
+	 *
+	 * NB: device may be detached during initialization;
+	 * use if_ioctl for existence check.
+	 */
+	NET_EPOCH_ENTER(et);
+	if (ifp->if_ioctl == ieee80211_ioctl &&
+	    (ifp->if_flags & IFF_UP) == 0 &&
+	    !IEEE80211_ADDR_EQ(vap->iv_myaddr, IF_LLADDR(ifp)))
+		IEEE80211_ADDR_COPY(vap->iv_myaddr, IF_LLADDR(ifp));
+	NET_EPOCH_EXIT(et);
+}
+
 /*
  * Module glue.
  *
