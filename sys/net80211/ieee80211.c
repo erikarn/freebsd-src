@@ -722,6 +722,7 @@ ieee80211_vap_attach(struct ieee80211vap *vap, ifm_change_cb_t media_change,
 		ifp->if_baudrate = IF_Mbps(maxrate);
 
 	ether_ifattach(ifp, macaddr);
+	/* TODO: see if we can just call ieee80211_vap_sync_mac_address() here now! */
 	IEEE80211_ADDR_COPY(vap->iv_myaddr, IF_LLADDR(ifp));
 	/* hook output method setup by ether_ifattach */
 	vap->iv_output = ifp->if_output;
