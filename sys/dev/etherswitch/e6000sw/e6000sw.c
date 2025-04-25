@@ -89,6 +89,7 @@ typedef struct e6000sw_softc {
 	device_t		miibus[E6000SW_MAX_PORTS];
 	struct taskqueue	*sc_tq;
 	struct timeout_task	sc_tt;
+	bool			is_shutdown;
 
 	int			vlans[E6000SW_NUM_VLANS];
 	uint32_t		swid;
@@ -646,7 +647,7 @@ e6000sw_attach(device_t dev)
 
 		err = e6000sw_attach_miibus(sc, port);
 		if (err != 0) {
-			device_printf(sc->dev, "failed to attach miibus\n");
+			device_printf(sc->dev, "failed to attach miibus (err %d)\n", err);
 			goto out_fail;
 		}
 	}
@@ -660,6 +661,11 @@ e6000sw_attach(device_t dev)
 	if (reg & SWITCH_GLOBAL_STATUS_IR)
 		device_printf(dev, "switch is ready.\n");
 	E6000SW_UNLOCK(sc);
+
+#if 1
+	device_printf(dev, "%s: cpumask=0x%08x, fixed=0x%08x, fixed25=0x%08x, ports=0x%08x\n",
+	    __func__, sc->cpuports_mask, sc->fixed_mask, sc->fixed25_mask, sc->ports_mask);
+#endif
 
 	bus_identify_children(dev);
 	bus_attach_children(dev);
@@ -813,7 +819,9 @@ e6000sw_readphy_locked(device_t dev, int phy, int reg)
 	}
 
 	val = e6000sw_readreg(sc, REG_GLOBAL2, SMI_PHY_DATA_REG);
-
+#if 0
+	device_printf(dev, "%s: (phy=%04x reg=%04x) -> 0x%04x\n", __func__, phy, reg, val & PHY_DATA_MASK);
+#endif
 	return (val & PHY_DATA_MASK);
 }
 
@@ -859,6 +867,10 @@ e6000sw_writephy_locked(device_t dev, int phy, int reg, int data)
 	    SMI_CMD_OP_C22_WRITE | (reg & SMI_CMD_REG_ADDR_MASK) |
 	    ((phy << SMI_CMD_DEV_ADDR) & SMI_CMD_DEV_ADDR_MASK));
 
+#if 0
+	device_printf(dev, "%s: (phy=%04x reg=%04x) <- 0x%04x\n", __func__, phy, reg, data);
+#endif
+
 	return (0);
 }
 
@@ -870,12 +882,17 @@ e6000sw_detach(device_t dev)
 
 	sc = device_get_softc(dev);
 
+	E6000SW_LOCK(sc);
+	sc->is_shutdown = true;
+	if (sc->sc_tq != NULL) {
+		while (taskqueue_cancel_timeout(sc->sc_tq, &sc->sc_tt, NULL) != 0)
+			taskqueue_drain_timeout(sc->sc_tq, &sc->sc_tt);
+	}
+	E6000SW_UNLOCK(sc);
+
 	error = bus_generic_detach(dev);
 	if (error != 0)
 		return (error);
-
-	if (device_is_attached(dev))
-		taskqueue_drain_timeout(sc->sc_tq, &sc->sc_tt);
 
 	if (sc->sc_tq != NULL)
 		taskqueue_free(sc->sc_tq);
@@ -1181,7 +1198,9 @@ e6000sw_readreg_wrapper(device_t dev, int addr_reg)
 		device_printf(dev, "Wrong register address.\n");
 		return (EINVAL);
 	}
-
+#if 0
+	device_printf(sc->dev, "%s: addr_reg=0x%08x\n", __func__, addr_reg);
+#endif
 	return (e6000sw_readreg(device_get_softc(dev), addr_reg / 32,
 	    addr_reg % 32));
 }
@@ -1197,6 +1216,9 @@ e6000sw_writereg_wrapper(device_t dev, int addr_reg, int val)
 		device_printf(dev, "Wrong register address.\n");
 		return (EINVAL);
 	}
+#if 0
+	device_printf(sc->dev, "%s: addr_reg=0x%08x val=0x%04x\n", __func__, addr_reg, val);
+#endif
 	e6000sw_writereg(device_get_softc(dev), addr_reg / 32,
 	    addr_reg % 32, val);
 
@@ -1411,8 +1433,13 @@ e6000sw_ifmedia_upd(if_t ifp)
 
 	sc = if_getsoftc(ifp);
 	mii = e6000sw_miiforphy(sc, if_getdunit(ifp));
-	if (mii == NULL)
+	if (mii == NULL) {
+		device_printf(sc->dev,
+		    "%s: e6000sw_miiforphy(%d) returned NULL\n",
+		    __func__,
+		    if_getdunit(ifp));
 		return (ENXIO);
+	}
 	mii_mediachg(mii);
 
 	return (0);
@@ -1427,8 +1454,13 @@ e6000sw_ifmedia_sts(if_t ifp, struct ifmediareq *ifmr)
 	sc = if_getsoftc(ifp);
 	mii = e6000sw_miiforphy(sc, if_getdunit(ifp));
 
-	if (mii == NULL)
+	if (mii == NULL) {
+		device_printf(sc->dev,
+		    "%s: e6000sw_miiforphy(%d) returned NULL\n",
+		    __func__,
+		    if_getdunit(ifp));
 		return;
+	}
 
 	mii_pollstat(mii);
 	ifmr->ifm_active = mii->mii_media_active;
@@ -1452,6 +1484,7 @@ e6000sw_smi_waitready(e6000sw_softc_t *sc, int phy)
 static __inline uint32_t
 e6000sw_readreg(e6000sw_softc_t *sc, int addr, int reg)
 {
+	uint32_t data;
 
 	E6000SW_LOCK_ASSERT(sc, SA_XLOCKED);
 
@@ -1470,7 +1503,12 @@ e6000sw_readreg(e6000sw_softc_t *sc, int addr, int reg)
 		return (0xffff);
 	}
 
-	return (MDIO_READ(sc->dev, sc->sw_addr, SMI_DATA) & 0xffff);
+	data = (MDIO_READ(sc->dev, sc->sw_addr, SMI_DATA));
+#if 0
+	device_printf(sc->dev, "%s:   addr=0x%04x, reg=0x%04x, data=0x%04x\n",
+	    __func__, addr, reg, data);
+#endif
+	return (data& 0xffff);
 }
 
 static __inline void
@@ -1492,6 +1530,9 @@ e6000sw_writereg(e6000sw_softc_t *sc, int addr, int reg, int val)
 	MDIO_WRITE(sc->dev, sc->sw_addr, SMI_CMD,
 	    SMI_CMD_OP_C22_WRITE | (reg & SMI_CMD_REG_ADDR_MASK) |
 	    ((addr << SMI_CMD_DEV_ADDR) & SMI_CMD_DEV_ADDR_MASK));
+#if 0
+	device_printf(sc->dev, "%s: addr=0x%04x, reg=0x%04x, val=0x%04x\n", __func__, addr, reg, val);
+#endif
 }
 
 static __inline bool
@@ -1600,9 +1641,19 @@ e6000sw_tick(void *arg, int p __unused)
 
 	sc = arg;
 
+#if 0
+	device_printf(sc->dev, "%s: called\n", __func__);
+#endif
+
 	E6000SW_LOCK_ASSERT(sc, SA_UNLOCKED);
 
 	E6000SW_LOCK(sc);
+
+	if (sc->is_shutdown) {
+		E6000SW_UNLOCK(sc);
+		return;
+	}
+
 	for (port = 0; port < sc->num_ports; port++) {
 		/* Tick only on PHY ports */
 		if (!e6000sw_is_portenabled(sc, port) ||
@@ -1615,11 +1666,21 @@ e6000sw_tick(void *arg, int p __unused)
 
 		portstatus = e6000sw_readreg(sc, REG_PORT(sc, port),
 		    PORT_STATUS);
+#if 0
+		device_printf(sc->dev, "%s: port %d: status=0x%08x\n",
+		    __func__, port, portstatus);
+#endif
 
 		e6000sw_update_ifmedia(portstatus,
 		    &mii->mii_media_status, &mii->mii_media_active);
 
 		LIST_FOREACH(miisc, &mii->mii_phys, mii_list) {
+			if (mii->mii_media.ifm_cur == NULL) {
+				device_printf(sc->dev,
+				    "%s: port %d: ifm_cur == NULL\n",
+				    __func__, port);
+				continue;
+			}
 			if (IFM_INST(mii->mii_media.ifm_cur->ifm_media)
 			    != miisc->mii_inst)
 				continue;
@@ -1627,6 +1688,8 @@ e6000sw_tick(void *arg, int p __unused)
 		}
 	}
 	E6000SW_UNLOCK(sc);
+
+	taskqueue_enqueue_timeout(sc->sc_tq, &sc->sc_tt, hz);
 }
 
 static void
