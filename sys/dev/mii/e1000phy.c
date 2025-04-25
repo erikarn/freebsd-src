@@ -185,6 +185,16 @@ e1000phy_reset(struct mii_softc *sc)
 {
 	uint16_t reg, page;
 
+	device_printf(sc->mii_dev, "%s: CR=0x%04x, SCR=0x%04x\n",
+	    __func__,
+	    PHY_READ(sc, E1000_CR),
+	    PHY_READ(sc, E1000_SCR));
+
+	/* Undo power-down / isolate */
+	reg = PHY_READ(sc, E1000_CR);
+	reg &= ~(E1000_CR_ISOLATE | E1000_CR_POWER_DOWN);
+	PHY_WRITE(sc, E1000_CR, reg);
+
 	reg = PHY_READ(sc, E1000_SCR);
 	if ((sc->mii_flags & MIIF_HAVEFIBER) != 0) {
 		reg &= ~E1000_SCR_AUTO_X_MODE;
@@ -338,6 +348,9 @@ e1000phy_service(struct mii_softc *sc, struct mii_data *mii, int cmd)
 			break;
 		case IFM_NONE:
 			reg = PHY_READ(sc, E1000_CR);
+			device_printf(sc->mii_dev,
+			    "%s: called; IFM_NONE; powering down\n",
+			    __func__);
 			PHY_WRITE(sc, E1000_CR,
 			    reg | E1000_CR_ISOLATE | E1000_CR_POWER_DOWN);
 			goto done;
