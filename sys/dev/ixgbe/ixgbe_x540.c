@@ -878,7 +878,10 @@ void ixgbe_release_swfw_sync_X540(struct ixgbe_hw *hw, u32 mask)
 	IXGBE_WRITE_REG(hw, IXGBE_SWFW_SYNC_BY_MAC(hw), swfw_sync);
 
 	ixgbe_release_swfw_sync_semaphore(hw);
-	msec_delay(2);
+	if (mask & (IXGBE_GSSR_EEP_SM | IXGBE_GSSR_FLASH_SM))
+		usec_delay(2000);
+	else
+		usec_delay(10);
 }
 
 /**
