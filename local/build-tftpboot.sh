@@ -1,5 +1,15 @@
 #!/bin/sh
 
+# To use:
+
+# raw kernel
+# tftpboot 0x82000000 kernel.elf
+# go 0x82000200
+
+# testing the compressed kernel image as a uboot FIT application
+# tftpboot 0x84000000 test.itb
+# bootm 0x84000000
+
 . local/opts.inc
 
 cd ${X_SRCDIR} || exit 1
@@ -14,6 +24,9 @@ cp ${X_OBJDIR}/data/1/adrian/freebsd/head-embedded-arm/freebsd-src/arm.armv7/sys
 # TODO: this doesn't work; I have a lot more stuff to do for the DTB!
 echo "*** empty initrd"
 dd if=/dev/zero of=../ramdisk.bin bs=1024 count=64
+
+echo "*** compress kernel"
+cat ../kernel.elf | lzma > ../kernel.elf.lzma
 
 echo "*** Building FIT"
 mkimage -f local/test.its ../test.itb
