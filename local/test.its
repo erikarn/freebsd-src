@@ -1,5 +1,9 @@
 /dts-v1/;
 
+// Load at offset 0x81000000 (16mb)
+// FDT for now is 0x83000000 (48mb) - I'm not sure yet if it's used or needed
+// Empty ramdisk for now
+
 / {
         description = "FreeBSD-HEAD AC1300 FIT Image";
         #address-cells = <1>;
@@ -12,36 +16,36 @@
                         arch = "arm";
                         os = "linux";
                         compression = "none";
-                        load = <0x80208000>;
-                        entry = <0x80208180>;
+                        load = <0x81000000>;
+                        entry = <0x81000200>;
                         hash {
                                 algo = "sha1";
                         };
                 };
-                fdt {
-                        description = "DTB";
-                        data = /incbin/("../../qcom-ipq4018-rt-ac58u.dtb");
-                        type = "flat_dt";
-                        arch = "arm";
-                        compression = "none";
-                        load = <0x83000000>;
-                        entry = <0x83000000>;
-                        hash {
-                                algo = "sha1";
-                        };
-                };
-                initrd {
-                        description = "Initrd";
-                        data = /incbin/("../../ramdisk.bin");
-                        type = "ramdisk";
-                        arch = "arm";
-                        os = "linux";
-                        load = <0x0>;
-                        compression = "none";
-                        hash {
-                                algo = "sha1";
-                        };
-                };
+//                fdt {
+//                        description = "DTB";
+//                        data = /incbin/("../../qcom-ipq4018-rt-ac58u.dtb");
+//                        type = "flat_dt";
+//                        arch = "arm";
+//                        compression = "none";
+//                        load = <0x83000000>;
+//                        entry = <0x83000000>;
+//                        hash {
+//                                algo = "sha1";
+//                        };
+//                };
+//                initrd {
+//                        description = "Initrd";
+//                        data = /incbin/("../../ramdisk.bin");
+//                        type = "ramdisk";
+//                        arch = "arm";
+//                        os = "linux";
+//                        load = <0x0>;
+//                        compression = "none";
+//                        hash {
+//                                algo = "sha1";
+//                        };
+//                };
         };
 
         configurations {
@@ -49,8 +53,8 @@
                 standard {
                         description = "Standard Boot";
                         kernel = "kernel";
-                        fdt = "fdt";
-                        ramdisk = "initrd";
+//                        fdt = "fdt";
+//                        ramdisk = "initrd";
                         hash {
                                 algo = "sha1";
                         };
