@@ -31,8 +31,45 @@ cat ../kernel.elf | lzma > ../kernel.elf.lzma
 echo "*** Building FIT"
 mkimage -f local/test.its ../test.itb
 
+# DEVICE_VENDOR ASUS
+# DEVICE_MODEL RT-AC58U
+# SOC qcom-ipq4018
+# BLOCKSIZE 128k
+# PAGESIZE 2058
+# IMAGE_SIZE 20439364
+# FILESYSTEMS squashfs
+# UIMAGE_MAGIC 0x27051956
+# (which requires -M as an option to mkimage?)
+# UIMAGE_NAME $(shell echo -e '\03\01\01\01RT-AC58U')
+
+echo "*** making a legacy image"
+mkimage \
+	-A arm \
+	-O linux \
+	-T kernel \
+	-C lzma \
+	-a 0x82000000 \
+	-e 0x82000200 \
+	-n `echo -e '\03\01\01\01RT-AC58U'` \
+	-d ../kernel.elf.lzma \
+	../image.trx
+
+echo "*** making a nested image"
+mkimage \
+	-A arm \
+	-O linux \
+	-T kernel \
+	-C none \
+	-a 0x82000000 \
+	-e 0x82000200 \
+	-n `echo -e '\03\01\01\01RT-AC58U'` \
+	-d ../test.itb \
+	../image2.trx
+
 echo "*** Copying into /tftpboot"
 cp -vf ../test.itb /tftpboot
+cp -vf ../image.trx /tftpboot
+cp -vf ../image2.trx /tftpboot
 cp -vf ../kernel.elf /tftpboot
 cp -vf ../qcom-ipq4018-rt-ac58u.dtb /tftpboot/kernel.dtb
 
