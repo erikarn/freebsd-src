@@ -34,6 +34,7 @@ install -m 0755 -D /mnt ${X_ROOTDIR}/usr/bin/uname /mnt/bin/
 install -m 0755 -D /mnt ${X_ROOTDIR}/usr/bin/hexdump /mnt/bin/
 install -m 0755 -D /mnt ${X_ROOTDIR}/usr/bin/vmstat /mnt/bin/
 install -m 0755 -D /mnt ${X_ROOTDIR}/usr/bin/netstat /mnt/bin/
+install -m 0755 -D /mnt ${X_ROOTDIR}/usr/bin/nc /mnt/bin/
 
 install -m 0755 -D /mnt ${X_ROOTDIR}/sbin/init /mnt/sbin/
 install -m 0755 -D /mnt ${X_ROOTDIR}/sbin/reboot /mnt/sbin/
@@ -72,6 +73,7 @@ install -m 0755 -D /mnt ${X_ROOTDIR}/lib/libelf.so.2 /mnt/lib/
 install -m 0755 -D /mnt ${X_ROOTDIR}/lib/libdevstat.so.7 /mnt/lib/
 install -m 0755 -D /mnt ${X_ROOTDIR}/lib/libtinfow.so.9 /mnt/lib/
 install -m 0755 -D /mnt ${X_ROOTDIR}/lib/libkiconv.so.4 /mnt/lib/
+install -m 0755 -D /mnt ${X_ROOTDIR}/lib/libstats.so.0 /mnt/lib/
 
 install -m 0755 -D /mnt ${X_ROOTDIR}/usr/lib/libmemstat.so.3 /mnt/lib/
 install -m 0755 -D /mnt ${X_ROOTDIR}/usr/lib/libnetgraph.so.4 /mnt/lib/
