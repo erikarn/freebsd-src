@@ -34,6 +34,7 @@
 #include <sys/devmap.h>
 #include <sys/physmem.h>
 #include <sys/lock.h>
+#include <sys/devmap.h>
 
 #include <vm/vm.h>
 
