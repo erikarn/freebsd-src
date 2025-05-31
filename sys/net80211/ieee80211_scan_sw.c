@@ -809,11 +809,9 @@ scan_end(struct ieee80211_scan_state *ss, int scandone)
 	 * driver calls (whilst unlocked), update scandone.
 	 */
 	if ((scandone == 0) && ((ss_priv->ss_iflags & ISCAN_PAUSE) == ISCAN_CANCEL)) {
-		/* XXX printf? */
-		if_printf(vap->iv_ifp,
+		ieee80211_vap_printf(vap,
 		    "%s: OOPS! scan cancelled during driver call (1) (ss_iflags=0x%x)!\n",
-		    __func__,
-		    ss_priv->ss_iflags);
+		    __func__, ss_priv->ss_iflags);
 		scandone = 1;
 	}
 
@@ -880,11 +878,9 @@ scan_end(struct ieee80211_scan_state *ss, int scandone)
 	 * driver calls (whilst unlocked), update scandone.
 	 */
 	if (scandone == 0 && (ss_priv->ss_iflags & ISCAN_PAUSE) == ISCAN_CANCEL) {
-		/* XXX printf? */
-		if_printf(vap->iv_ifp,
+		ieee80211_vap_printf(vap,
 		    "%s: OOPS! scan cancelled during driver call (2) (ss_iflags=0x%x)!\n",
-		    __func__,
-		    ss_priv->ss_iflags);
+		    __func__, ss_priv->ss_iflags);
 		scandone = 1;
 	}
 
