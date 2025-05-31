@@ -549,6 +549,11 @@ bool ieee80211_vap_ifp_check_is_running(struct ieee80211vap *);
 void ieee80211_vap_ifp_set_running_state(struct ieee80211vap *, bool);
 const uint8_t * ieee80211_vap_get_broadcast_address(struct ieee80211vap *);
 
+void	ieee80211_vap_printf(const struct ieee80211vap *, const char *fmt, ...)
+	    __printflike(2, 3);
+void	ieee80211_ic_printf(const struct ieee80211com *, const char *fmt, ...)
+	    __printflike(2, 3);
+
 #endif /* _KERNEL */
 
 /* XXX this stuff belongs elsewhere */
