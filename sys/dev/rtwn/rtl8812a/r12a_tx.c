@@ -433,6 +433,8 @@ r12a_fill_tx_desc(struct rtwn_softc *sc, struct ieee80211_node *ni,
 	} else {
 		uint16_t seqno;
 
+		/* TODO: seqno allocate through net80211? */
+		/* TODO: what to do about QoS NULL frames? */
 		if (m->m_flags & M_AMPDU_MPDU) {
 			seqno = ni->ni_txseqs[tid];
 			ni->ni_txseqs[tid]++;
