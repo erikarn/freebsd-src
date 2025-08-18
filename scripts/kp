@@ -8,4 +8,4 @@ REPODIR=/data/1/freebsd/router/pkgs/
 # repo and a pkg update / upgrade won't find it.
 
 env MAKEOBJDIRPREFIX=${WORKDIR}/freebsd-obj \
-    make -s stage-packages-kernel create-packages-kernel
+    make stage-packages-kernel create-packages-kernel KERNCONF=ROUTER
