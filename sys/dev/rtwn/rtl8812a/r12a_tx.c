@@ -433,14 +433,9 @@ r12a_fill_tx_desc(struct rtwn_softc *sc, struct ieee80211_node *ni,
 	} else {
 		uint16_t seqno;
 
-		/* TODO: seqno allocate through net80211? */
-		/* TODO: what to do about QoS NULL frames? */
-		if (m->m_flags & M_AMPDU_MPDU) {
-			seqno = ni->ni_txseqs[tid];
-			ni->ni_txseqs[tid]++;
-		} else
-			seqno = M_SEQNO_GET(m) % IEEE80211_SEQ_RANGE;
-
+		if (m->m_flags & M_AMPDU_MPDU)
+			ieee80211_output_seqno_assign(ni, -1, m);
+		seqno = M_SEQNO_GET(m) % IEEE80211_SEQ_RANGE;
 		/* Set sequence number. */
 		txd->txdw9 |= htole32(SM(R12A_TXDW9_SEQ, seqno));
 	}
