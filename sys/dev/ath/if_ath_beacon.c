@@ -392,6 +392,7 @@ ath_beacon_miss(struct ath_softc *sc)
 	HAL_SURVEY_SAMPLE hs;
 	HAL_BOOL ret;
 	uint32_t hangs;
+	uint32_t nav;
 
 	bzero(&hs, sizeof(hs));
 
@@ -409,16 +410,19 @@ ath_beacon_miss(struct ath_softc *sc)
 		if_ath_alq_post(&sc->sc_alq, ATH_ALQ_MISSED_BEACON, 0, NULL);
 #endif
 
+	nav = ath_hal_getnav(sc->sc_ah);
+
 	DPRINTF(sc, ATH_DEBUG_BEACON,
 	    "%s: valid=%d, txbusy=%u, rxbusy=%u, chanbusy=%u, "
-	    "extchanbusy=%u, cyclecount=%u\n",
+	    "extchanbusy=%u, cyclecount=%u, NAV=0x%x\n",
 	    __func__,
 	    ret,
 	    hs.tx_busy,
 	    hs.rx_busy,
 	    hs.chan_busy,
 	    hs.ext_chan_busy,
-	    hs.cycle_count);
+	    hs.cycle_count,
+	    nav);
 }
 
 /*
