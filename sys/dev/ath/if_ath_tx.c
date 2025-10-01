@@ -2069,9 +2069,8 @@ ath_tx_start(struct ath_softc *sc, struct ieee80211_node *ni,
 
 	/* This also sets up the DMA map; crypto; frame parameters, etc */
 	r = ath_tx_normal_setup(sc, ni, bf, m0, txq);
-
 	if (r != 0)
-		goto done;
+		return (r);
 
 	/* At this point m0 could have changed! */
 	m0 = bf->bf_m;
@@ -2128,7 +2127,6 @@ ath_tx_start(struct ath_softc *sc, struct ieee80211_node *ni,
 	ath_tx_leak_count_update(sc, tid, bf);
 	ath_tx_xmit_normal(sc, txq, bf);
 #endif
-done:
 	return 0;
 }
 
