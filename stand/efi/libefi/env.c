@@ -275,7 +275,9 @@ static struct efi_uuid_mapping {
         { .efi_guid_name = "Active EDID",
 	    .efi_guid = EFI_EDID_ACTIVE_PROTOCOL_GUID },
         { .efi_guid_name = "Discovered EDID",
-	    .efi_guid = EFI_EDID_DISCOVERED_PROTOCOL_GUID }
+	    .efi_guid = EFI_EDID_DISCOVERED_PROTOCOL_GUID },
+	{ .efi_guid_name = "Memory Attribute Protocol",
+	    .efi_guid = MEMORY_ATTRIBUTE_PROTOCOL_GUID },
 };
 
 bool

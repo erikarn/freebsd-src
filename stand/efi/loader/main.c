@@ -100,6 +100,7 @@ EFI_GUID memtype = MEMORY_TYPE_INFORMATION_TABLE_GUID;
 EFI_GUID debugimg = DEBUG_IMAGE_INFO_TABLE_GUID;
 EFI_GUID fdtdtb = FDT_TABLE_GUID;
 EFI_GUID inputid = SIMPLE_TEXT_INPUT_PROTOCOL;
+EFI_GUID mapid = MEMORY_ATTRIBUTE_PROTOCOL_GUID;
 
 /*
  * Number of seconds to wait for a keystroke before exiting with failure

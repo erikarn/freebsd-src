@@ -659,4 +659,11 @@ typedef struct _RISCV_EFI_BOOT_PROTOCOL {
     EFI_GET_BOOT_HARTID   GetBootHartId;
 } RISCV_EFI_BOOT_PROTOCOL;
 
+// Memory Attribute Protocol
+
+#define MEMORY_ATTRIBUTE_PROTOCOL_GUID \
+    { 0xf4560cf6, 0x40ec, 0x4b4a,  { 0xa1, 0x92, 0xbf, 0x1d, 0x57, 0xd0, 0xb1, 0x89 } }
+
+// TODO: interface, etc
+
 #endif
