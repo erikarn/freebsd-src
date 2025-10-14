@@ -958,6 +958,166 @@ command_gop(int argc, char *argv[])
 	return (CMD_ERROR);
 }
 
+extern uint64_t getusecs(void);
+
+
+static void
+command_consbench_text(void)
+{
+	int i;
+	uint64_t start, end;
+
+	start = getusecs();
+	for (i = 0; i < 1000; i++) {
+		putchar((i % 64) + 33);
+	}
+	end = getusecs();
+	putchar('\n');
+	printf("Time: %lu usec (%lu sec)\n",
+	    (unsigned long) (end - start),
+	    (unsigned long) (end - start) / 1000000UL);
+}
+
+static uint8_t *
+get_fb_address(void)
+{
+	return (ptov((uint32_t)gfx_state.tg_fb.fb_addr));
+}
+
+static void
+mem_wr4(uint8_t *base, size_t size, uint32_t o, uint32_t v)
+{
+	if (o >= size)
+		return;
+
+	*(uint32_t *)(base + o) = v;
+}
+
+static void
+command_consbench_fill_mask(uint32_t mask)
+{
+	uint8_t *base;
+	size_t size;
+	uint32_t i;
+
+	base = get_fb_address();
+	size = gfx_state.tg_fb.fb_size;
+
+	/* TODO: just fill the whole buffer for now for testing, don't care about dimensions/stride */
+	for (i = 0; i < size; i+= sizeof(uint32_t)) {
+		mem_wr4(base, size, i, mask);
+	}
+}
+
+static void
+command_consbench_fill(void)
+{
+	int i;
+	uint64_t start, end;
+
+	start = getusecs();
+	for (i = 0; i < 128; i++) {
+		switch (i % 3) {
+		case 0:
+			command_consbench_fill_mask(gfx_state.tg_fb.fb_mask_red);
+			break;
+		case 1:
+			command_consbench_fill_mask(gfx_state.tg_fb.fb_mask_green);
+			break;
+		case 2:
+			command_consbench_fill_mask(gfx_state.tg_fb.fb_mask_blue);
+			break;
+		}
+	}
+	end = getusecs();
+
+	printf("Time: %lu usec (%lu sec)\n",
+	    (unsigned long) (end - start),
+	    (unsigned long) (end - start) / 1000000UL);
+}
+
+static void
+command_consbench_shadowfill_mask(uint32_t mask)
+{
+	uint8_t *base;
+	size_t size;
+	uint32_t i;
+
+	if (gfx_state.tg_shadow_fb == NULL)
+		return;
+
+	base = (uint8_t *) gfx_state.tg_shadow_fb;
+	size = gfx_state.tg_shadow_sz * EFI_PAGE_SIZE;
+
+	for (i = 0; i < size; i += sizeof(uint32_t)) {
+		mem_wr4(base, size, i, mask);
+	}
+}
+
+static void
+command_consbench_shadowfill(void)
+{
+	int i;
+	uint64_t start, end;
+
+	if (gfx_state.tg_shadow_fb == NULL) {
+		printf("ERROR: no shadow buffer!\n");
+		return;
+	}
+
+	printf("Shadow: ptr=%p, size=%llu pages (%llu bytes)\n",
+	    (uint8_t *) gfx_state.tg_shadow_fb,
+	    (unsigned long long) gfx_state.tg_shadow_sz,
+	    (unsigned long long) gfx_state.tg_shadow_sz * EFI_PAGE_SIZE);
+
+	start = getusecs();
+	for (i = 0; i < 128; i++) {
+		switch (i % 3) {
+		case 0:
+			command_consbench_shadowfill_mask(gfx_state.tg_fb.fb_mask_red);
+			break;
+		case 1:
+			command_consbench_shadowfill_mask(gfx_state.tg_fb.fb_mask_green);
+			break;
+		case 2:
+			command_consbench_shadowfill_mask(gfx_state.tg_fb.fb_mask_blue);
+			break;
+		}
+	}
+	end = getusecs();
+
+	printf("Time: %lu usec (%lu sec)\n",
+	    (unsigned long) (end - start),
+	    (unsigned long) (end - start) / 1000000UL);
+}
+
+
+COMMAND_SET(consbench, "consbench", "console benchmark", command_consbench);
+static int
+command_consbench(int argc, char *argv[])
+{
+
+	if (argc < 2)
+		goto usage;
+
+	if (strcmp(argv[1], "text") == 0) {
+		command_consbench_text();
+	} else if (strcmp(argv[1], "fill") == 0) {
+		command_consbench_fill();
+	} else if (strcmp(argv[1], "shadowfill") == 0) {
+		command_consbench_shadowfill();
+	} else {
+		goto usage;
+	}
+
+	return (CMD_OK);
+
+usage:
+	snprintf(command_errbuf, sizeof(command_errbuf),
+	    "Usage: %s text | fill | shadowfill\n", argv[0]);
+	return (CMD_ERROR);
+}
+
 COMMAND_SET(uga, "uga", "universal graphics adapter", command_uga);
 
 static int

@@ -278,3 +278,13 @@ getsecs(void)
 
     return (time(NULL));
 }
+
+uint64_t
+getusecs(void)
+{
+	struct timeval tv;
+	memset(&tv, 0, sizeof(tv));
+	EFI_GetTimeOfDay(&tv, NULL);
+
+	return (tv.tv_sec * 1000000ULL) + (tv.tv_usec);
+}
