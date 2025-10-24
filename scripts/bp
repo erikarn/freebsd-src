@@ -3,8 +3,10 @@
 WORKDIR=/data/1/adrian/freebsd/freebsd-router/
 REPODIR=/data/1/freebsd/router/pkgs/
 
+X_KERNEL_LIST="ROUTER ROUTER_DEBUG ROUTER_RSS"
+
 mkdir -p ${REPODIR}
 env MAKEOBJDIRPREFIX=${WORKDIR}/freebsd-obj \
     REPODIR=${REPODIR} \
-    KERNCONF=ROUTER \
-    make -s -j12 packages
+    KERNCONF="${X_KERNEL_LIST}" \
+    make -s -j12 update-packages
