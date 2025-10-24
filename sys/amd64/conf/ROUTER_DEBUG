@@ -1,0 +1,5 @@
+include ROUTER
+
+ident ROUTER_DEBUG
+
+include "std.debug"
