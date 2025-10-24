@@ -1,0 +1,4 @@
+include ROUTER
+
+ident ROUTER_RSS
+options RSS
