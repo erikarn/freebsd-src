@@ -8,7 +8,7 @@ REPODIR=/data/1/freebsd/router/pkgs/
 # So before adding say, GENERIC to the front, first all of my
 # devices need updating to include GENERIC so I don't break them.
 
-X_KERNEL_LIST="ROUTER ROUTER_DEBUG ROUTER_RSS"
+X_KERNEL_LIST="GENERIC GENERIC-NODEBUG ROUTER ROUTER_DEBUG ROUTER_RSS"
 
 env MAKEOBJDIRPREFIX=${WORKDIR}/freebsd-obj \
     make -s -j12 buildworld buildkernel KERNCONF="${X_KERNEL_LIST}"
