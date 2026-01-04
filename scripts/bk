@@ -6,5 +6,5 @@ REPODIR=/data/1/freebsd/router/pkgs/
 X_KERNEL_LIST="GENERIC GENERIC-NODEBUG ROUTER ROUTER_DEBUG ROUTER_RSS"
 
 env MAKEOBJDIRPREFIX=${WORKDIR}/freebsd-obj \
-    make -s -j12 buildkernel KERNCONF="${X_KERNEL_LIST}"
+    make -s -j12 buildkernel WITHOUT_CLEAN=1 KERNCONF="${X_KERNEL_LIST}"
 
