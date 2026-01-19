@@ -276,7 +276,7 @@ pmuextint_probe(device_t dev)
 {
 	const char *type = ofw_bus_get_type(dev);
 
-	if (strcmp(type, "extint-gpio1") != 0)
+	if (type == NULL || strcmp(type, "extint-gpio1") != 0)
                 return (ENXIO);
 
 	device_set_desc(dev, "Apple PMU99 External Interrupt");
@@ -288,7 +288,7 @@ pmu_probe(device_t dev)
 {
 	const char *type = ofw_bus_get_type(dev);
 
-	if (strcmp(type, "via-pmu") != 0)
+	if (type == NULL || strcmp(type, "via-pmu") != 0)
                 return (ENXIO);
 
 	device_set_desc(dev, "Apple PMU99 Controller");
@@ -599,6 +599,7 @@ pmu_send(void *cookie, int cmd, int length, uint8_t *in_msg, int rlen,
 	struct pmu_softc *sc = cookie;
 	int i, rcv_len = -1;
 	uint8_t out_len, intreg;
+	uint8_t dummy;
 
 	intreg = pmu_read_reg(sc, vIER);
 	intreg &= 0x10;
@@ -626,16 +627,20 @@ pmu_send(void *cookie, int cmd, int length, uint8_t *in_msg, int rlen,
 
 	/* read command */
 	if (rcv_len == 1) {
-		pmu_read_byte(sc, out_msg);
+		pmu_read_byte(sc, &dummy);
+		if (rlen > 0)
+			out_msg[0] = dummy;
 		goto done;
-	} else
+	} else if (rlen > 0) {
 		out_msg[0] = cmd;
+	}
 	if (rcv_len < 0) {
 		pmu_read_byte(sc, &out_len);
 		rcv_len = out_len + 1;
 	}
-	for (i = 1; i < min(rcv_len, rlen); i++)
+	for (i = 1; i < min(rcv_len, rlen); i++) {
 		pmu_read_byte(sc, &out_msg[i]);
+	}
 
 done:
 	pmu_write_reg(sc, vIER, (intreg == 0) ? 0 : 0x90);
