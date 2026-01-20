@@ -42,6 +42,8 @@
  * IEEE80211_KEYBUF_SIZE as the key size will eventually grow.
  */
 #define	IEEE80211_KEYBUF_128_SIZE	16
+#define	IEEE80211_TX_MICBUF_128_SIZE	8
+#define	IEEE80211_RX_MICBUF_128_SIZE	8
 #define	IEEE80211_MICBUF_128_SIZE	(8+8)	/* space for both tx+rx keys */
 
 /*
@@ -316,6 +318,58 @@ void	ieee80211_notify_michael_failure(struct ieee80211vap *,
 /* AAD assembly for CCMP/GCMP. */
 uint16_t	ieee80211_crypto_init_aad(const struct ieee80211_frame *,
 		uint8_t *, int);
+
+/**
+ * @brief Set the key data.
+ *
+ * This will only set the key data and length, not the TX/RX MIC.
+ *
+ * Return true if the key was copied and it fit, false otherwise.
+ */
+static inline bool
+ieee80211_crypto_set_key_data(struct ieee80211_key *k, uint8_t *data,
+    int len)
+{
+	if (len > IEEE80211_KEYBUF_SIZE)
+		return (false);
+	memcpy(k->wk_key, data, len);
+	k->wk_keylen = len;
+	return (true);
+}
+
+/**
+ * @brief Set the TX MIC data.
+ *
+ * This will only set the TX MIC data, not the key.
+ *
+ * Return true if the MIC data was copied and it fit, false otherwise.
+ */
+static inline bool
+ieee80211_crypto_set_key_txmic_data(struct ieee80211_key *k, uint8_t *data,
+    int len)
+{
+	if (len > IEEE80211_TX_MICBUF_128_SIZE)
+		return (false);
+	memcpy(k->wk_txmic, data, len);
+	return (true);
+}
+
+/**
+ * @brief Set the RX MIC data.
+ *
+ * This will only set the RX MIC data, not the key.
+ *
+ * Return true if the MIC data was copied and it fit, false otherwise.
+ */
+static inline bool
+ieee80211_crypto_set_key_rxmic_data(struct ieee80211_key *k, uint8_t *data,
+    int len)
+{
+	if (len > IEEE80211_RX_MICBUF_128_SIZE)
+		return (false);
+	memcpy(k->wk_rxmic, data, len);
+	return (true);
+}
 
 /**
  * @brief Return the key data.
