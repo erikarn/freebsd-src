@@ -1000,8 +1000,8 @@ rum_newstate(struct ieee80211vap *vap, enum ieee80211_state nstate, int arg)
 		ni = ieee80211_ref_node(vap->iv_bss);
 
 		if (vap->iv_opmode != IEEE80211_M_MONITOR) {
-			if (ic->ic_bsschan == IEEE80211_CHAN_ANYC ||
-			    ni->ni_chan == IEEE80211_CHAN_ANYC) {
+			if (IEEE80211_IS_CHAN_ANYC(ic->ic_bsschan) ||
+			    IEEE80211_IS_CHAN_ANYC(ni->ni_chan)) {
 				ret = EINVAL;
 				goto run_fail;
 			}
@@ -2765,7 +2765,7 @@ rum_set_beacon(struct rum_softc *sc, struct ieee80211vap *vap)
 
 	if (m == NULL)
 		return EINVAL;
-	if (ic->ic_bsschan == IEEE80211_CHAN_ANYC)
+	if (IEEE80211_IS_CHAN_ANYC(ic->ic_bsschan))
 		return EINVAL;
 
 	tp = &vap->iv_txparms[ieee80211_chan2mode(ic->ic_bsschan)];
@@ -2792,7 +2792,7 @@ rum_alloc_beacon(struct rum_softc *sc, struct ieee80211vap *vap)
 	struct ieee80211_node *ni = vap->iv_bss;
 	struct mbuf *m;
 
-	if (ni->ni_chan == IEEE80211_CHAN_ANYC)
+	if (IEEE80211_IS_CHAN_ANYC(ni->ni_chan))
 		return EINVAL;
 
 	m = ieee80211_beacon_alloc(ni);
