@@ -862,7 +862,7 @@ _db_show_channel(const char *tag, const struct ieee80211_channel *c)
 	db_printf("%s ", tag);
 	if (c == NULL)
 		db_printf("<NULL>");
-	else if (c == IEEE80211_CHAN_ANYC)
+	else if (IEEE80211_IS_CHAN_ANYC(c))
 		db_printf("<ANY>");
 	else
 		db_printf("[%u (%u) flags=%b maxreg %d maxpow %d minpow %d state 0x%x extieee %u]",

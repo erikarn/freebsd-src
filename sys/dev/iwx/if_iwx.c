@@ -5536,7 +5536,7 @@ iwx_min_basic_rate(struct ieee80211com *ic)
 
 	min = -1;
 
-	if (c == IEEE80211_CHAN_ANYC) {
+	if (IEEE80211_IS_CHAN_ANYC(c)) {
 		printf("%s: channel is IEEE80211_CHAN_ANYC\n", __func__);
 		return -1;
 	}
@@ -6814,7 +6814,7 @@ iwx_ack_rates(struct iwx_softc *sc, struct iwx_node *in, int *cck_rates,
 	uint8_t ofdm = 0;
 	int i;
 
-	if (ni->ni_chan == IEEE80211_CHAN_ANYC ||
+	if (IEEE80211_IS_CHAN_ANYC(ni->ni_chan) ||
 	    IEEE80211_IS_CHAN_2GHZ(ni->ni_chan)) {
 		for (i = IWX_FIRST_CCK_RATE; i < IWX_FIRST_OFDM_RATE; i++) {
 			if ((iwx_ridx2rate(rs, i) & IEEE80211_RATE_BASIC) == 0)
@@ -7550,7 +7550,7 @@ iwx_phy_ctxt_update(struct iwx_softc *sc, struct iwx_phy_ctxt *phyctxt,
 	uint16_t band_flags = (IEEE80211_CHAN_2GHZ | IEEE80211_CHAN_5GHZ);
 	int err;
 
-	if (chan == IEEE80211_CHAN_ANYC) {
+	if (IEEE80211_IS_CHAN_ANYC(chan)) {
 		printf("%s: GOS-3833: IEEE80211_CHAN_ANYC triggered\n",
 		    DEVNAME(sc));
 		    return EIO;

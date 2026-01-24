@@ -2250,7 +2250,7 @@ run_newstate(struct ieee80211vap *vap, enum ieee80211_state nstate, int arg)
 		if (vap->iv_opmode != IEEE80211_M_MONITOR) {
 			struct ieee80211_node *ni;
 
-			if (ic->ic_bsschan == IEEE80211_CHAN_ANYC) {
+			if (IEEE80211_IS_CHAN_ANYC(ic->ic_bsschan)) {
 				RUN_UNLOCK(sc);
 				IEEE80211_LOCK(ic);
 				return (-1);
@@ -5061,9 +5061,9 @@ run_update_beacon_cb(void *arg)
 	uint16_t txwisize;
 	uint8_t ridx;
 
-	if (ni->ni_chan == IEEE80211_CHAN_ANYC)
+	if (IEEE80211_IS_CHAN_ANYC(ni->ni_chan))
 		return;
-	if (ic->ic_bsschan == IEEE80211_CHAN_ANYC)
+	if (IEEE80211_IS_CHAN_ANYC(ic->ic_bsschan))
 		return;
 
 	/*
