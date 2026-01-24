@@ -828,8 +828,8 @@ scan_end(struct ieee80211_scan_state *ss, int scandone)
 	if (scandone)
 		ic->ic_lastscan = ticks;
 	/* return to the bss channel */
-	if (ic->ic_bsschan != IEEE80211_CHAN_ANYC &&
-	    ic->ic_curchan != ic->ic_bsschan) {
+	if (!NET80211_CHANNEL_P_IS_ANYC(ic->ic_bsschan) &&
+	    !NET80211_CHANNEL_P_IS_EQUIV(ic->ic_curchan, ic->ic_bsschan)) {
 		ieee80211_setupcurchan(ic, ic->ic_bsschan);
 		IEEE80211_UNLOCK(ic);
 		ic->ic_set_channel(ic);

@@ -176,7 +176,7 @@ r92e_set_tx_power(struct rtwn_softc *sc, struct ieee80211vap *vap)
 
 	if (vap->iv_bss == NULL)
 		return (EINVAL);
-	if (vap->iv_bss->ni_chan == IEEE80211_CHAN_ANYC)
+	if (NET80211_CHANNEL_P_IS_ANYC(vap->iv_bss->ni_chan))
 		return (EINVAL);
 
 	r92e_set_txpower(sc, vap->iv_bss->ni_chan);

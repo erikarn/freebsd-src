@@ -1428,25 +1428,25 @@ ieee80211_ht_adjust_channel(struct ieee80211com *ic,
 			if (!IEEE80211_IS_CHAN_HT40(chan)) {
 				/* NB: arbitrarily pick ht40+ over ht40- */
 				c = findhtchan(ic, chan, IEEE80211_CHAN_HT40U);
-				if (c == NULL)
+				if (!NET80211_CHANNEL_P_IS_DEFINED(c))
 					c = findhtchan(ic, chan,
 						IEEE80211_CHAN_HT40D);
-				if (c == NULL)
+				if (!NET80211_CHANNEL_P_IS_DEFINED(c))
 					c = findhtchan(ic, chan,
 						IEEE80211_CHAN_HT20);
-				if (c != NULL)
+				if (NET80211_CHANNEL_P_IS_DEFINED(c))
 					chan = c;
 			}
 		} else if (!IEEE80211_IS_CHAN_HT20(chan)) {
 			c = findhtchan(ic, chan, IEEE80211_CHAN_HT20);
-			if (c != NULL)
+			if (NET80211_CHANNEL_P_IS_DEFINED(c))
 				chan = c;
 		}
 	} else if (IEEE80211_IS_CHAN_HT(chan)) {
 		/* demote to legacy, HT use is disabled */
 		c = ieee80211_find_channel(ic, chan->ic_freq,
 		    chan->ic_flags &~ IEEE80211_CHAN_HT);
-		if (c != NULL)
+		if (NET80211_CHANNEL_P_IS_DEFINED(c))
 			chan = c;
 	}
 	return chan;
@@ -1557,7 +1557,7 @@ htinfo_update(struct ieee80211vap *vap)
 	} else if (vap->iv_flags_ht & IEEE80211_FHT_NONHT_PR) {
 		protmode = IEEE80211_HTINFO_OPMODE_PROTOPT
 			 | IEEE80211_HTINFO_NONHT_PRESENT;
-	} else if (ic->ic_bsschan != IEEE80211_CHAN_ANYC &&
+	} else if (!NET80211_CHANNEL_P_IS_ANYC(ic->ic_bsschan) &&
 	    IEEE80211_IS_CHAN_HT40(ic->ic_bsschan) && 
 	    vap->iv_sta_assoc != vap->iv_ht40_sta_assoc) {
 		protmode = IEEE80211_HTINFO_OPMODE_HT20PR;
@@ -3382,7 +3382,7 @@ ieee80211_add_htcap_body(uint8_t *frm, struct ieee80211_node *ni)
 		 * after association the channel is upgraded to HT based
 		 * on the negotiated capabilities.
 		 */
-		if (ni->ni_chan != IEEE80211_CHAN_ANYC &&
+		if (!NET80211_CHANNEL_P_IS_ANYC(ni->ni_chan) &&
 		    findhtchan(ic, ni->ni_chan, IEEE80211_CHAN_HT40U) == NULL &&
 		    findhtchan(ic, ni->ni_chan, IEEE80211_CHAN_HT40D) == NULL)
 			caps &= ~IEEE80211_HTCAP_CHWIDTH40;
@@ -3807,14 +3807,14 @@ ieee80211_ht_check_tx_ht(const struct ieee80211_node *ni)
 	const struct ieee80211vap *vap;
 	const struct ieee80211_channel *bss_chan;
 
-	if (ni == NULL || ni->ni_chan == IEEE80211_CHAN_ANYC ||
+	if (ni == NULL || NET80211_CHANNEL_P_IS_ANYC(ni->ni_chan) ||
 	    ni->ni_vap == NULL || ni->ni_vap->iv_bss == NULL)
 		return (false);
 
 	vap = ni->ni_vap;
 	bss_chan = vap->iv_bss->ni_chan;
 
-	if (bss_chan == IEEE80211_CHAN_ANYC)
+	if (NET80211_CHANNEL_P_IS_ANYC(bss_chan))
 		return (false);
 
 	if (IEEE80211_IS_CHAN_HT(ni->ni_chan) &&

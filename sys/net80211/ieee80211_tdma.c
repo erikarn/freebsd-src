@@ -270,7 +270,7 @@ tdma_newstate(struct ieee80211vap *vap, enum ieee80211_state nstate, int arg)
 	    nstate == IEEE80211_S_RUN && ostate != IEEE80211_S_RUN &&
 	    (vap->iv_flags_ext & IEEE80211_FEXT_SWBMISS) &&
 	    ts->tdma_slot != 0 &&
-	    vap->iv_des_chan == IEEE80211_CHAN_ANYC) {
+	    NET80211_CHANNEL_P_IS_ANYC(vap->iv_des_chan)) {
 		/*
 		 * Start s/w beacon miss timer for slave devices w/o
 		 * hardware support.  Note we do this only if we're
