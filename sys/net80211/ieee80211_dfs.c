@@ -273,7 +273,7 @@ static void
 announce_radar(struct ieee80211com *ic, const struct ieee80211_channel *curchan,
 	const struct ieee80211_channel *newchan)
 {
-	if (newchan == NULL)
+	if (!NET80211_CHANNEL_P_IS_DEFINED(newchan))
 		ic_printf(ic, "radar detected on channel %u (%u MHz)\n",
 		    curchan->ic_ieee, curchan->ic_freq);
 	else
@@ -350,7 +350,7 @@ ieee80211_dfs_notify_radar(struct ieee80211com *ic, struct ieee80211_channel *ch
 	 * channels other than the bss channel; not sure
 	 * that can/will happen but it's simple to support.
 	 */
-	if (chan == ic->ic_bsschan) {
+	if (NET80211_CHANNEL_P_IS_EQUIV(chan, ic->ic_bsschan)) {
 		/* XXX need a way to defer to user app */
 
 		/*
@@ -366,7 +366,7 @@ ieee80211_dfs_notify_radar(struct ieee80211com *ic, struct ieee80211_channel *ch
 
 		if (callout_pending(&dfs->cac_timer))
 			callout_schedule(&dfs->cac_timer, 0);
-		else if (dfs->newchan != NULL) {
+		else if (NET80211_CHANNEL_P_IS_DEFINED(dfs->newchan)) {
 			/* XXX mode 1, switch count 2 */
 			/* XXX calculate switch count based on max
 			  switch time and beacon interval? */

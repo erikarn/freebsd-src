@@ -698,7 +698,7 @@ ural_newstate(struct ieee80211vap *vap, enum ieee80211_state nstate, int arg)
 		ni = ieee80211_ref_node(vap->iv_bss);
 
 		if (vap->iv_opmode != IEEE80211_M_MONITOR) {
-			if (ic->ic_bsschan == IEEE80211_CHAN_ANYC)
+			if (NET80211_CHANNEL_P_IS_ANYC(ic->ic_bsschan))
 				goto fail;
 
 			ural_update_slot(sc);
@@ -1031,7 +1031,7 @@ ural_tx_bcn(struct ural_softc *sc, struct mbuf *m0, struct ieee80211_node *ni)
 		ieee80211_free_node(ni);
 		return (EIO);
 	}
-	if (ic->ic_bsschan == IEEE80211_CHAN_ANYC) {
+	if (NET80211_CHANNEL_P_IS_ANYC(ic->ic_bsschan)) {
 		m_freem(m0);
 		ieee80211_free_node(ni);
 		return (ENXIO);

@@ -1102,7 +1102,7 @@ ieee80211_chan2ieee(struct ieee80211com *ic, const struct ieee80211_channel *c)
 		ic_printf(ic, "invalid channel (NULL)\n");
 		return 0;		/* XXX */
 	}
-	return (c == IEEE80211_CHAN_ANYC ?  IEEE80211_CHAN_ANY : c->ic_ieee);
+	return (NET80211_CHANNEL_P_IS_ANYC(c) ? IEEE80211_CHAN_ANY : c->ic_ieee);
 }
 
 /*

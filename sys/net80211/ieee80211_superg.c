@@ -997,7 +997,7 @@ ieee80211_dturbo_switch(struct ieee80211vap *vap, int newflags)
 	struct ieee80211_channel *chan;
 
 	chan = ieee80211_find_channel(ic, ic->ic_bsschan->ic_freq, newflags);
-	if (chan == NULL) {		/* XXX should not happen */
+	if (!NET80211_CHANNEL_P_IS_DEFINED(chan)) {		/* XXX should not happen */
 		IEEE80211_DPRINTF(vap, IEEE80211_MSG_SUPERG,
 		    "%s: no channel with freq %u flags 0x%x\n",
 		    __func__, ic->ic_bsschan->ic_freq, newflags);

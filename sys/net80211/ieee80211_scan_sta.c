@@ -318,9 +318,9 @@ found:
 		 */
 		c = ieee80211_find_channel_byieee(ic, sp->chan,
 		    curchan->ic_flags);
-		if (c != NULL) {
+		if (NET80211_CHANNEL_P_IS_DEFINED(c)) {
 			ise->se_chan = c;
-		} else if (ise->se_chan == NULL) {
+		} else if (!NET80211_CHANNEL_P_IS_DEFINED(ise->se_chan)) {
 			/* should not happen, pick something */
 			ise->se_chan = curchan;
 		}
@@ -427,7 +427,7 @@ static int
 isexcluded(struct ieee80211vap *vap, const struct ieee80211_channel *c)
 {
 	return (isclr(vap->iv_ic->ic_chan_active, c->ic_ieee) ||
-	    (vap->iv_des_chan != IEEE80211_CHAN_ANYC &&
+	    (!NET80211_CHANNEL_P_IS_ANYC(vap->iv_des_chan) &&
 	     c->ic_freq != vap->iv_des_chan->ic_freq));
 }
 
@@ -598,7 +598,7 @@ sweepchannels(struct ieee80211_scan_state *ss, struct ieee80211vap *vap,
 	 * mechanisms would otherwise elide it (e.g HT, turbo).
 	 */
 	c = vap->iv_des_chan;
-	if (c != IEEE80211_CHAN_ANYC &&
+	if (!NET80211_CHANNEL_P_IS_ANYC(c) &&
 	    !onscanlist(ss, c) &&
 	    (vap->iv_des_mode == IEEE80211_MODE_AUTO ||
 	     vap->iv_des_mode == ieee80211_chan2mode(c)) &&
@@ -1603,7 +1603,7 @@ adhoc_pick_channel(struct ieee80211_scan_state *ss, int flags)
 			if (se->base.se_rssi > maxrssi)
 				maxrssi = se->base.se_rssi;
 		}
-		if (bestchan == NULL || maxrssi < bestrssi)
+		if (!NET80211_CHANNEL_P_IS_DEFINED(bestchan) || maxrssi < bestrssi)
 			bestchan = c;
 	}
 	IEEE80211_SCAN_TABLE_UNLOCK(st);
@@ -1665,7 +1665,7 @@ notfound:
 			 * an ssid; start one up.  If no channel was
 			 * specified, try to select a channel.
 			 */
-			if (vap->iv_des_chan == IEEE80211_CHAN_ANYC ||
+			if (NET80211_CHANNEL_P_IS_ANYC(vap->iv_des_chan) ||
 			    IEEE80211_IS_CHAN_RADAR(vap->iv_des_chan)) {
 				chan = adhoc_pick_channel(ss, 0);
 			} else
@@ -1819,7 +1819,7 @@ ap_pick_channel(struct ieee80211_scan_state *ss, int flags)
 			/* XXX use other considerations */
 			return chan;
 		}
-		if (bestchan == NULL ||
+		if (!NET80211_CHANNEL_P_IS_DEFINED(bestchan) ||
 		    st->st_maxrssi[chan->ic_ieee] < st->st_maxrssi[bestchan->ic_ieee])
 			bestchan = chan;
 	}
@@ -1838,7 +1838,7 @@ ap_end(struct ieee80211_scan_state *ss, struct ieee80211vap *vap)
 	KASSERT(vap->iv_opmode == IEEE80211_M_HOSTAP,
 		("wrong opmode %u", vap->iv_opmode));
 	bestchan = ap_pick_channel(ss, 0);
-	if (bestchan == NULL) {
+	if (!NET80211_CHANNEL_P_IS_DEFINED(bestchan)) {
 		/* no suitable channel, should not happen */
 		IEEE80211_DPRINTF(vap, IEEE80211_MSG_SCAN,
 		    "%s: no suitable channel! (should not happen)\n", __func__);
@@ -1851,7 +1851,7 @@ ap_end(struct ieee80211_scan_state *ss, struct ieee80211vap *vap)
 	if (IEEE80211_IS_CHAN_TURBO(bestchan)) {
 		bestchan = ieee80211_find_channel(ic, bestchan->ic_freq,
 			bestchan->ic_flags & ~IEEE80211_CHAN_TURBO);
-		if (bestchan == NULL) {
+		if (!NET80211_CHANNEL_P_IS_DEFINED(bestchan)) {
 			/* should never happen ?? */
 			return 0;
 		}
@@ -1936,7 +1936,7 @@ notfound:
 			 * a meshid; start one up.  If no channel was
 			 * specified, try to select a channel.
 			 */
-			if (vap->iv_des_chan == IEEE80211_CHAN_ANYC ||
+			if (NET80211_CHANNEL_P_IS_ANYC(vap->iv_des_chan) ||
 			    IEEE80211_IS_CHAN_RADAR(vap->iv_des_chan)) {
 				struct ieee80211com *ic = vap->iv_ic;
 

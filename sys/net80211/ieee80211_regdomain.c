@@ -435,7 +435,7 @@ ieee80211_setregdomain(struct ieee80211vap *vap,
 	 * needs to be done for all vaps but for now we only do
 	 * the one where the ioctl is issued.
 	 */
-	if (vap->iv_des_chan != IEEE80211_CHAN_ANYC) {
+	if (!NET80211_CHANNEL_P_IS_ANYC(vap->iv_des_chan)) {
 		desfreq = vap->iv_des_chan->ic_freq;
 		desflags = vap->iv_des_chan->ic_flags;
 	}
@@ -459,7 +459,7 @@ ieee80211_setregdomain(struct ieee80211vap *vap,
 	}
 	ieee80211_scan_flush(vap);
 	ieee80211_dfs_reset(ic);
-	if (vap->iv_des_chan != IEEE80211_CHAN_ANYC) {
+	if (!NET80211_CHANNEL_P_IS_ANYC(vap->iv_des_chan)) {
 		c = ieee80211_find_channel(ic, desfreq, desflags);
 		/* NB: may be NULL if not present in new channel list */
 		vap->iv_des_chan = (c != NULL) ? c : IEEE80211_CHAN_ANYC;

@@ -165,7 +165,7 @@ adhoc_newstate(struct ieee80211vap *vap, enum ieee80211_state nstate, int arg)
 			    sta_leave, NULL);
 			/* fall thru... */
 		case IEEE80211_S_INIT:
-			if (vap->iv_des_chan != IEEE80211_CHAN_ANYC &&
+			if (!NET80211_CHANNEL_P_IS_ANYC(vap->iv_des_chan) &&
 			    !IEEE80211_IS_CHAN_RADAR(vap->iv_des_chan)) {
 				/*
 				 * Already have a channel; bypass the

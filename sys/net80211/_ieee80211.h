@@ -163,6 +163,44 @@ struct ieee80211_channel {
 #define	IEEE80211_CHAN_ANYC \
 	((struct ieee80211_channel *) IEEE80211_CHAN_ANY)
 
+/**
+ * @brief Return true if the channel is defined.
+ *
+ * This is true if the channel is defined.
+ * For channel pointers it currently is "is it NULL".
+ *
+ * @param c	ieee80211_channel to check
+ * @returns true if defined, false otherwise
+ */
+#define	NET80211_CHANNEL_P_IS_DEFINED(c)	((c) != NULL)
+
+/**
+ * @brief Return true if the channel is "any" channel.
+ *
+ * Some uses of channels are as a configuration option to
+ * match against, and there's a way to represent that "any channel" is OK.
+ *
+ * @param c	ieee80211_channel to check
+ * @returns true if the channel is marked as "any channel", false otherwise
+ */
+#define	NET80211_CHANNEL_P_IS_ANYC(c)	((c) == IEEE80211_CHAN_ANYC)
+
+/**
+ * @brief Return true if the channels are equivalent.
+ *
+ * This returns true if the channel representations are equivalent.
+ * For now this is just a pointer comparison, but the fields that
+ * specifically matter here are:
+ *
+ * + ic_flags, ic_freq, ic_ieee, ic_extieee, ic_vht_ch_freq1, ic_vht_ch_freq2,
+ *   ic_freq2.
+ *
+ * @param c1	first ieee80211_channel to check
+ * @param c2	second ieee80211_channel to check
+ * @returns true if the channels are equivalent, false otherwise
+ */
+#define	NET80211_CHANNEL_P_IS_EQUIV(c1, c2)	((c1) == (c2))
+
 /* channel attributes */
 #define	IEEE80211_CHAN_PRIV0	0x00000001 /* driver private bit 0 */
 #define	IEEE80211_CHAN_PRIV1	0x00000002 /* driver private bit 1 */

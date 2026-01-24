@@ -396,7 +396,7 @@ get_sta_info(void *arg, struct ieee80211_node *ni)
 	if (vap->iv_opmode == IEEE80211_M_HOSTAP &&
 	    ni->ni_associd == 0)	/* only associated stations */
 		return;
-	if (ni->ni_chan == IEEE80211_CHAN_ANYC)	/* XXX bogus entry */
+	if (NET80211_CHANNEL_P_IS_ANYC(ni->ni_chan))	/* XXX bogus entry */
 		return;
 	len = sta_space(ni, &ielen);
 	if (len > req->space)
@@ -2087,7 +2087,7 @@ setcurchan(struct ieee80211vap *vap, struct ieee80211_channel *c)
 				return EINVAL;
 		}
 		if ((vap->iv_state == IEEE80211_S_RUN || vap->iv_state == IEEE80211_S_SLEEP) &&
-		    vap->iv_bss->ni_chan == c)
+		    NET80211_CHANNEL_P_IS_EQUIV(vap->iv_bss->ni_chan, c))
 			return 0;	/* NB: nothing to do */
 	}
 	vap->iv_des_chan = c;
