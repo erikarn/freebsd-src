@@ -110,7 +110,7 @@ rtwn_setup_beacon(struct rtwn_softc *sc, struct ieee80211_node *ni)
 
 	RTWN_ASSERT_LOCKED(sc);
 
-	if (ni->ni_chan == IEEE80211_CHAN_ANYC)
+	if (IEEE80211_IS_CHAN_ANYC(ni->ni_chan))
 		return (EINVAL);
 
 	m = ieee80211_beacon_alloc(ni);

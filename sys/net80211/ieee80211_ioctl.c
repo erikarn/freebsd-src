@@ -396,7 +396,7 @@ get_sta_info(void *arg, struct ieee80211_node *ni)
 	if (vap->iv_opmode == IEEE80211_M_HOSTAP &&
 	    ni->ni_associd == 0)	/* only associated stations */
 		return;
-	if (ni->ni_chan == IEEE80211_CHAN_ANYC)	/* XXX bogus entry */
+	if (IEEE80211_IS_CHAN_ANYC(ni->ni_chan))	/* XXX bogus entry */
 		return;
 	len = sta_space(ni, &ielen);
 	if (len > req->space)

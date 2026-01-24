@@ -237,7 +237,7 @@ iwm_power_is_radar(struct iwm_softc *sc)
 	boolean_t radar_detect = FALSE;
 
 	chan = ic->ic_bsschan;
-	if (chan == IEEE80211_CHAN_ANYC ||
+	if (IEEE80211_IS_CHAN_ANYC(chan) ||
 	    (chan->ic_flags & IEEE80211_CHAN_DFS) != 0) {
 		radar_detect = TRUE;
 	}

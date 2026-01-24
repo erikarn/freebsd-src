@@ -4400,7 +4400,7 @@ wpi_setup_beacon(struct wpi_softc *sc, struct ieee80211_node *ni)
 
 	DPRINTF(sc, WPI_DEBUG_TRACE, TRACE_STR_DOING, __func__);
 
-	if (ni->ni_chan == IEEE80211_CHAN_ANYC)
+	if (IEEE80211_IS_CHAN_ANYC(ni->ni_chan))
 		return EINVAL;
 
 	m = ieee80211_beacon_alloc(ni);
@@ -4502,7 +4502,7 @@ wpi_run(struct wpi_softc *sc, struct ieee80211vap *vap)
 	}
 
 	/* XXX kernel panic workaround */
-	if (c == IEEE80211_CHAN_ANYC) {
+	if (IEEE80211_IS_CHAN_ANYC(c)) {
 		device_printf(sc->sc_dev, "%s: incomplete configuration\n",
 		    __func__);
 		return EINVAL;

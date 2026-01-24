@@ -1328,16 +1328,16 @@ lkpi_get_lkpi80211_chan(struct ieee80211com *ic, struct ieee80211_node *ni)
 	struct lkpi_hw *lhw;
 
 	chan = NULL;
-	if (ni != NULL && ni->ni_chan != IEEE80211_CHAN_ANYC)
+	if (ni != NULL && !IEEE80211_IS_CHAN_ANYC(ni->ni_chan))
 		c = ni->ni_chan;
-	else if (ic->ic_bsschan != IEEE80211_CHAN_ANYC)
+	else if (!IEEE80211_IS_CHAN_ANYC(ic->ic_bsschan))
 		c = ic->ic_bsschan;
-	else if (ic->ic_curchan != IEEE80211_CHAN_ANYC)
+	else if (!IEEE80211_IS_CHAN_ANYC(ic->ic_curchan))
 		c = ic->ic_curchan;
 	else
 		c = NULL;
 
-	if (c != NULL && c != IEEE80211_CHAN_ANYC) {
+	if (c != NULL && !IEEE80211_IS_CHAN_ANYC(c)) {
 		lhw = ic->ic_softc;
 		chan = lkpi_find_lkpi80211_chan(lhw, c);
 	}
@@ -2576,7 +2576,7 @@ lkpi_sta_scan_to_auth(struct ieee80211vap *vap, enum ieee80211_state nstate, int
 	 * the fact that the iv_bss can be swapped under the hood in (*iv_update_bss).
 	 */
 	ni = ieee80211_ref_node(vap->iv_bss);
-	if (ni->ni_chan == NULL || ni->ni_chan == IEEE80211_CHAN_ANYC) {
+	if (ni->ni_chan == NULL || IEEE80211_IS_CHAN_ANYC(ni->ni_chan)) {
 		ic_printf(vap->iv_ic, "%s: no channel set for iv_bss ni %p "
 		    "on vap %p\n", __func__, ni, vap);
 		ieee80211_free_node(ni);	/* Error handling for the local ni. */
@@ -2616,7 +2616,7 @@ lkpi_sta_scan_to_auth(struct ieee80211vap *vap, enum ieee80211_state nstate, int
 	/* Add chanctx (or if exists, change it). */
 	chanctx_conf = lkpi_get_chanctx_conf(hw, vif);
 
-	KASSERT(ni->ni_chan != NULL && ni->ni_chan != IEEE80211_CHAN_ANYC,
+	KASSERT(ni->ni_chan != NULL && !IEEE80211_IS_CHAN_ANYC(ni->ni_chan),
 	   ("%s:%d: ni %p ni_chan %p\n", __func__, __LINE__, ni, ni->ni_chan));
 
 #ifdef LKPI_80211_HT
@@ -5202,7 +5202,7 @@ lkpi_ic_set_channel(struct ieee80211com *ic)
 	lhw = ic->ic_softc;
 
 	c = ic->ic_curchan;
-	if (c == NULL || c == IEEE80211_CHAN_ANYC) {
+	if (c == NULL || IEEE80211_IS_CHAN_ANYC(c)) {
 		ic_printf(ic, "%s: Unset channel: c %p, ignoring update\n",
 		    __func__, c);
 		return;
@@ -5757,7 +5757,7 @@ lkpi_80211_txq_tx_one(struct lkpi_sta *lsta, struct mbuf *m)
 			rtap->wt_flags |= IEEE80211_RADIOTAP_F_FRAG;
 		IMPROVE();
 		rtap->wt_rate = 0;
-		if (c != NULL && c != IEEE80211_CHAN_ANYC) {
+		if (c != NULL && !IEEE80211_IS_CHAN_ANYC(c)) {
 			rtap->wt_chan_freq = htole16(c->ic_freq);
 			rtap->wt_chan_flags = htole16(c->ic_flags);
 		}
@@ -5840,7 +5840,7 @@ lkpi_80211_txq_tx_one(struct lkpi_sta *lsta, struct mbuf *m)
 	info = IEEE80211_SKB_CB(skb);
 	info->flags |= IEEE80211_TX_CTL_REQ_TX_STATUS;
 	/* Slight delay; probably only happens on scanning so fine? */
-	if (c == NULL || c == IEEE80211_CHAN_ANYC)
+	if (c == NULL || IEEE80211_IS_CHAN_ANYC(c))
 		c = ic->ic_curchan;
 	info->band = lkpi_net80211_chan_to_nl80211_band(c);
 	info->hw_queue = vif->hw_queue[ac];
