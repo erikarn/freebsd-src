@@ -427,7 +427,7 @@ static int
 isexcluded(struct ieee80211vap *vap, const struct ieee80211_channel *c)
 {
 	return (isclr(vap->iv_ic->ic_chan_active, c->ic_ieee) ||
-	    (vap->iv_des_chan != IEEE80211_CHAN_ANYC &&
+	    (!IEEE80211_IS_CHAN_ANYC(vap->iv_des_chan) &&
 	     c->ic_freq != vap->iv_des_chan->ic_freq));
 }
 
@@ -598,7 +598,7 @@ sweepchannels(struct ieee80211_scan_state *ss, struct ieee80211vap *vap,
 	 * mechanisms would otherwise elide it (e.g HT, turbo).
 	 */
 	c = vap->iv_des_chan;
-	if (c != IEEE80211_CHAN_ANYC &&
+	if (!IEEE80211_IS_CHAN_ANYC(c) &&
 	    !onscanlist(ss, c) &&
 	    (vap->iv_des_mode == IEEE80211_MODE_AUTO ||
 	     vap->iv_des_mode == ieee80211_chan2mode(c)) &&
@@ -1665,7 +1665,7 @@ notfound:
 			 * an ssid; start one up.  If no channel was
 			 * specified, try to select a channel.
 			 */
-			if (vap->iv_des_chan == IEEE80211_CHAN_ANYC ||
+			if (IEEE80211_IS_CHAN_ANYC(vap->iv_des_chan) ||
 			    IEEE80211_IS_CHAN_RADAR(vap->iv_des_chan)) {
 				chan = adhoc_pick_channel(ss, 0);
 			} else
@@ -1936,7 +1936,7 @@ notfound:
 			 * a meshid; start one up.  If no channel was
 			 * specified, try to select a channel.
 			 */
-			if (vap->iv_des_chan == IEEE80211_CHAN_ANYC ||
+			if (IEEE80211_IS_CHAN_ANYC(vap->iv_des_chan) ||
 			    IEEE80211_IS_CHAN_RADAR(vap->iv_des_chan)) {
 				struct ieee80211com *ic = vap->iv_ic;
 
