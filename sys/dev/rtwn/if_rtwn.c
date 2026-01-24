@@ -1138,7 +1138,7 @@ rtwn_newstate(struct ieee80211vap *vap, enum ieee80211_state nstate, int arg)
 	RTWN_DPRINTF(sc, RTWN_DEBUG_STATE, "%s -> %s\n",
 	    ieee80211_state_name[ostate], ieee80211_state_name[nstate]);
 
-	if (vap->iv_bss->ni_chan == IEEE80211_CHAN_ANYC &&
+	if (IEEE80211_IS_CHAN_ANYC(vap->iv_bss->ni_chan) &&
 	    ostate == IEEE80211_S_INIT && nstate == IEEE80211_S_RUN) {
 		/* need to call iv_newstate() firstly */
 		error = uvp->newstate(vap, nstate, arg);
@@ -1315,7 +1315,7 @@ rtwn_calc_basicrates(struct rtwn_softc *sc)
 		basicrates |= (htrates << RTWN_RIDX_HT_MCS_SHIFT);
 
 		/* Filter out undesired high rates */
-		if (ni->ni_chan != IEEE80211_CHAN_ANYC &&
+		if (!IEEE80211_IS_CHAN_ANYC(ni->ni_chan) &&
 		    IEEE80211_IS_CHAN_5GHZ(ni->ni_chan))
 			basicrates &= R92C_RRSR_RATE_MASK_5GHZ;
 		else
@@ -1348,8 +1348,8 @@ rtwn_run(struct rtwn_softc *sc, struct ieee80211vap *vap)
 	error = 0;
 	ni = ieee80211_ref_node(vap->iv_bss);
 
-	if (ic->ic_bsschan == IEEE80211_CHAN_ANYC ||
-	    ni->ni_chan == IEEE80211_CHAN_ANYC) {
+	if (IEEE80211_IS_CHAN_ANYC(ic->ic_bsschan) ||
+	    IEEE80211_IS_CHAN_ANYC(ni->ni_chan)) {
 		error = EINVAL;
 		goto fail;
 	}
