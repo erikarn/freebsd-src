@@ -123,7 +123,9 @@ uintptr_t moea64_get_unique_vsid(void);
  */
 
 #define PV_LOCK_COUNT	MAXCPU
-static struct mtx_padalign pv_lock[PV_LOCK_COUNT];
+#define PV_LOCK_STRLEN 16
+static struct rwlock __exclusive_cache_line pv_lock[PV_LOCK_COUNT];
+char pv_lock_str[PV_LOCK_COUNT][PV_LOCK_STRLEN];
 
 #define	PV_LOCK_SHIFT	21
 #define	pa_index(pa)	((pa) >> PV_LOCK_SHIFT)
@@ -138,11 +140,17 @@ static struct mtx_padalign pv_lock[PV_LOCK_COUNT];
 #else
 #define PV_LOCK_IDX(pa)	(pa_index(pa) % PV_LOCK_COUNT)
 #endif
-#define PV_LOCKPTR(pa)	((struct mtx *)(&pv_lock[PV_LOCK_IDX(pa)]))
-#define PV_LOCK(pa)		mtx_lock(PV_LOCKPTR(pa))
-#define PV_UNLOCK(pa)		mtx_unlock(PV_LOCKPTR(pa))
-#define PV_LOCKASSERT(pa) 	mtx_assert(PV_LOCKPTR(pa), MA_OWNED)
-#define PV_PAGE_LOCK(m)		PV_LOCK(VM_PAGE_TO_PHYS(m))
+#define PV_LOCKPTR(pa)	((struct rwlock *)(&pv_lock[PV_LOCK_IDX(pa)]))
+
+#define PV_WR_LOCK(pa)		rw_wlock(PV_LOCKPTR(pa))
+#define PV_RD_LOCK(pa)		rw_rlock(PV_LOCKPTR(pa))
+#define PV_UNLOCK(pa)		rw_unlock(PV_LOCKPTR(pa))
+#define PV_LOCKASSERT(pa) 	rw_assert(PV_LOCKPTR(pa), RA_LOCKED)
+#define PV_LOCK_RD_ASSERT(pa) 	rw_assert(PV_LOCKPTR(pa), RA_RLOCKED)
+#define PV_LOCK_WR_ASSERT(pa) 	rw_assert(PV_LOCKPTR(pa), RA_WLOCKED)
+
+#define PV_PAGE_WR_LOCK(m)	PV_WR_LOCK(VM_PAGE_TO_PHYS(m))
+#define PV_PAGE_RD_LOCK(m)	PV_RD_LOCK(VM_PAGE_TO_PHYS(m))
 #define PV_PAGE_UNLOCK(m)	PV_UNLOCK(VM_PAGE_TO_PHYS(m))
 #define PV_PAGE_LOCKASSERT(m)	PV_LOCKASSERT(VM_PAGE_TO_PHYS(m))
 
@@ -151,19 +159,35 @@ static struct mtx_padalign pv_lock[PV_LOCK_COUNT];
 #define	PV_LOCK_SIZE		(1 << PV_LOCK_SHIFT)
 
 static __always_inline void
-moea64_sp_pv_lock(vm_paddr_t pa)
+moea64_sp_pv_rd_lock(vm_paddr_t pa)
 {
 	vm_paddr_t pa_end;
 
 	/* Note: breaking when pa_end is reached to avoid overflows */
 	pa_end = pa + (HPT_SP_SIZE - PV_LOCK_SIZE);
 	for (;;) {
-		mtx_lock_flags(PV_LOCKPTR(pa), MTX_DUPOK);
+		rw_rlock(PV_LOCKPTR(pa));
 		if (pa == pa_end)
 			break;
 		pa += PV_LOCK_SIZE;
 	}
 }
+
+static __always_inline void
+moea64_sp_pv_wr_lock(vm_paddr_t pa)
+{
+	vm_paddr_t pa_end;
+
+	/* Note: breaking when pa_end is reached to avoid overflows */
+	pa_end = pa + (HPT_SP_SIZE - PV_LOCK_SIZE);
+	for (;;) {
+		rw_wlock(PV_LOCKPTR(pa));
+		if (pa == pa_end)
+			break;
+		pa += PV_LOCK_SIZE;
+	}
+}
+
 
 static __always_inline void
 moea64_sp_pv_unlock(vm_paddr_t pa)
@@ -174,18 +198,23 @@ moea64_sp_pv_unlock(vm_paddr_t pa)
 	pa_end = pa;
 	pa += HPT_SP_SIZE - PV_LOCK_SIZE;
 	for (;;) {
-		mtx_unlock_flags(PV_LOCKPTR(pa), MTX_DUPOK);
+		rw_unlock(PV_LOCKPTR(pa));
 		if (pa == pa_end)
 			break;
 		pa -= PV_LOCK_SIZE;
 	}
 }
 
-#define	SP_PV_LOCK_ALIGNED(pa)		moea64_sp_pv_lock(pa)
+#define	SP_PV_LOCK_WR_ALIGNED(pa)	moea64_sp_pv_wr_lock(pa)
+#define	SP_PV_LOCK_RD_ALIGNED(pa)	moea64_sp_pv_rd_lock(pa)
 #define	SP_PV_UNLOCK_ALIGNED(pa)	moea64_sp_pv_unlock(pa)
-#define	SP_PV_LOCK(pa)			moea64_sp_pv_lock((pa) & ~HPT_SP_MASK)
+
+#define	SP_PV_WR_LOCK(pa)		moea64_sp_pv_wr_lock((pa) & ~HPT_SP_MASK)
+#define	SP_PV_RD_LOCK(pa)		moea64_sp_pv_rd_lock((pa) & ~HPT_SP_MASK)
 #define	SP_PV_UNLOCK(pa)		moea64_sp_pv_unlock((pa) & ~HPT_SP_MASK)
-#define	SP_PV_PAGE_LOCK(m)		SP_PV_LOCK(VM_PAGE_TO_PHYS(m))
+
+#define	SP_PV_PAGE_WR_LOCK(m)		SP_PV_WR_LOCK(VM_PAGE_TO_PHYS(m))
+#define	SP_PV_PAGE_RD_LOCK(m)		SP_PV_RD_LOCK(VM_PAGE_TO_PHYS(m))
 #define	SP_PV_PAGE_UNLOCK(m)		SP_PV_UNLOCK(VM_PAGE_TO_PHYS(m))
 
 struct ofw_map {
@@ -537,11 +566,17 @@ moea64_pvo_paddr(struct pvo_entry *pvo)
 	return (pa);
 }
 
+/*
+ * vm_page -> pvo
+ *
+ * TODO: add a flag to describe if it's read/write, since some
+ * callers are read and some are write.
+ */
 static struct pvo_head *
 vm_page_to_pvoh(vm_page_t m)
 {
 
-	mtx_assert(PV_LOCKPTR(VM_PAGE_TO_PHYS(m)), MA_OWNED);
+	rw_assert(PV_LOCKPTR(VM_PAGE_TO_PHYS(m)), RA_LOCKED);
 	return (&m->md.mdpg_pvoh);
 }
 
@@ -1068,8 +1103,10 @@ moea64_mid_bootstrap(vm_offset_t kernelstart, vm_offset_t kernelend)
 	 * Initialize SLB table lock and page locks
 	 */
 	mtx_init(&moea64_slb_mutex, "SLB table", NULL, MTX_DEF);
-	for (i = 0; i < PV_LOCK_COUNT; i++)
-		mtx_init(&pv_lock[i], "page pv", NULL, MTX_DEF);
+	for (i = 0; i < PV_LOCK_COUNT; i++) {
+		snprintf(pv_lock_str[i], PV_LOCK_STRLEN, "page pv %d", i);
+		rw_init(&pv_lock[i], pv_lock_str[i]);
+	}
 
 	/*
 	 * Initialise the bootstrap pvo pool.
@@ -1685,7 +1722,7 @@ moea64_enter(pmap_t pmap, vm_offset_t va, vm_page_t m,
 		pvo->pvo_vaddr |= PVO_MANAGED;
 	}
 
-	PV_LOCK(pa);
+	PV_WR_LOCK(pa);
 	PMAP_LOCK(pmap);
 	if (pvo->pvo_pmap == NULL)
 		init_pvo_entry(pvo, pmap, va);
@@ -2069,7 +2106,7 @@ moea64_remove_write(vm_page_t m)
 		return;
 
 	powerpc_sync();
-	PV_PAGE_LOCK(m);
+	PV_PAGE_WR_LOCK(m);
 	refchg = 0;
 	LIST_FOREACH(pvo, vm_page_to_pvoh(m), pvo_vlink) {
 		pmap = pvo->pvo_pmap;
@@ -2142,7 +2179,7 @@ moea64_page_set_memattr(vm_page_t m, vm_memattr_t ma)
 
 	lo = moea64_calc_wimg(VM_PAGE_TO_PHYS(m), ma);
 
-	PV_PAGE_LOCK(m);
+	PV_PAGE_WR_LOCK(m);
 	LIST_FOREACH(pvo, vm_page_to_pvoh(m), pvo_vlink) {
 		pmap = pvo->pvo_pmap;
 		PMAP_LOCK(pmap);
@@ -2401,7 +2438,7 @@ moea64_page_exists_quick(pmap_t pmap, vm_page_t m)
 	    ("moea64_page_exists_quick: page %p is not managed", m));
 	loops = 0;
 	rv = false;
-	PV_PAGE_LOCK(m);
+	PV_PAGE_RD_LOCK(m);
 	LIST_FOREACH(pvo, vm_page_to_pvoh(m), pvo_vlink) {
 		if (!(pvo->pvo_vaddr & PVO_DEAD) && pvo->pvo_pmap == pmap) {
 			rv = true;
@@ -2436,7 +2473,7 @@ moea64_page_wired_mappings(vm_page_t m)
 	count = 0;
 	if ((m->oflags & VPO_UNMANAGED) != 0)
 		return (count);
-	PV_PAGE_LOCK(m);
+	PV_PAGE_RD_LOCK(m);
 	LIST_FOREACH(pvo, vm_page_to_pvoh(m), pvo_vlink)
 		if ((pvo->pvo_vaddr & (PVO_DEAD | PVO_WIRED)) == PVO_WIRED)
 			count++;
@@ -2806,7 +2843,7 @@ moea64_remove_all(vm_page_t m)
 
 	LIST_INIT(&freequeue);
 
-	PV_PAGE_LOCK(m);
+	PV_PAGE_WR_LOCK(m);
 	LIST_FOREACH_SAFE(pvo, vm_page_to_pvoh(m), pvo_vlink, next_pvo) {
 		pmap = pvo->pvo_pmap;
 		PMAP_LOCK(pmap);
@@ -3029,7 +3066,7 @@ moea64_pvo_remove_from_page(struct pvo_entry *pvo)
 	if (pvo->pvo_vaddr & PVO_MANAGED)
 		pg = PHYS_TO_VM_PAGE(PVO_PADDR(pvo));
 
-	PV_LOCK(PVO_PADDR(pvo));
+	PV_WR_LOCK(PVO_PADDR(pvo));
 	moea64_pvo_remove_from_page_locked(pvo, pg);
 	PV_UNLOCK(PVO_PADDR(pvo));
 }
@@ -3070,7 +3107,8 @@ moea64_query_bit(vm_page_t m, uint64_t ptebit)
 	 */
 	rv = false;
 	powerpc_sync();
-	PV_PAGE_LOCK(m);
+	/* TODO: is this OK as a read lock? */
+	PV_PAGE_RD_LOCK(m);
 	LIST_FOREACH(pvo, vm_page_to_pvoh(m), pvo_vlink) {
 		if (PVO_IS_SP(pvo)) {
 			ret = moea64_sp_query(pvo, ptebit);
@@ -3130,7 +3168,7 @@ moea64_clear_bit(vm_page_t m, u_int64_t ptebit)
 	 * For each pvo entry, clear the pte's ptebit.
 	 */
 	count = 0;
-	PV_PAGE_LOCK(m);
+	PV_PAGE_WR_LOCK(m);
 	LIST_FOREACH(pvo, vm_page_to_pvoh(m), pvo_vlink) {
 		if (PVO_IS_SP(pvo)) {
 			if ((ret = moea64_sp_clear(pvo, m, ptebit)) != -1) {
@@ -3736,7 +3774,7 @@ moea64_sp_enter(pmap_t pmap, vm_offset_t va, vm_page_t m,
 		}
 	}
 
-	SP_PV_LOCK_ALIGNED(spa);
+	SP_PV_LOCK_WR_ALIGNED(spa);
 	PMAP_LOCK(pmap);
 
 	/* Note: moea64_remove_locked() also clears cached REF/CHG bits. */
@@ -4172,11 +4210,17 @@ moea64_sp_query_locked(struct pvo_entry *pvo, uint64_t ptebit)
 	return (refchg);
 }
 
+/*
+ * TODO: this assumes the page is locked, but I'm not sure
+ * if this can be a read lock.
+ */
 static int64_t
 moea64_sp_query(struct pvo_entry *pvo, uint64_t ptebit)
 {
 	int64_t refchg;
 	pmap_t pmap;
+
+	/* TODO: lock assert? */
 
 	pmap = pvo->pvo_pmap;
 	PMAP_LOCK(pmap);
