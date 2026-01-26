@@ -2791,6 +2791,7 @@ moea64_remove_pages(pmap_t pm)
 {
 	struct pvo_entry *pvo, *tpvo;
 	struct pvo_dlist tofree;
+	struct rwlock *lock = NULL;
 
 	SLIST_INIT(&tofree);
 
@@ -2809,13 +2810,15 @@ moea64_remove_pages(pmap_t pm)
 	}
 	PMAP_UNLOCK(pm);
 
-	/* TODO: lock optimisation! */
 	while (!SLIST_EMPTY(&tofree)) {
 		pvo = SLIST_FIRST(&tofree);
 		SLIST_REMOVE_HEAD(&tofree, pvo_dlink);
-		moea64_pvo_remove_from_page(pvo);
+		moea64_pvo_remove_from_page_single_locked(pvo, &lock);
 		free_pvo_entry(pvo);
 	}
+
+	if (lock != NULL)
+		rw_unlock(lock);
 }
 
 static void
@@ -2859,6 +2862,7 @@ moea64_remove(pmap_t pm, vm_offset_t sva, vm_offset_t eva)
 {
 	struct pvo_entry *pvo;
 	struct pvo_dlist tofree;
+	struct rwlock *lock = NULL;
 
 	/*
 	 * Perform an unsynchronized read.  This is, however, safe.
@@ -2871,13 +2875,15 @@ moea64_remove(pmap_t pm, vm_offset_t sva, vm_offset_t eva)
 	moea64_remove_locked(pm, sva, eva, &tofree);
 	PMAP_UNLOCK(pm);
 
-	/* TODO: lock optimisation! */
 	while (!SLIST_EMPTY(&tofree)) {
 		pvo = SLIST_FIRST(&tofree);
 		SLIST_REMOVE_HEAD(&tofree, pvo_dlink);
-		moea64_pvo_remove_from_page(pvo);
+		moea64_pvo_remove_from_page_single_locked(pvo, &lock);
 		free_pvo_entry(pvo);
 	}
+
+	if (lock != NULL)
+		rw_unlock(lock);
 }
 
 /*
@@ -3714,15 +3720,18 @@ static __inline void
 moea64_pvo_cleanup(struct pvo_dlist *tofree)
 {
 	struct pvo_entry *pvo;
+	struct rwlock *lock = NULL;
 
 	/* clean up */
 	while (!SLIST_EMPTY(tofree)) {
 		pvo = SLIST_FIRST(tofree);
 		SLIST_REMOVE_HEAD(tofree, pvo_dlink);
 		if (pvo->pvo_vaddr & PVO_DEAD)
-			moea64_pvo_remove_from_page(pvo);
+			moea64_pvo_remove_from_page_single_locked(pvo, &lock);
 		free_pvo_entry(pvo);
 	}
+	if (lock != NULL)
+		rw_unlock(lock);
 }
 
 static __inline uint16_t
