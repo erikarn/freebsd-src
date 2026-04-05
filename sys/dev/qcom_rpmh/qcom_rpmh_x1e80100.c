@@ -151,12 +151,19 @@ qcom_rpmh_x1e80100_init(struct qcom_rpmh_clk_softc *sc)
 	(void) bcm_clks;
 	device_printf(sc->dev, "%s: called\n", __func__);
 
+	sc->clkdom = clkdom_create(sc->dev);
+
 	for (i = 0; i < nitems(rpmh_clks); i++) {
+		device_printf(sc->dev, "%s: registering clock %i (%s)\n",
+		    __func__, i, rpmh_clks[i].clkdef.name);
 		rv = qcom_clk_rpmh_register(sc->clkdom, rpmh_clks + i);
 		if (rv != 0) {
 			printf("%s: register (%s) failed - %d\n", __func__,
 			    rpmh_clks[i].clkdef.name, rv);
 		}
 	}
+
+	clkdom_finit(sc->clkdom);
+
 	return (0);
 }
