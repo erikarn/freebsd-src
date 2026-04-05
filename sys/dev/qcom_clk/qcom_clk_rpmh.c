@@ -108,6 +108,7 @@ qcom_clk_rpmh_recalc(struct clknode *clk, uint64_t *freq)
 
 	printf("%s: TODO: device=%s, res=%s\n", __func__,
 	    device_get_nameunit(clknode_get_device(sc->clknode)), sc->res_name);
+	*freq = 0;
 
 	return (0);
 }
