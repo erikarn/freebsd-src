@@ -33,7 +33,6 @@ struct qcom_rpmh_softc {
 	struct simplebus_softc	simplebus_sc;
 	device_t		dev;
 	struct mtx		mtx;
-	struct clkdom		*clkdom;
 };
 
 #endif	/* __QCOM_RPMH_VAR_H__ */

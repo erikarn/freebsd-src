@@ -66,6 +66,8 @@ static struct qcom_rpmh_clk_chipset_list_entry qcom_rpmh_clk_chipset_list[] = {
 	{ NULL, NULL, 0 },
 };
 
+#define OFW_COMPAT_LEN 255
+
 static int
 qcom_rpmh_clk_modevent(module_t mod, int type, void *unused)
 {
@@ -89,10 +91,23 @@ qcom_rpmh_clk_modevent(module_t mod, int type, void *unused)
 static int
 qcom_rpmh_clk_probe(device_t dev)
 {
+	char compat[OFW_COMPAT_LEN];
 	struct qcom_rpmh_clk_softc *sc;
+	phandle_t node;
 	int i;
 
 	sc = device_get_softc(dev);
+
+	if ((node = ofw_bus_get_node(dev)) == -1)
+		return (ENXIO);
+	bzero(compat, sizeof(compat));
+	if (OF_getprop(node, "compatible", compat, OFW_COMPAT_LEN) < 0)
+		return (ENXIO);
+
+#if 0
+	device_printf(dev, "%s: called; compatible=%s; status_okay=%d\n",
+	    __func__, compat, ofw_bus_status_okay(dev));
+#endif
 
 	if (! ofw_bus_status_okay(dev))
 		return (ENXIO);
@@ -189,7 +204,5 @@ static driver_t qcom_rpmh_clk_driver = {
 };
 
 EARLY_DRIVER_MODULE(qcom_rpmh_clk, simplebus, qcom_rpmh_clk_driver,
-    qcom_rpmh_clk_modevent, NULL, BUS_PASS_CPU + BUS_PASS_ORDER_EARLY + 1);
-EARLY_DRIVER_MODULE(qcom_rpmh_clk, ofwbus, qcom_rpmh_clk_driver,
-    qcom_rpmh_clk_modevent, NULL, BUS_PASS_CPU + BUS_PASS_ORDER_EARLY + 1);
+    qcom_rpmh_clk_modevent, NULL, BUS_PASS_BUS + BUS_PASS_ORDER_EARLY + 1);
 MODULE_VERSION(qcom_rpmh_clk, 1);
