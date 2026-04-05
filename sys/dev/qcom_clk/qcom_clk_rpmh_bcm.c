@@ -159,6 +159,7 @@ qcom_clk_rpmh_bcm_init(struct clknode *clk, device_t dev)
 	 */
 #endif
 
+	clknode_init_parent_idx(clk, 0);
 	printf("%s: TODO: device=%s, res=%s\n", __func__,
 	    device_get_nameunit(clknode_get_device(sc->clknode)), sc->res_name);
 	return (0);
