@@ -114,6 +114,7 @@ qcom_rpmh_attach(device_t dev)
 	node = ofw_bus_get_node(dev);
 	simplebus_init(dev, node);
 	for (child = OF_child(node); child > 0; child = OF_peer(child)) {
+		device_printf(dev, "%s: added child\n", __func__);
 		simplebus_add_device(dev, child, 0, NULL, -1, NULL);
 	}
 	bus_attach_children(dev);
@@ -151,14 +152,21 @@ static device_method_t qcom_rpmh_methods[] = {
 	DEVMETHOD_END
 };
 
+#if 0
 static driver_t qcom_rpmh_driver = {
 	"qcom_rpmh",
 	qcom_rpmh_methods,
 	sizeof(struct qcom_rpmh_softc)
 };
+#endif
+
+DEFINE_CLASS_1(qcom_rpmh, qcom_rpmh_driver, qcom_rpmh_methods,
+    sizeof(struct qcom_rpmh_softc), simplebus_driver);
 
 EARLY_DRIVER_MODULE(qcom_rpmh, simplebus, qcom_rpmh_driver,
-    qcom_rpmh_modevent, NULL, BUS_PASS_BUS + BUS_PASS_ORDER_MIDDLE);
+    qcom_rpmh_modevent, NULL, BUS_PASS_BUS + BUS_PASS_ORDER_EARLY);
+#if 0
 EARLY_DRIVER_MODULE(qcom_rpmh, ofwbus, qcom_rpmh_driver,
-    qcom_rpmh_modevent, NULL, BUS_PASS_BUS + BUS_PASS_ORDER_MIDDLE);
+    qcom_rpmh_modevent, NULL, BUS_PASS_BUS + BUS_PASS_ORDER_EARLY);
+#endif
 MODULE_VERSION(qcom_rpmh, 1);
