@@ -272,6 +272,7 @@ qcom_cmd_db_dump(struct qcom_cmd_db_softc *sc)
 			ent = qcom_cmd_db_get_rsc_entry(sc, i, j);
 			if (ent == NULL)
 				continue;
+#if 0
 			DPRINTF(sc, "  -> [%d]: id: %.*s, resource addr=0x%x, aux data offset=0x%x, len=%d\n",
 			    j,
 			    (int) strnlen(ent->id, QCOM_CMD_DB_ENTRY_HDR_ID_SIZE),
@@ -279,8 +280,72 @@ qcom_cmd_db_dump(struct qcom_cmd_db_softc *sc)
 			    le32toh(ent->addr),
 			    le16toh(ent->offset),
 			    le16toh(ent->len));
+#endif
 		}
 	}
+}
+
+/**
+ * Iterate over the command db looking for a specific match on 'id'.
+ *
+ * If found, populates the entry and rsc headers and returns true.
+ * Otherwise, return false.
+ *
+ * @param sc driver softc
+ * @param id resource id string
+ * @param ret_rsc pointer store an rsc_hdr pointer at upon success
+ * @param ret_ent pointer store an entry_hdr pointer at upon success
+ * @returns true if the entry was found, false otherwise
+ */
+static const bool
+qcom_cmd_db_lookup_entry(struct qcom_cmd_db_softc *sc,
+    const char *id,
+    const struct qcom_cmd_db_rsc_hdr **ret_rsc,
+    const struct qcom_cmd_db_entry_hdr **ret_ent)
+{
+	struct qcom_cmd_db_hdr *hdr;
+	struct qcom_cmd_db_rsc_hdr *rsc;
+	int i, j;
+	int id_len;
+
+	/* XXX TODO: mutex? */
+
+	if (!sc->sc_is_setup)
+		return (false);
+
+	id_len = strlen(id);
+
+	hdr = qcom_cmd_db.sc_reg_vmaddr;
+	for (i = 0; i < QCOM_CMD_DB_MAX_SLAVE_ID; i++) {
+		const struct qcom_cmd_db_entry_hdr *ent;
+		rsc = &hdr->rsc_header[i];
+		if (rsc->slave_id == QCOM_CMD_DB_HW_TYPE_INVALID)
+			continue;
+		for (j = 0; j < le16toh(rsc->count); j++) {
+			ent = qcom_cmd_db_get_rsc_entry(sc, i, j);
+			if (ent == NULL)
+				continue;
+
+			/*
+			 * First validate the lengths match, so a straight
+			 * memcmp can be done.
+			 */
+			if (strnlen(ent->id, QCOM_CMD_DB_ENTRY_HDR_ID_SIZE) != id_len)
+				continue;
+			if (memcmp(ent->id, id, id_len) != 0)
+				continue;
+
+			/* We found the match, return the entry */
+			if (ret_rsc)
+				*ret_rsc = rsc;
+			if (ret_ent)
+				*ret_ent = ent;
+			return (true);
+		}
+	}
+
+	/* Didn't find anything */
+	return (false);
 }
 
 /**
@@ -289,16 +354,47 @@ qcom_cmd_db_dump(struct qcom_cmd_db_softc *sc)
 bool
 qcom_cmd_db_lookup_addr_by_id(const char *id, uint32_t *addr)
 {
-	return (false);
+	const struct qcom_cmd_db_entry_hdr *ent;
+	struct qcom_cmd_db_softc *sc = &qcom_cmd_db;
+
+	if (!sc->sc_is_setup)
+		return (false);
+
+	if (qcom_cmd_db_lookup_entry(sc, id, NULL, &ent) == false)
+		return (false);
+
+	if (addr)
+		*addr = le32toh(ent->addr);
+	return (true);
 }
 
 /**
  * Lookup the auxiliary data and length by id string.
  */
 bool
-qcom_cmd_db_lookup_aux_data_by_id(const char *id, void *addr, uint16_t *len)
+qcom_cmd_db_lookup_aux_data_by_id(const char *id, const void **addr, uint16_t *len)
 {
-	return (false);
+	struct qcom_cmd_db_softc *sc = &qcom_cmd_db;
+	const struct qcom_cmd_db_entry_hdr *ent;
+	const struct qcom_cmd_db_rsc_hdr *rsc;
+	const char *paddr;
+
+	if (!sc->sc_is_setup)
+		return (false);
+
+	if (qcom_cmd_db_lookup_entry(sc, id, &rsc, &ent) == false)
+		return (false);
+
+	if (len)
+		*len = le16toh(ent->len);
+
+	if (addr) {
+		paddr = (const char *) qcom_cmd_db.sc_reg_vmaddr;
+		paddr += le16toh(rsc->data_offset);
+		paddr += le16toh(ent->offset);
+		*addr = (const void *) paddr;
+	}
+	return (true);
 }
 
 static void

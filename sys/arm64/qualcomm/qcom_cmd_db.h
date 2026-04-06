@@ -30,7 +30,7 @@
 
 extern	bool qcom_cmd_db_lookup_addr_by_id(const char *id, uint32_t *addr);
 extern	bool qcom_cmd_db_lookup_aux_data_by_id(const char *id,
-	    void *addr, uint16_t *len);
+	    const void **addr, uint16_t *len);
 
 #endif	/* __QCOM_CMD_DB_H__ */
 
