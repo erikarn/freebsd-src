@@ -66,24 +66,47 @@
  * but with the same driver/naming here.  Let's hope that doesn't
  * happen.
  */
-static struct ofw_compat_data compat_data[] = {
-	{ "qcom,tcsr",			1 },
-	{ "ipq,tcsr",			1 },
-	{ NULL,				0 }
+
+struct qcom_tcsr_chipset_list {
+	qcom_tcsr_chipset_t id;
+	const char *ofw_str;
+	const char *desc_str;
+	int (*attach_func)(struct qcom_tcsr_softc *);
+};
+
+static struct qcom_tcsr_chipset_list qcom_tcsr_chipsets[] = {
+	{ QCOM_TCSR_CHIPSET_IPQ4018, "qcom,tcsr",
+	    "Qualcomm IP401x Core Top Control and Status Driver",
+	    qcom_tcsr_init_ipq4018 },
+	{ QCOM_TCSR_CHIPSET_IPQ4018, "ipq,tcsr",
+	    "Qualcomm IP401x Core Top Control and Status Driver",
+	    qcom_tcsr_init_ipq4018 },
+	{ QCOM_TCSR_CHIPSET_X1E80100, "qcom,x1e80100-tcsr",
+	    "Qualcomm X1E80100 Core Top Control, Clock and Status Driver",
+	    qcom_tcsr_init_x1e80100 },
+	{ 0, NULL, NULL, NULL },
 };
 
 static int
 qcom_tcsr_probe(device_t dev)
 {
+	struct qcom_tcsr_softc *sc = device_get_softc(dev);
+	struct qcom_tcsr_chipset_list *ql;
+	int i;
 
 	if (!ofw_bus_status_okay(dev))
 		return (ENXIO);
 
-	if (!ofw_bus_search_compatible(dev, compat_data)->ocd_data)
-		return (ENXIO);
-
-	device_set_desc(dev, "Qualcomm Core Top Control and Status Driver");
-	return (BUS_PROBE_DEFAULT);
+	for (i = 0; qcom_tcsr_chipsets[i].id != 0; i++) {
+		ql = &qcom_tcsr_chipsets[i];
+		if (ofw_bus_is_compatible(dev, ql->ofw_str) == 1) {
+			sc->sc_chipset = ql->id;
+			sc->sc_attach_func = ql->attach_func;
+			device_set_desc(dev, ql->desc_str);
+			return (BUS_PROBE_DEFAULT);
+		}
+	}
+	return (ENXIO);
 }
 
 static int
@@ -91,15 +114,8 @@ qcom_tcsr_attach(device_t dev)
 {
 	struct qcom_tcsr_softc *sc = device_get_softc(dev);
 	int rid, ret;
-	uint32_t val;
 
 	sc->sc_dev = dev;
-
-	/*
-	 * Hardware version is stored in the ofw_compat_data table.
-	 */
-	sc->hw_version =
-	    ofw_bus_search_compatible(dev, compat_data)->ocd_data;
 
 	mtx_init(&sc->sc_mtx, device_get_nameunit(dev), NULL, MTX_DEF);
 
@@ -112,81 +128,9 @@ qcom_tcsr_attach(device_t dev)
 		goto error;
 	}
 
-	/*
-	 * Parse out the open firmware entries to see which particular
-	 * configurations we need to set here.
-	 */
-
-	/*
-	 * USB control select.
-	 *
-	 * For linux-msm on the IPQ401x, it actually calls into the SCM
-	 * to make the change.  OpenWRT just does a register write.
-	 * We'll do the register write for now.
-	 */
-	if (OF_getencprop(ofw_bus_get_node(dev), "qcom,usb-ctrl-select",
-	    &val, sizeof(val)) > 0) {
-		if (bootverbose)
-			device_printf(sc->sc_dev,
-			    "USB control select (val 0x%x)\n",
-			    val);
-		QCOM_TCSR_WRITE_4(sc, QCOM_TCSR_USB_PORT_SEL, val);
-	}
-
-	/*
-	 * USB high speed phy mode select.
-	 */
-	if (OF_getencprop(ofw_bus_get_node(dev), "qcom,usb-hsphy-mode-select",
-	    &val, sizeof(val)) > 0) {
-		if (bootverbose)
-			device_printf(sc->sc_dev,
-			    "USB high speed PHY mode select (val 0x%x)\n",
-			    val);
-		QCOM_TCSR_WRITE_4(sc, QCOM_TCSR_USB_HSPHY_CONFIG, val);
-	}
-
-	/*
-	 * Ethernet switch subsystem interface type select.
-	 */
-	if (OF_getencprop(ofw_bus_get_node(dev), "qcom,ess-interface-select",
-	    &val, sizeof(val)) > 0) {
-		uint32_t reg;
-
-		if (bootverbose)
-			device_printf(sc->sc_dev,
-			    "ESS external interface select (val 0x%x)\n",
-			    val);
-		reg = QCOM_TCSR_READ_4(sc, QCOM_TCSR_ESS_INTERFACE_SEL_OFFSET);
-		reg &= ~QCOM_TCSR_ESS_INTERFACE_SEL_MASK;
-		reg |= (val & QCOM_TCSR_ESS_INTERFACE_SEL_MASK);
-		QCOM_TCSR_WRITE_4(sc, QCOM_TCSR_ESS_INTERFACE_SEL_OFFSET, reg);
-	}
-
-	/*
-	 * WiFi GLB select.
-	 */
-	if (OF_getencprop(ofw_bus_get_node(dev), "qcom,wifi_glb_cfg",
-	    &val, sizeof(val)) > 0) {
-		if (bootverbose)
-			device_printf(sc->sc_dev,
-			    "WIFI GLB select (val 0x%x)\n",
-			    val);
-		QCOM_TCSR_WRITE_4(sc, QCOM_TCSR_WIFI0_GLB_CFG_OFFSET, val);
-		QCOM_TCSR_WRITE_4(sc, QCOM_TCSR_WIFI1_GLB_CFG_OFFSET, val);
-	}
-
-	/*
-	 * WiFi NOC interconnect memory type.
-	 */
-	if (OF_getencprop(ofw_bus_get_node(dev),
-	    "qcom,wifi_noc_memtype_m0_m2",
-	    &val, sizeof(val)) > 0) {
-		if (bootverbose)
-			device_printf(sc->sc_dev,
-			    "WiFi NOC memory type (val 0x%x)\n",
-			    val);
-		QCOM_TCSR_WRITE_4(sc, QCOM_TCSR_PNOC_SNOC_MEMTYPE_M0_M2, val);
-	}
+	ret = sc->sc_attach_func(sc);
+	if (ret != 0)
+		goto error;
 
 	return (0);
 
@@ -231,4 +175,4 @@ static driver_t qcom_tcsr_driver = {
  */
 EARLY_DRIVER_MODULE(qcom_tcsr, simplebus, qcom_tcsr_driver, 0, 0,
     BUS_PASS_CPU + BUS_PASS_ORDER_EARLY);
-SIMPLEBUS_PNP_INFO(compat_data);
+MODULE_VERSION(qcom_tcsr, 1);
