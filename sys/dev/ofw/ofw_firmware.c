@@ -166,5 +166,5 @@ DEFINE_CLASS_1(ofw_firmware, ofw_firmware_driver, ofw_firmware_methods,
   sizeof(struct ofw_firmware_softc), simplebus_driver);
 
 EARLY_DRIVER_MODULE(ofw_firmware, simplebus, ofw_firmware_driver, 0, 0,
-    BUS_PASS_BUS + BUS_PASS_ORDER_MIDDLE);
+    BUS_PASS_BUS + BUS_PASS_ORDER_MIDDLE - 2);
 MODULE_VERSION(ofw_firmware, 1);
