@@ -54,6 +54,8 @@
 #include <dev/qcom_clk/qcom_clk_rpmh.h>
 #include <dev/qcom_clk/qcom_clk_rpmh_bcm.h>
 
+#include <dev/qcom_clk/qcom_clk_nodeinst.h>
+
 #include "clkdev_if.h"
 
 #include "qcom_rpmh_clk_var.h"
@@ -120,15 +122,6 @@
 	.div = _div,							\
 }
 
-#define	F_RPMH_LINK(_name)						\
-{									\
-	.clkdef.id = 0,							\
-	.clkdef.name = _name,						\
-	.clkdef.parent_names = NULL,					\
-	.clkdef.parent_cnt = 0,						\
-	.clkdef.flags = CLK_NODE_STATIC_STRINGS,			\
-}
-
 /* TODO: this isn't technically true; need to do the x1e specific ones once i know this compiles */
 /* double TODO: BCM clocks don't exist on x1e */
 static struct qcom_clk_rpmh_bcm_def bcm_clks[] = {
@@ -144,7 +137,7 @@ static struct qcom_clk_rpmh_bcm_def bcm_clks[] = {
 };
 
 static struct clk_link_def rpmh_link_clks[] = {
-	F_RPMH_LINK("xo-board"),
+	F_LINK(0, "xo-board"),
 };
 
 /*
