@@ -152,8 +152,10 @@ static struct qcom_clk_rpmh_def rpmh_clks[] = {
 	 * registering them as divide by 2 clocks, but the device tree
 	 * is ALSO defining them as divide by 2, so will it be div-4 ?
 	 */
-	F_RPMH_NORMAL(RPMH_CXO_CLK, "bi_tcxo_div2", "xo.lvl", "bi_tcxo_ao_div2", QCOM_CLK_RPMH_ARC_EN_OFFSET, 0x3, 2),
-	F_RPMH_AO(RPMH_CXO_CLK_A, "bi_tcxo_ao_div2", "xo.lvl", "bi_tcxo_div2", QCOM_CLK_RPMH_ARC_EN_OFFSET, 0x3, 2),
+	F_RPMH_NORMAL(RPMH_CXO_CLK, "bi_tcxo_div2", "bi_tcxo_ao_div2",
+	    "xo.lvl", QCOM_CLK_RPMH_ARC_EN_OFFSET, 0x3, 2),
+	F_RPMH_AO(RPMH_CXO_CLK_A, "bi_tcxo_ao_div2", "bi_tcxo_div2",
+	    "xo.lvl", QCOM_CLK_RPMH_ARC_EN_OFFSET, 0x3, 2),
 
 	/* RPMH_LN_BB_CLK1 / A */
 	/* RPMH_LN_BB_CLK2 / A */
