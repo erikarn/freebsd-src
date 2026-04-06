@@ -82,4 +82,18 @@ struct qcom_cmd_db_hdr {
 	/* Data follows */
 } __packed;
 
+/**
+ * Auxilary data for a clock node (eg Bus Clock Manager / BCM)
+ *
+ * @unit: divisor used to convert Hz value to an RPMh message
+ * @width: multiplier used to convert Hz valuet o an RPMh message
+ * @vcd: virtual clock domain this entry belongs to
+ */
+struct qcom_cmd_db_bcm_entry {
+	uint32_t unit;
+	uint16_t width;
+	uint8_t vcd;
+	uint8_t reserved1;
+} __packed;
+
 #endif	/* __QCOM_CMD_DB_HW_H__ */
