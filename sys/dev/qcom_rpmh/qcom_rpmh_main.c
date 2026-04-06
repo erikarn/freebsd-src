@@ -164,9 +164,5 @@ DEFINE_CLASS_1(qcom_rpmh, qcom_rpmh_driver, qcom_rpmh_methods,
     sizeof(struct qcom_rpmh_softc), simplebus_driver);
 
 EARLY_DRIVER_MODULE(qcom_rpmh, simplebus, qcom_rpmh_driver,
-    qcom_rpmh_modevent, NULL, BUS_PASS_BUS + BUS_PASS_ORDER_EARLY);
-#if 0
-EARLY_DRIVER_MODULE(qcom_rpmh, ofwbus, qcom_rpmh_driver,
-    qcom_rpmh_modevent, NULL, BUS_PASS_BUS + BUS_PASS_ORDER_EARLY);
-#endif
+    qcom_rpmh_modevent, NULL, BUS_PASS_BUS + BUS_PASS_ORDER_MIDDLE - 1);
 MODULE_VERSION(qcom_rpmh, 1);

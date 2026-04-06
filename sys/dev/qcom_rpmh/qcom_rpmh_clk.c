@@ -204,5 +204,5 @@ static driver_t qcom_rpmh_clk_driver = {
 };
 
 EARLY_DRIVER_MODULE(qcom_rpmh_clk, simplebus, qcom_rpmh_clk_driver,
-    qcom_rpmh_clk_modevent, NULL, BUS_PASS_BUS + BUS_PASS_ORDER_EARLY + 1);
+    qcom_rpmh_clk_modevent, NULL, BUS_PASS_BUS + BUS_PASS_ORDER_MIDDLE - 1);
 MODULE_VERSION(qcom_rpmh_clk, 1);
