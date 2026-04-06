@@ -45,6 +45,8 @@ struct qcom_tcsr_softc {
 	struct mtx		sc_mtx;
 	qcom_tcsr_chipset_t	sc_chipset;
 
+	struct clkdom		*sc_clkdom;
+
 	int			(*sc_attach_func)(struct qcom_tcsr_softc *);
 };
 
