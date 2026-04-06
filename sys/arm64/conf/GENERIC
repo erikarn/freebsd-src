@@ -44,3 +44,7 @@ include		"std.qcom"
 include		"std.rockchip"
 include		"std.virt"
 include		"std.xilinx"
+
+# Thinkpad specific bits
+options		IICHID_SAMPLING
+options		IICHID_DEBUG

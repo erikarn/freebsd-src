@@ -1167,6 +1167,7 @@ iichid_attach(device_t dev)
 		device_printf(sc->dev,
 		    "Using sampling mode\n");
 		sc->sampling_rate_slow = IICHID_SAMPLING_RATE_SLOW;
+		iichid_setup_callout(sc);
 #else
 		device_printf(sc->dev, "Interrupt setup failed\n");
 		if (sc->irq_res != NULL)
@@ -1201,7 +1202,7 @@ iichid_attach(device_t dev)
 	 * Windows driver sleeps for 1ms between the SET_POWER and RESET
 	 * commands. So we too as some devices may depend on this.
 	 */
-	pause("iichid", (hz + 999) / 1000);
+	pause_sbt("iichid", SBT_1MS, 0, 0);
 
 	error = iichid_reset(sc);
 	if (error) {
@@ -1214,7 +1215,7 @@ iichid_attach(device_t dev)
 	/* Wait for RESET response */
 #ifdef IICHID_SAMPLING
 	if (sc->sampling_rate_slow >= 0) {
-		pause("iichid", (hz + 999) / 1000);
+		pause_sbt("iichid", SBT_1MS, 0, 0);
 		(void)iichid_cmd_read(sc, sc->intr_buf, 0, NULL);
 	} else
 #endif /* IICHID_SAMPLING */
@@ -1246,6 +1247,8 @@ done:
 	if (!sc->open) {
 		(void)iichid_set_power(sc, I2C_HID_POWER_OFF);
 		sc->power_on = false;
+	} else if (sc->sampling_rate_slow > 0) {
+		iichid_reset_callout(sc);
 	}
 	iicbus_release_bus(device_get_parent(dev), dev);
 	return (error);
