@@ -36,6 +36,9 @@
 #include <dev/clk/clk_fixed.h>
 #include <dev/clk/clk_mux.h>
 
+#include <arm64/qualcomm/qcom_cmd_db.h>
+#include <arm64/qualcomm/qcom_cmd_db_hw.h>
+
 #include "qcom_clk_freqtbl.h"
 #include "qcom_clk_rpmh.h"
 #include "qcom_clk_rpmh_reg.h"
@@ -70,45 +73,18 @@ static int
 qcom_clk_rpmh_recalc(struct clknode *clk, uint64_t *freq)
 {
 	struct qcom_clk_rpmh_sc *sc;
-#if 0
-	uint32_t cfg, m = 0, n = 0, hid_div = 0;
-	uint32_t mode = 0, mask;
-#endif
 
 	sc = clknode_get_softc(clk);
 
-#if 0
-	/* Read the MODE, CFG, M and N parameters */
-	CLKDEV_DEVICE_LOCK(clknode_get_device(sc->clknode));
-	CLKDEV_READ_4(clknode_get_device(sc->clknode),
-	    QCOM_CLK_RCG2_CFG_OFFSET(sc),
-	    &cfg);
-	if (sc->mnd_width != 0) {
-		mask = (1U << sc->mnd_width) - 1;
-		CLKDEV_READ_4(clknode_get_device(sc->clknode),
-		    QCOM_CLK_RCG2_M_OFFSET(sc), &m);
-		CLKDEV_READ_4(clknode_get_device(sc->clknode),
-		    QCOM_CLK_RCG2_N_OFFSET(sc), &n);
-		m = m & mask;
-		n = ~ n;
-		n = n & mask;
-		n = n + m;
-		mode = (cfg & QCOM_CLK_RCG2_CFG_MODE_MASK)
-		    >> QCOM_CLK_RCG2_CFG_MODE_SHIFT;
-	}
-	CLKDEV_DEVICE_UNLOCK(clknode_get_device(sc->clknode));
+	/*
+	 * RPMh clocks implement a fixed divisor.
+	 */
+	if (sc->div > 0)
+		*freq = *freq / sc->div;
 
-	/* Fetch the divisor */
-	mask = (1U << sc->hid_width) - 1;
-	hid_div = (cfg >> QCOM_CLK_RCG2_CFG_SRC_DIV_SHIFT) & mask;
-
-	/* Calculate the rate based on the parent rate and config */
-	*freq = qcom_clk_rcg2_calc_rate(*freq, mode, m, n, hid_div);
-#endif
-
-	printf("%s: TODO: device=%s, res=%s\n", __func__,
-	    device_get_nameunit(clknode_get_device(sc->clknode)), sc->res_name);
-	*freq = 0;
+	printf("%s: device=%s, res=%s\n", __func__,
+	    device_get_nameunit(clknode_get_device(sc->clknode)),
+	    sc->res_name);
 
 	return (0);
 }
@@ -117,51 +93,23 @@ static int
 qcom_clk_rpmh_init(struct clknode *clk, device_t dev)
 {
 	struct qcom_clk_rpmh_sc *sc;
-#if 0
-	uint32_t reg;
-	uint32_t idx;
-	bool enabled __unused;
-#endif
+//	const struct qcom_cmd_db_bcm_entry *bcm;
+	uint32_t res_addr = 0;
+	bool ret;
 
 	sc = clknode_get_softc(clk);
-#if 0
-	/*
-	 * Read the mux setting to set the right parent.
-	 * Whilst here, read the config to get whether we're enabled
-	 * or not.
-	 */
-	CLKDEV_DEVICE_LOCK(clknode_get_device(sc->clknode));
-	/* check if rcg2 root clock is enabled */
-	CLKDEV_READ_4(clknode_get_device(sc->clknode),
-	    QCOM_CLK_RCG2_CMD_REGISTER(sc), &reg);
-	if (reg & QCOM_CLK_RCG2_CMD_ROOT_OFF)
-		enabled = false;
-	else
-		enabled = true;
-
-	/* mux settings */
-	CLKDEV_READ_4(clknode_get_device(sc->clknode),
-	    QCOM_CLK_RCG2_CFG_OFFSET(sc), &reg);
-	CLKDEV_DEVICE_UNLOCK(clknode_get_device(sc->clknode));
-
-	idx = (reg & QCOM_CLK_RCG2_CFG_SRC_SEL_MASK)
-	    >> QCOM_CLK_RCG2_CFG_SRC_SEL_SHIFT;
-	DPRINTF(clknode_get_device(sc->clknode),
-	    "%s: mux index %u, enabled=%d\n",
-	    __func__, idx, enabled);
-	clknode_init_parent_idx(clk, idx);
-
-	/*
-	 * If we could be sure our parent clocks existed here in the tree,
-	 * we could calculate our current frequency by fetching the parent
-	 * frequency and then do our divider math.  Unfortunately that
-	 * currently isn't the case.
-	 */
-#endif
-
 	clknode_init_parent_idx(clk, 0);
-	printf("%s: TODO: device=%s, res=%s\n", __func__,
-	    device_get_nameunit(clknode_get_device(sc->clknode)), sc->res_name);
+
+	/* For now, don't error out; just do the lookup */
+	ret = qcom_cmd_db_lookup_addr_by_id(sc->res_name, &res_addr);
+	(void) ret;
+
+	printf("%s: TODO: device=%s, res_name=%s, div=%d, res_addr=0x%08x\n",
+	    __func__,
+	    device_get_nameunit(clknode_get_device(sc->clknode)),
+	    sc->res_name,
+	    sc->div,
+	    res_addr);
 	return (0);
 }
 
