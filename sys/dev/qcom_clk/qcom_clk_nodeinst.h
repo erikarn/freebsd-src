@@ -160,5 +160,22 @@
 	.halt_check_voted = _voted,					\
 	.flags = _flags,						\
 }
+#define	F_BRANCH2_NOPARENT(_id, _cname, _eo, _es, _hr, _hs, _haltreg,	\
+    _type, _voted, _flags)						\
+{									\
+	.clkdef.id = _id,						\
+	.clkdef.name = _cname,						\
+	.clkdef.parent_names = NULL,					\
+	.clkdef.parent_cnt = 0,						\
+	.clkdef.flags = CLK_NODE_STATIC_STRINGS,			\
+	.enable_offset = _eo,						\
+	.enable_shift = _es,						\
+	.hwcg_reg = _hr,						\
+	.hwcg_bit = _hs,						\
+	.halt_reg = _haltreg,						\
+	.halt_check_type = _type,					\
+	.halt_check_voted = _voted,					\
+	.flags = _flags,						\
+}
 
 #endif	/* __QCOM_CLK_NODEINST_H__ */
