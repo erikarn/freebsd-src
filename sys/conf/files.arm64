@@ -799,6 +799,9 @@ dev/qcom_tlmm/qcom_tlmm_ipq4018_hw.c		optional qcom_tlmm gpio
 dev/qcom_tlmm/qcom_tlmm_x1e.c			optional qcom_tlmm gpio
 dev/qcom_tlmm/qcom_tlmm_x1e_hw.c		optional qcom_tlmm gpio
 arm64/qualcomm/qcom_cmd_db.c			optional qcom_cmd_db
+dev/qcom_tcsr/qcom_tcsr.c			optional qcom_tcsr
+dev/qcom_tcsr/qcom_tcsr_ipq4018.c		optional qcom_tcsr
+dev/qcom_tcsr/qcom_tcsr_x1e80100.c		optional qcom_tcsr
 
 # RockChip Drivers
 arm64/rockchip/rk3328_codec.c			optional fdt rk3328codec soc_rockchip_rk3328
