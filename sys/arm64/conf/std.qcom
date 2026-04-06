@@ -15,6 +15,9 @@ device		uart_msm		# Qualcomm MSM UART driver
 # TLMM driver
 device		qcom_tlmm		# pinmux/GPIO driver
 
+# Top control/reset/clock controller
+device		qcom_tcsr
+
 # MMC/SD/SDIO Card slot support
 device		sdhci
 

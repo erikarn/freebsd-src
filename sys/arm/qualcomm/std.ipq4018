@@ -62,6 +62,8 @@ dev/qcom_tlmm/qcom_tlmm_pinmux.c	optional qcom_tlmm
 dev/qcom_tlmm/qcom_tlmm.c		optional qcom_tlmm
 
 dev/qcom_tcsr/qcom_tcsr.c		optional qcom_tcsr
+dev/qcom_tcsr/qcom_tcsr_ipq4018.c	optional qcom_tcsr
+dev/qcom_tcsr/qcom_tcsr_x1e80100.c	optional qcom_tcsr
 
 dev/qcom_mdio/qcom_mdio_ipq4018.c	optional qcom_mdio_ipq4018
 

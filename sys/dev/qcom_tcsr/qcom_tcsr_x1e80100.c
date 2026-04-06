@@ -1,13 +1,14 @@
 /*-
  * SPDX-License-Identifier: BSD-2-Clause
  *
- * Copyright (c) 2021 Adrian Chadd <adrian@FreeBSD.org>
+ * Copyright (c) 2026, Adrian Chadd <adrian@FreeBSD.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
  * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
+ *    notice unmodified, this list of conditions, and the following
+ *    disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
@@ -25,30 +26,44 @@
  * SUCH DAMAGE.
  */
 
-#ifndef	__QCOM_TCSR_VAR_H__
-#define	__QCOM_TCSR_VAR_H__
+#include <sys/param.h>
+#include <sys/systm.h>
 
-typedef enum {
-	QCOM_TCSR_CHIPSET_IPQ4018 = 1,
-	QCOM_TCSR_CHIPSET_X1E80100 = 2,
-} qcom_tcsr_chipset_t;
+#include <sys/bus.h>
+#include <sys/interrupt.h>
+#include <sys/malloc.h>
+#include <sys/lock.h>
+#include <sys/mutex.h>
+#include <sys/kernel.h>
+#include <sys/module.h>
+#include <sys/rman.h>
+#include <sys/gpio.h>
 
-#define	QCOM_TCSR_READ_4(sc, reg)	bus_read_4((sc)->sc_mem_res, (reg))
-#define	QCOM_TCSR_WRITE_4(sc, reg, val)	bus_write_4((sc)->sc_mem_res,	\
-	    (reg), (val))
+#include <vm/vm.h>
+#include <vm/pmap.h>
+#include <vm/vm_extern.h>
 
-struct qcom_tcsr_softc {
-	device_t		sc_dev;
+#include <machine/bus.h>
+#include <machine/cpu.h>
 
-	struct resource		*sc_mem_res;
+#include <dev/fdt/fdt_common.h>
+#include <dev/fdt/fdt_pinctrl.h>
 
-	struct mtx		sc_mtx;
-	qcom_tcsr_chipset_t	sc_chipset;
+#include <dev/gpio/gpiobusvar.h>
+#include <dev/ofw/ofw_bus.h>
+#include <dev/ofw/ofw_bus_subr.h>
 
-	int			(*sc_attach_func)(struct qcom_tcsr_softc *);
-};
+#include <dev/qcom_tcsr/qcom_tcsr_var.h>
 
-extern	int qcom_tcsr_init_ipq4018(struct qcom_tcsr_softc *);
-extern	int qcom_tcsr_init_x1e80100(struct qcom_tcsr_softc *);
+/*
+ * The X1E80100 support actually exposes a bunch of early clock
+ * branch enables.  So those need to be exported here rather
+ * than reset controllers and such.
+ */
 
-#endif	/* __QCOM_TCSR_VAR_H__ */
+int
+qcom_tcsr_init_x1e80100(struct qcom_tcsr_softc *sc)
+{
+	/* TODO: register/export everything! */
+	return (0);
+}
