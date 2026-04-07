@@ -41,6 +41,7 @@
 #include <sys/malloc.h>
 #include <sys/mutex.h>
 #include <sys/gpio.h>
+#include <sys/bitstring.h>
 
 #include <machine/bus.h>
 #include <machine/resource.h>

@@ -41,6 +41,7 @@
 #include <sys/malloc.h>
 #include <sys/mutex.h>
 #include <sys/gpio.h>
+#include <sys/bitstring.h>
 
 #include <machine/bus.h>
 #include <machine/resource.h>
@@ -51,6 +52,7 @@
 #include <dev/ofw/ofw_bus_subr.h>
 
 #include <dev/fdt/fdt_pinctrl.h>
+
 
 #include "qcom_tlmm_var.h"
 #include "qcom_tlmm_pin.h"
@@ -123,6 +125,8 @@ qcom_tlmm_detach(device_t dev)
 		    sc->gpio_mem_res);
 	if (sc->gpio_pins)
 		free(sc->gpio_pins, M_DEVBUF);
+	if (sc->sc_ap_gpiomap)
+		free(sc->sc_ap_gpiomap, M_DEVBUF);
 	mtx_destroy(&sc->gpio_mtx);
 
 	return(0);
@@ -177,12 +181,38 @@ qcom_tlmm_attach(device_t dev)
 	sc->gpio_pins = malloc(sizeof(*sc->gpio_pins) * sc->gpio_npins,
 	    M_DEVBUF, M_WAITOK | M_ZERO);
 
+	/* Allocate GPIO AP available bitmap */
+	sc->sc_ap_gpiomap = bit_alloc(sc->gpio_npins, M_DEVBUF, M_NOWAIT);
+	if (sc->sc_ap_gpiomap == NULL) {
+		device_printf(dev, "ERROR: couldn't allocate gpiomap\n");
+		qcom_tlmm_detach(dev);
+		return (ENXIO);
+	}
+
+	/* Default bitstring to all enabled */
+	for (i = 0; i < sc->gpio_npins; i++)
+		bit_set(sc->sc_ap_gpiomap, i);
+
+	/*
+	 * Walk chipset specific unavailable list, clear bits as appropriate.
+	 */
+	for (i = 0; i < sc->sc_ap_reserved.npins; i++) {
+		bit_clear(sc->sc_ap_gpiomap,
+		    sc->sc_ap_reserved.pins[i]);
+	}
+
 	/* Note: direct map between gpio pin and gpio_pin[] entry */
 	for (i = 0; i < sc->gpio_npins; i++) {
 		snprintf(sc->gpio_pins[i].gp_name, GPIOMAXNAME,
 		    "gpio%d", i);
 		sc->gpio_pins[i].gp_pin = i;
 		sc->gpio_pins[i].gp_caps = DEFAULT_CAPS;
+		/*
+		 * Allow a config/flags lookup to fail; GPIO pins can switch
+		 * between AP owned, non-AP owned, hypervisor owned, and
+		 * "unavailable".
+		 */
+		sc->gpio_pins[i].gp_flags = 0;
 		(void) qcom_tlmm_pin_getflags(dev, i,
 		    &sc->gpio_pins[i].gp_flags);
 	}

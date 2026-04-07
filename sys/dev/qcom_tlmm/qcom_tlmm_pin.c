@@ -37,6 +37,7 @@
 #include <sys/malloc.h>
 #include <sys/mutex.h>
 #include <sys/gpio.h>
+#include <sys/bitstring.h>
 
 #include <machine/bus.h>
 #include <machine/resource.h>
@@ -56,10 +57,27 @@
 
 #include "gpio_if.h"
 
+/**
+ * @brief Return if the pin is reserved or available.
+ *
+ * @param sc TLMM driver softc
+ * @param pin GPIO pin ID
+ * @returns true if the pin is valid, false if invalid/reserved
+ */
+bool
+qcom_tlmm_pin_valid(struct qcom_tlmm_softc *sc, int pin)
+{
+	if (pin < 0 || pin >= sc->gpio_npins)
+		return (false);
+	if (bit_test(sc->sc_ap_gpiomap, pin) == 0)
+		return (false);
+	return (true);
+}
+
 static struct gpio_pin *
 qcom_tlmm_pin_lookup(struct qcom_tlmm_softc *sc, int pin)
 {
-	if (pin >= sc->gpio_npins)
+	if (pin < 0 || pin >= sc->gpio_npins)
 		return (NULL);
 
 	return &sc->gpio_pins[pin];
@@ -71,6 +89,9 @@ qcom_tlmm_pin_configure(struct qcom_tlmm_softc *sc,
 {
 
 	GPIO_LOCK_ASSERT(sc);
+
+	if (!qcom_tlmm_pin_valid(sc, pin->gp_pin))
+		return;
 
 	/*
 	 * Manage input/output
@@ -165,6 +186,9 @@ qcom_tlmm_pin_getflags(device_t dev, uint32_t pin, uint32_t *flags)
 	if (pin >= sc->gpio_npins)
 		return (EINVAL);
 
+	if (!qcom_tlmm_pin_valid(sc, pin))
+		return (EINVAL);
+
 	*flags = 0;
 
 	GPIO_LOCK(sc);
@@ -209,6 +233,7 @@ qcom_tlmm_pin_getflags(device_t dev, uint32_t pin, uint32_t *flags)
 
 done:
 	GPIO_UNLOCK(sc);
+
 	return (ret);
 }
 
@@ -235,6 +260,9 @@ qcom_tlmm_pin_setflags(device_t dev, uint32_t pin, uint32_t flags)
 	struct qcom_tlmm_softc *sc = device_get_softc(dev);
 	struct gpio_pin *p;
 
+	if (!qcom_tlmm_pin_valid(sc, pin))
+		return (EINVAL);
+
 	p = qcom_tlmm_pin_lookup(sc, pin);
 	if (p == NULL)
 		return (EINVAL);
@@ -252,7 +280,7 @@ qcom_tlmm_pin_set(device_t dev, uint32_t pin, unsigned int value)
 	struct qcom_tlmm_softc *sc = device_get_softc(dev);
 	int ret;
 
-	if (pin >= sc->gpio_npins)
+	if (!qcom_tlmm_pin_valid(sc, pin))
 		return (EINVAL);
 
 	GPIO_LOCK(sc);
@@ -268,7 +296,7 @@ qcom_tlmm_pin_get(device_t dev, uint32_t pin, unsigned int *val)
 	struct qcom_tlmm_softc *sc = device_get_softc(dev);
 	int ret;
 
-	if (pin >= sc->gpio_npins)
+	if (!qcom_tlmm_pin_valid(sc, pin))
 		return (EINVAL);
 
 	GPIO_LOCK(sc);
@@ -284,7 +312,7 @@ qcom_tlmm_pin_toggle(device_t dev, uint32_t pin)
 	struct qcom_tlmm_softc *sc = device_get_softc(dev);
 	int ret;
 
-	if (pin >= sc->gpio_npins)
+	if (!qcom_tlmm_pin_valid(sc, pin))
 		return (EINVAL);
 
 	GPIO_LOCK(sc);

@@ -41,6 +41,7 @@
 #include <sys/malloc.h>
 #include <sys/mutex.h>
 #include <sys/gpio.h>
+#include <sys/bitstring.h>
 
 #include <machine/bus.h>
 #include <machine/resource.h>
@@ -125,15 +126,15 @@ qcom_tlmm_x1e_hw_pin_get_function(struct qcom_tlmm_softc *sc,
 	if (pin >= sc->gpio_npins)
 		return (EINVAL);
 
-
 	reg = GPIO_READ(sc, QCOM_TLMM_X1E_REG_PIN(pin,
 	    QCOM_TLMM_X1E_REG_PIN_CONTROL));
+
 	/* eGPIO check - this tells us if it's ours */
 	if (reg & QCOM_TLMM_X1E_EGPIO_PRESENT) {
 		if ((reg & QCOM_TLMM_X1E_EGPIO_ENABLE) == 0) {
-			/* XXX TODO would be better to return its eGPIO */
-			device_printf(sc->dev, "%s: pin %d, eGPIO set\n",
-			    __func__, pin);
+			/* XXX TODO would be better to return it is eGPIO */
+//			device_printf(sc->dev, "%s: pin %d, eGPIO set\n",
+//			    __func__, pin);
 			return (ENXIO);
 		}
 	}

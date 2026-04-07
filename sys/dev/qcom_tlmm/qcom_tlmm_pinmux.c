@@ -46,6 +46,7 @@
 #include <sys/malloc.h>
 #include <sys/mutex.h>
 #include <sys/gpio.h>
+#include <sys/bitstring.h>
 
 #include <machine/bus.h>
 #include <machine/resource.h>
@@ -59,6 +60,7 @@
 
 #include "qcom_tlmm_var.h"
 #include "qcom_tlmm_debug.h"
+#include "qcom_tlmm_pin.h" /* for qcom_tlmm_pin_valid() */
 
 /*
  * For now we're hard-coded to doing IPQ4018 stuff here, but
@@ -238,6 +240,10 @@ qcom_tlmm_pinctrl_config_gmux(struct qcom_tlmm_softc *sc, char *pin_name,
 		    __func__,
 		    gmux->id,
 		    tmp);
+
+		if (!qcom_tlmm_pin_valid(sc, gmux->id))
+			return (ENXIO);
+
 		err = sc->sc_hw->qcom_tlmm_hw_pin_set_function(sc, gmux->id,
 		    tmp);
 		if (err != 0) {

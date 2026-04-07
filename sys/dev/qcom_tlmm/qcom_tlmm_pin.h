@@ -45,4 +45,7 @@ extern	int qcom_tlmm_filter(void *arg);
 extern	void qcom_tlmm_intr(void *arg);
 extern	phandle_t qcom_tlmm_pin_get_node(device_t dev, device_t bus);
 
+/* Library functions */
+extern	bool qcom_tlmm_pin_valid(struct qcom_tlmm_softc *sc, int pin);
+
 #endif	/* __QCOM_TLMM_PIN_H__ */

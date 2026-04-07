@@ -203,6 +203,26 @@ struct qcom_tlmm_softc {
 
 	struct qcom_tlmm_hw_callbacks	*sc_hw;
 
+	/*
+	 * Which GPIO pins are currently allowable/accessible by the AP
+	 *
+	 * Some pins are may be owned by the hypervisor and aren't at all
+	 * accessible/allowable for query / control by the host - to the
+	 * point where accessing their configuration registers in TLMM
+	 * register space will cause an exception.
+	 *
+	 * Any pin set to '0' here will be treated as unavailable and all
+	 * interaction with said pin, including during probe/attach,
+	 * will fail with ENXIO.
+	 *
+	 * TODO: this should really be a per-pin attribute.
+	 */
+	bitstr_t		*sc_ap_gpiomap;
+	struct {
+		const uint32_t	*pins;
+		uint32_t	npins;
+	} sc_ap_reserved;
+
 	const struct qcom_tlmm_gpio_mux	*gpio_muxes;
 	const struct qcom_tlmm_spec_pin	*spec_pins;
 };

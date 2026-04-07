@@ -41,6 +41,7 @@
 #include <sys/malloc.h>
 #include <sys/mutex.h>
 #include <sys/gpio.h>
+#include <sys/bitstring.h>
 
 #include <machine/bus.h>
 #include <machine/resource.h>
@@ -68,9 +69,7 @@
 /* gpio 238 - UFS_RESET */
 /* gpio 239 .. 241 - SDC2 */
 
-/* TODO: these are OBVIOUSLY VERY WRONG for the X1E */
-
-#define QCOM_TLMM_X1E80100_GPIO_PINS     237
+#define QCOM_TLMM_X1E80100_GPIO_PINS     238
 
 static const struct qcom_tlmm_gpio_mux x1e80100_muxes[] = {
 	GDEF(0, "qup0_se0", "ibi_i3c", NULL, NULL, NULL, NULL, NULL, NULL, NULL),
@@ -319,6 +318,12 @@ static const struct qcom_tlmm_gpio_mux x1e80100_muxes[] = {
 #endif
 	GDEF(-1),
 };
+
+static const uint32_t qcom_tlmm_x1e_reserved_pins[] = {
+	44, 45, 46, 47,
+	72, 73, 74, 75,
+};
+
 static struct qcom_tlmm_hw_callbacks qcom_tlmm_x1e_hw_callbacks = {
 	.qcom_tlmm_hw_pin_set_function = qcom_tlmm_x1e_hw_pin_set_function,
 	.qcom_tlmm_hw_pin_get_function = qcom_tlmm_x1e_hw_pin_get_function,
@@ -348,5 +353,7 @@ qcom_tlmm_x1e_attach(struct qcom_tlmm_softc *sc)
 
 	sc->gpio_npins = QCOM_TLMM_X1E80100_GPIO_PINS;
 	sc->gpio_muxes = &x1e80100_muxes[0];
+	sc->sc_ap_reserved.pins = qcom_tlmm_x1e_reserved_pins;
+	sc->sc_ap_reserved.npins = nitems(qcom_tlmm_x1e_reserved_pins);
 	sc->sc_hw = &qcom_tlmm_x1e_hw_callbacks;
 }
