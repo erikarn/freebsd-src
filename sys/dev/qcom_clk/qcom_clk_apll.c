@@ -55,6 +55,7 @@
 
 struct qcom_clk_apll_sc {
 	struct clknode *clknode;
+	uint32_t reg_offset;
 	uint32_t enable_offset;
 	uint32_t enable_shift;
 	qcom_clk_apll_type_t apll_type;
@@ -203,6 +204,12 @@ static clknode_method_t qcom_clk_apll_methods[] = {
 	CLKNODEMETHOD(clknode_recalc_freq,	qcom_clk_apll_recalc),
 	CLKNODEMETHOD(clknode_set_gate,		qcom_clk_apll_set_gate),
 	CLKNODEMETHOD(clknode_set_freq,		qcom_clk_apll_set_freq),
+
+	/* XXX TODO: figure out the equivalents for these linux methods */
+
+	/* XXX is_enabled */
+	/* XXX prepare */
+	/* XXX unprepare */
 	CLKNODEMETHOD_END
 };
 
@@ -224,6 +231,7 @@ qcom_clk_apll_register(struct clkdom *clkdom,
 	sc = clknode_get_softc(clk);
 	sc->clknode = clk;
 
+	sc->reg_offset = clkdef->reg_offset;
 	sc->enable_offset = clkdef->enable_offset;
 	sc->enable_shift = clkdef->enable_shift;
 	sc->apll_type = clkdef->apll_type;
