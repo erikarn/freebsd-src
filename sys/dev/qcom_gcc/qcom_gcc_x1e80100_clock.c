@@ -39,8 +39,52 @@
 #include "qcom_gcc_var.h"
 #include "qcom_gcc_x1e80100.h"
 
+#define	CBCR_CLOCK_ENABLE		0x00000001
+
+static void
+qcom_gcc_x1e80100_branch_set_clk_en(struct qcom_gcc_softc *sc, uint32_t cbcr)
+{
+	uint32_t reg;
+
+	reg = bus_read_4(sc->reg, cbcr);
+	reg |= CBCR_CLOCK_ENABLE;
+	bus_write_4(sc->reg, cbcr, reg);
+}
+
 void
 qcom_gcc_x1e80100_clock_setup(struct qcom_gcc_softc *sc)
 {
 	device_printf(sc->dev, "%s: called\n", __func__);
+
+	/* Keep some clocks always on */
+
+	/*
+	 * qcom_branch_set_clk_en() on:
+	 *
+	 * 0x26004 - GCC_CAMERA_AHB_CLK
+	 * 0x26028 - GCC_CAMERA_XO_CLK
+	 * 0x27004 - GCC_DISP_AHB_CLK
+	 * 0x27018 - GCC_DISP_XO_CLK
+	 * 0x32004 - GCC_VIDEO_AHB_CLK
+	 * 0x32030 - GCC_VIDEO_XO_CLK
+	 * 0x71004 - GCC_CPU_CFG_AHB_CLK
+	 */
+	qcom_gcc_x1e80100_branch_set_clk_en(sc, 0x26004);
+	qcom_gcc_x1e80100_branch_set_clk_en(sc, 0x26028);
+	qcom_gcc_x1e80100_branch_set_clk_en(sc, 0x27004);
+	qcom_gcc_x1e80100_branch_set_clk_en(sc, 0x27018);
+	qcom_gcc_x1e80100_branch_set_clk_en(sc, 0x32004);
+	qcom_gcc_x1e80100_branch_set_clk_en(sc, 0x32030);
+	qcom_gcc_x1e80100_branch_set_clk_en(sc, 0x71004);
+
+	/*
+	 * Clear GDSC_SLEEP_ENA_VOTE to stop votes being auto-removed
+	 * in sleep.
+	 */
+
+	bus_write_4(sc->reg, 0x52224, 0x0);
+
+	/* TODO: register RCG DFS clocks */
+
+	/* TODO: register the rest of the clock tree */
 }
