@@ -37,17 +37,20 @@ typedef enum {
 struct qcom_clk_apll_def {
 	struct clknode_init_def clkdef;
 	qcom_clk_apll_type_t apll_type;
+	uint32_t reg_offset;
 	uint32_t enable_offset;
 	uint32_t enable_shift;
 };
 
-#define F_APLL_LUCID_OLE_FIXEDDIV(_id, _cname, _parent, _eoffset, _eshift)	\
+#define F_APLL_LUCID_OLE_FIXED(_id, _cname, _parent, _roffset,		\
+	_eoffset, _eshift)						\
 {									\
 	.clkdef.id = _id,						\
 	.clkdef.name = _cname,						\
 	.clkdef.parent_names = (const char *[]){_parent},		\
 	.clkdef.parent_cnt = 1,						\
 	.clkdef.flags = CLK_NODE_STATIC_STRINGS,			\
+	.reg_offset = _roffset,						\
 	.enable_offset = _eoffset,					\
 	.enable_shift = _eshift,					\
 	.apll_type = QCOM_CLK_APLL_TYPE_FIXED_LUCID_EVO,		\
