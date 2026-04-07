@@ -62,6 +62,42 @@ struct qcom_clk_branch2_def {
 	bool halt_check_voted;	/* whether to delay when waiting */
 };
 
+/* branch2 gate nodes */
+#define	F_BRANCH2(_id, _cname, _parent, _eo, _es, _hr, _hs, _haltreg,	\
+    _type, _voted, _flags)						\
+{									\
+	.clkdef.id = _id,						\
+	.clkdef.name = _cname,						\
+	.clkdef.parent_names = (const char *[]){_parent},		\
+	.clkdef.parent_cnt = 1,						\
+	.clkdef.flags = CLK_NODE_STATIC_STRINGS,			\
+	.enable_offset = _eo,						\
+	.enable_shift = _es,						\
+	.hwcg_reg = _hr,						\
+	.hwcg_bit = _hs,						\
+	.halt_reg = _haltreg,						\
+	.halt_check_type = _type,					\
+	.halt_check_voted = _voted,					\
+	.flags = _flags,						\
+}
+#define	F_BRANCH2_NOPARENT(_id, _cname, _eo, _es, _hr, _hs, _haltreg,	\
+    _type, _voted, _flags)						\
+{									\
+	.clkdef.id = _id,						\
+	.clkdef.name = _cname,						\
+	.clkdef.parent_names = NULL,					\
+	.clkdef.parent_cnt = 0,						\
+	.clkdef.flags = CLK_NODE_STATIC_STRINGS,			\
+	.enable_offset = _eo,						\
+	.enable_shift = _es,						\
+	.hwcg_reg = _hr,						\
+	.hwcg_bit = _hs,						\
+	.halt_reg = _haltreg,						\
+	.halt_check_type = _type,					\
+	.halt_check_voted = _voted,					\
+	.flags = _flags,						\
+}
+
 extern	int qcom_clk_branch2_register(struct clkdom *clkdom,
 	    struct qcom_clk_branch2_def *clkdef);
 

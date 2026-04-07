@@ -37,6 +37,21 @@ struct qcom_clk_fepll_def {
 	uint32_t refclkdiv_width; /* REFCLKDIV width */
 };
 
+/* FEPLL clock */
+#define F_FEPLL(_id, _cname, _parent, _reg, _fs, _fw, _rs, _rw)		\
+{									\
+	.clkdef.id = _id,						\
+	.clkdef.name = _cname,						\
+	.clkdef.parent_names = (const char *[]){_parent},		\
+	.clkdef.parent_cnt = 1,						\
+	.clkdef.flags = CLK_NODE_STATIC_STRINGS,			\
+	.offset = _reg,							\
+	.fdbkdiv_shift = _fs,						\
+	.fdbkdiv_width = _fw,						\
+	.refclkdiv_shift = _rs,						\
+	.refclkdiv_width = _rw,						\
+}
+
 extern	int qcom_clk_fepll_register(struct clkdom *clkdom,
 	    struct qcom_clk_fepll_def *clkdef);
 

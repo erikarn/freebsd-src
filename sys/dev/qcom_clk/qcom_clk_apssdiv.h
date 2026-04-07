@@ -40,6 +40,23 @@ struct qcom_clk_apssdiv_def {
 	const struct qcom_clk_freq_tbl *freq_tbl;
 };
 
+/* APSS DIV clock */
+#define F_APSSDIV(_id, _cname, _parent, _doffset, _dshift, _dwidth,	\
+    _eoffset, _eshift, _freqtbl)					\
+{									\
+	.clkdef.id = _id,						\
+	.clkdef.name = _cname,						\
+	.clkdef.parent_names = (const char *[]){_parent},		\
+	.clkdef.parent_cnt = 1,						\
+	.clkdef.flags = CLK_NODE_STATIC_STRINGS,			\
+	.div_offset = _doffset,						\
+	.div_width = _dwidth,						\
+	.div_shift = _dshift,						\
+	.enable_offset = _eoffset,					\
+	.enable_shift = _eshift,					\
+	.freq_tbl = _freqtbl,						\
+}
+
 extern	int qcom_clk_apssdiv_register(struct clkdom *clkdom,
 	    struct qcom_clk_apssdiv_def *clkdef);
 
