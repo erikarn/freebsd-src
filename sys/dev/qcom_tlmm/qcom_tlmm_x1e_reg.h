@@ -28,58 +28,73 @@
 #ifndef	__QCOM_TLMM_X1E_REG_H__
 #define	__QCOM_TLMM_X1E_REG_H__
 
-#if 0
+/* General pinmux block */
+
 /*
  * Each GPIO pin configuration block exists in a 0x1000 sized window.
  */
-#define	QCOM_TLMM_IPQ4018_REG_CONFIG_PIN_BASE		0x0
-#define	QCOM_TLMM_IPQ4018_REG_CONFIG_PIN_SIZE		0x1000
+#define	QCOM_TLMM_X1E_REG_CONFIG_PIN_BASE		0x0
+#define	QCOM_TLMM_X1E_REG_CONFIG_PIN_SIZE		0x1000
 
 /*
  * Inside each configuration block are the following registers for
  * controlling the pin.
  */
-#define	QCOM_TLMM_IPQ4018_REG_PIN_CONTROL		0x00
+#define	QCOM_TLMM_X1E_REG_PIN_CONTROL		0x00
 			/* 1 = output gpio pin, 0 = input gpio pin */
 
-#define		QCOM_TLMM_IPQ4018_REG_PIN_CONTROL_PUPD_MASK	0x3
-#define		QCOM_TLMM_IPQ4018_REG_PIN_CONTROL_PUPD_SHIFT	0x0
-#define			QCOM_TLMM_IPQ4018_REG_PIN_CONTROL_PUPD_DISABLE	0
-#define			QCOM_TLMM_IPQ4018_REG_PIN_CONTROL_PUPD_PULLDOWN	1
-#define			QCOM_TLMM_IPQ4018_REG_PIN_CONTROL_PUPD_PULLUP	2
-			/* There's no BUSHOLD on IPQ4018 */
-#define			QCOM_TLMM_IPQ4018_REG_PIN_CONTROL_PUPD_BUSHOLD	0
-#define		QCOM_TLMM_IPQ4018_REG_PIN_CONTROL_MUX_MASK	0x7
-#define		QCOM_TLMM_IPQ4018_REG_PIN_CONTROL_MUX_SHIFT	2
-			/* function/mux control */
-#define		QCOM_TLMM_IPQ4018_REG_PIN_CONTROL_DRIVE_STRENGTH_SHIFT	6
-#define		QCOM_TLMM_IPQ4018_REG_PIN_CONTROL_DRIVE_STRENGTH_MASK	0x7
-#define		QCOM_TLMM_IPQ4018_REG_PIN_CONTROL_OE_ENABLE	(1U << 9)
-			/* output enable */
-#define		QCOM_TLMM_IPQ4018_REG_PIN_CONTROL_VM_ENABLE	(1U << 11)
-			/* VM passthrough enable */
-#define		QCOM_TLMM_IPQ4018_REG_PIN_CONTROL_OD_ENABLE	(1U << 12)
+/*
+ * TODO: does the X1E support configuring open-drain?
+ * The Linux pinctrl-x1e80100.c doesn't define an od_bit and the code
+ * treats 0 as not special.
+ *////
+#define		QCOM_TLMM_X1E_REG_PIN_CONTROL_OD_ENABLE	(1U << 0)
 			/* open drain */
-#define		QCOM_TLMM_IPQ4018_REG_PIN_CONTROL_RES_MASK	0x3
-#define		QCOM_TLMM_IPQ4018_REG_PIN_CONTROL_RES_SHIFT	13
-#define			QCOM_TLMM_IPQ4018_REG_PIN_CONTROL_10K	0x0
-#define			QCOM_TLMM_IPQ4018_REG_PIN_CONTROL_1K5	0x1
-#define			QCOM_TLMM_IPQ4018_REG_PIN_CONTROL_35K	0x2
-#define			QCOM_TLMM_IPQ4018_REG_PIN_CONTROL_20K	0x3
 
-#define	QCOM_TLMM_IPQ4018_REG_PIN_IO			0x04
-#define		QCOM_TLMM_IPQ4018_REG_PIN_IO_INPUT_STATUS	(1U << 0)
+#define		QCOM_TLMM_X1E_REG_PIN_CONTROL_PUPD_MASK	0x3
+#define		QCOM_TLMM_X1E_REG_PIN_CONTROL_PUPD_SHIFT	0x0
+#define			QCOM_TLMM_X1E_REG_PIN_CONTROL_PUPD_DISABLE		0
+#define			QCOM_TLMM_X1E_REG_PIN_CONTROL_PUPD_PULLDOWN	1
+#define			QCOM_TLMM_X1E_REG_PIN_CONTROL_PUPD_PULLUP		2
+			/* TODO: check if there is BUSHOLD on X1E */
+#define			QCOM_TLMM_X1E_REG_PIN_CONTROL_PUPD_BUSHOLD		0
+#define		QCOM_TLMM_X1E_REG_PIN_CONTROL_MUX_MASK	0xf
+#define		QCOM_TLMM_X1E_REG_PIN_CONTROL_MUX_SHIFT	2
+			/* function/mux control */
+/* GPIO function used to treat this GPIO pin as eGPIO and route appropriately */
+#define			QCOM_TLMM_X1E_EGPIO_FUNC			9
+
+#define		QCOM_TLMM_X1E_REG_PIN_CONTROL_DRIVE_STRENGTH_SHIFT		6
+#define		QCOM_TLMM_X1E_REG_PIN_CONTROL_DRIVE_STRENGTH_MASK		0x7
+#define		QCOM_TLMM_X1E_REG_PIN_CONTROL_OE_ENABLE	(1U << 9)
+			/* output enable */
+#define		QCOM_TLMM_X1E_REG_PIN_CONTROL_VM_ENABLE	(1U << 11)
+#define	QCOM_TLMM_X1E_EGPIO_PRESENT			(1U << 11)
+#define	QCOM_TLMM_X1E_EGPIO_ENABLE			(1U << 12)
+			/* VM passthrough enable */
+/* Which bit in the config register represents i2c/"strong" pull up */
+#define	QCOM_TLMM_X1E_I2C_PULL_BIT			13
+#define			QCOM_TLMM_X1E_REG_PIN_CONTROL_10K	0x0
+#define			QCOM_TLMM_X1E_REG_PIN_CONTROL_1K5	0x1
+#define			QCOM_TLMM_X1E_REG_PIN_CONTROL_35K	0x2
+#define			QCOM_TLMM_X1E_REG_PIN_CONTROL_20K	0x3
+
+#define	QCOM_TLMM_X1E_REG_PIN_IO			0x04
+#define		QCOM_TLMM_X1E_REG_PIN_IO_INPUT_STATUS	(1U << 0)
 			/* read gpio input status */
-#define		QCOM_TLMM_IPQ4018_REG_PIN_IO_OUTPUT_EN		(1U << 1)
+#define		QCOM_TLMM_X1E_REG_PIN_IO_OUTPUT_EN		(1U << 1)
 			/* set gpio output high or low */
 
+#define	QCOM_TLMM_X1E_REG_PIN_INTR_CONFIG		0x08
+#define	QCOM_TLMM_X1E_REG_PIN_INTR_STATUS		0x0c
 
-#define	QCOM_TLMM_IPQ4018_REG_PIN_INTR_CONFIG		0x08
-#define	QCOM_TLMM_IPQ4018_REG_PIN_INTR_STATUS		0x0c
+#define	QCOM_TLMM_X1E_REG_PIN(p, reg)		\
+	    (((p) * QCOM_TLMM_X1E_REG_CONFIG_PIN_SIZE) + \
+	      QCOM_TLMM_X1E_REG_CONFIG_PIN_BASE + (reg))
 
-#define	QCOM_TLMM_IPQ4018_REG_PIN(p, reg)		\
-	    (((p) * QCOM_TLMM_IPQ4018_REG_CONFIG_PIN_SIZE) + \
-	      QCOM_TLMM_IPQ4018_REG_CONFIG_PIN_BASE + (reg))
-#endif
+
+/* SDC_QDSD pin control */
+
+/* UFS_RESET pin control */
 
 #endif	/* __QCOM_TLMM_X1E_REG_H__ */

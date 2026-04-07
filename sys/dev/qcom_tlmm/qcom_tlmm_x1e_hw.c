@@ -68,23 +68,43 @@ int
 qcom_tlmm_x1e_hw_pin_set_function(struct qcom_tlmm_softc *sc,
     int pin, int function)
 {
-#if 0
-	uint32_t reg;
+	uint32_t reg, val;
 
 	GPIO_LOCK_ASSERT(sc);
 
 	if (pin >= sc->gpio_npins)
 		return (EINVAL);
 
-	reg = GPIO_READ(sc, QCOM_TLMM_X1E_REG_PIN(pin,
+	val = GPIO_READ(sc, QCOM_TLMM_X1E_REG_PIN(pin,
 	    QCOM_TLMM_X1E_REG_PIN_CONTROL));
+	reg = val;
+
 	reg &= ~(QCOM_TLMM_X1E_REG_PIN_CONTROL_MUX_MASK
 	    << QCOM_TLMM_X1E_REG_PIN_CONTROL_MUX_SHIFT);
 	reg |= (function & QCOM_TLMM_X1E_REG_PIN_CONTROL_MUX_MASK)
 	    << QCOM_TLMM_X1E_REG_PIN_CONTROL_MUX_SHIFT;
+
+	/*
+	 * Check if the eGPIO ownership is changing.
+	 *
+	 * eGPIO is a concept the Linux driver uses to represent the
+	 * pin mux that sits between the external pins and the TLMM.
+	 * It can route pins to the AP (ie TLMM) or to other owners
+	 * inside the SoC.
+	 *
+	 * TODO: double-check this against the openwrt ipq4018/4019
+	 * drop, they have a "VM enable" bit which lines up with this.
+	 */
+	if (function == QCOM_TLMM_X1E_EGPIO_FUNC) {
+		if (val & QCOM_TLMM_X1E_EGPIO_PRESENT)
+			reg &= ~QCOM_TLMM_X1E_EGPIO_ENABLE;
+	} else {
+		if (val & QCOM_TLMM_X1E_EGPIO_PRESENT)
+			reg |= QCOM_TLMM_X1E_EGPIO_ENABLE;
+	}
+
 	GPIO_WRITE(sc, QCOM_TLMM_X1E_REG_PIN(pin,
 	    QCOM_TLMM_X1E_REG_PIN_CONTROL), reg);
-#endif
 
 	return (0);
 }
@@ -98,7 +118,6 @@ int
 qcom_tlmm_x1e_hw_pin_get_function(struct qcom_tlmm_softc *sc,
     int pin, int *function)
 {
-#if 0
 	uint32_t reg;
 
 	GPIO_LOCK_ASSERT(sc);
@@ -109,10 +128,20 @@ qcom_tlmm_x1e_hw_pin_get_function(struct qcom_tlmm_softc *sc,
 
 	reg = GPIO_READ(sc, QCOM_TLMM_X1E_REG_PIN(pin,
 	    QCOM_TLMM_X1E_REG_PIN_CONTROL));
+	/* eGPIO check - this tells us if it's ours */
+	if (reg & QCOM_TLMM_X1E_EGPIO_PRESENT) {
+		if ((reg & QCOM_TLMM_X1E_EGPIO_ENABLE) == 0) {
+			/* XXX TODO would be better to return its eGPIO */
+			device_printf(sc->dev, "%s: pin %d, eGPIO set\n",
+			    __func__, pin);
+			return (ENXIO);
+		}
+	}
+
 	reg = reg >> QCOM_TLMM_X1E_REG_PIN_CONTROL_MUX_SHIFT;
 	reg &= QCOM_TLMM_X1E_REG_PIN_CONTROL_MUX_MASK;
 	*function = reg;
-#endif
+
 	return (0);
 }
 
@@ -124,7 +153,6 @@ int
 qcom_tlmm_x1e_hw_pin_set_oe_output(struct qcom_tlmm_softc *sc,
     int pin)
 {
-#if 0
 	uint32_t reg;
 
 	GPIO_LOCK_ASSERT(sc);
@@ -138,7 +166,7 @@ qcom_tlmm_x1e_hw_pin_set_oe_output(struct qcom_tlmm_softc *sc,
 	GPIO_WRITE(sc,
 	    QCOM_TLMM_X1E_REG_PIN(pin, QCOM_TLMM_X1E_REG_PIN_CONTROL),
 	    reg);
-#endif
+
 	return (0);
 }
 
@@ -150,7 +178,6 @@ int
 qcom_tlmm_x1e_hw_pin_set_oe_input(struct qcom_tlmm_softc *sc,
     int pin)
 {
-#if 0
 	uint32_t reg;
 
 	GPIO_LOCK_ASSERT(sc);
@@ -163,7 +190,7 @@ qcom_tlmm_x1e_hw_pin_set_oe_input(struct qcom_tlmm_softc *sc,
 	reg &= ~QCOM_TLMM_X1E_REG_PIN_CONTROL_OE_ENABLE;
 	GPIO_WRITE(sc, QCOM_TLMM_X1E_REG_PIN(pin,
 	    QCOM_TLMM_X1E_REG_PIN_CONTROL), reg);
-#endif
+
 	return (0);
 }
 
@@ -175,7 +202,6 @@ int
 qcom_tlmm_x1e_hw_pin_get_oe_state(struct qcom_tlmm_softc *sc,
     int pin, bool *is_output)
 {
-#if 0
 	uint32_t reg;
 
 	GPIO_LOCK_ASSERT(sc);
@@ -186,7 +212,7 @@ qcom_tlmm_x1e_hw_pin_get_oe_state(struct qcom_tlmm_softc *sc,
 	reg = GPIO_READ(sc, QCOM_TLMM_X1E_REG_PIN(pin,
 	    QCOM_TLMM_X1E_REG_PIN_CONTROL));
 	*is_output = !! (reg & QCOM_TLMM_X1E_REG_PIN_CONTROL_OE_ENABLE);
-#endif
+
 	return (0);
 }
 
@@ -198,7 +224,6 @@ int
 qcom_tlmm_x1e_hw_pin_set_output_value(struct qcom_tlmm_softc *sc,
     uint32_t pin, unsigned int value)
 {
-#if 0
 	uint32_t reg;
 
 	GPIO_LOCK_ASSERT(sc);
@@ -214,7 +239,7 @@ qcom_tlmm_x1e_hw_pin_set_output_value(struct qcom_tlmm_softc *sc,
 		reg &= ~QCOM_TLMM_X1E_REG_PIN_IO_OUTPUT_EN;
 	GPIO_WRITE(sc, QCOM_TLMM_X1E_REG_PIN(pin,
 	    QCOM_TLMM_X1E_REG_PIN_IO), reg);
-#endif
+
 	return (0);
 }
 
@@ -225,7 +250,6 @@ int
 qcom_tlmm_x1e_hw_pin_get_output_value(struct qcom_tlmm_softc *sc,
     uint32_t pin, unsigned int *val)
 {
-#if 0
 	uint32_t reg;
 
 	GPIO_LOCK_ASSERT(sc);
@@ -237,7 +261,7 @@ qcom_tlmm_x1e_hw_pin_get_output_value(struct qcom_tlmm_softc *sc,
 	    QCOM_TLMM_X1E_REG_PIN_IO));
 
 	*val = !! (reg & QCOM_TLMM_X1E_REG_PIN_IO_INPUT_STATUS);
-#endif
+
 	return (0);
 }
 
@@ -249,7 +273,6 @@ int
 qcom_tlmm_x1e_hw_pin_get_input_value(struct qcom_tlmm_softc *sc,
     uint32_t pin, unsigned int *val)
 {
-#if 0
 	uint32_t reg;
 
 	GPIO_LOCK_ASSERT(sc);
@@ -261,7 +284,7 @@ qcom_tlmm_x1e_hw_pin_get_input_value(struct qcom_tlmm_softc *sc,
 	    QCOM_TLMM_X1E_REG_PIN_IO));
 
 	*val = !! (reg & QCOM_TLMM_X1E_REG_PIN_IO_INPUT_STATUS);
-#endif
+
 	return (0);
 }
 
@@ -272,7 +295,6 @@ int
 qcom_tlmm_x1e_hw_pin_toggle_output_value(
     struct qcom_tlmm_softc *sc, uint32_t pin)
 {
-#if 0
 	uint32_t reg;
 
 	GPIO_LOCK_ASSERT(sc);
@@ -288,7 +310,7 @@ qcom_tlmm_x1e_hw_pin_toggle_output_value(
 		reg &= ~QCOM_TLMM_X1E_REG_PIN_IO_OUTPUT_EN;
 	GPIO_WRITE(sc, QCOM_TLMM_X1E_REG_PIN(pin,
 	    QCOM_TLMM_X1E_REG_PIN_IO), reg);
-#endif
+
 	return (0);
 }
 
@@ -302,7 +324,6 @@ qcom_tlmm_x1e_hw_pin_set_pupd_config(
     struct qcom_tlmm_softc *sc, uint32_t pin,
     qcom_tlmm_pin_pupd_config_t pupd)
 {
-#if 0
 	uint32_t reg;
 
 	GPIO_LOCK_ASSERT(sc);
@@ -315,6 +336,8 @@ qcom_tlmm_x1e_hw_pin_set_pupd_config(
 
 	reg &= ~(QCOM_TLMM_X1E_REG_PIN_CONTROL_PUPD_MASK
 	    << QCOM_TLMM_X1E_REG_PIN_CONTROL_PUPD_SHIFT);
+	/* Clear the i2c strong pull bit too */
+	reg &= ~QCOM_TLMM_X1E_I2C_PULL_BIT;
 
 	switch (pupd) {
 	case QCOM_TLMM_PIN_PUPD_CONFIG_DISABLE:
@@ -329,6 +352,11 @@ qcom_tlmm_x1e_hw_pin_set_pupd_config(
 		reg |= QCOM_TLMM_X1E_REG_PIN_CONTROL_PUPD_PULLUP
 		    << QCOM_TLMM_X1E_REG_PIN_CONTROL_PUPD_SHIFT;
 		break;
+	case QCOM_TLMM_PIN_PUPD_CONFIG_STRONG_PULL_UP:
+		reg |= QCOM_TLMM_X1E_REG_PIN_CONTROL_PUPD_PULLUP
+		    << QCOM_TLMM_X1E_REG_PIN_CONTROL_PUPD_SHIFT;
+		reg |= QCOM_TLMM_X1E_I2C_PULL_BIT;
+		break;
 	case QCOM_TLMM_PIN_PUPD_CONFIG_BUS_HOLD:
 		reg |= QCOM_TLMM_X1E_REG_PIN_CONTROL_PUPD_BUSHOLD
 		    << QCOM_TLMM_X1E_REG_PIN_CONTROL_PUPD_SHIFT;
@@ -337,7 +365,7 @@ qcom_tlmm_x1e_hw_pin_set_pupd_config(
 
 	GPIO_WRITE(sc, QCOM_TLMM_X1E_REG_PIN(pin,
 	    QCOM_TLMM_X1E_REG_PIN_CONTROL), reg);
-#endif
+
 	return (0);
 }
 
@@ -349,21 +377,27 @@ qcom_tlmm_x1e_hw_pin_get_pupd_config(
     struct qcom_tlmm_softc *sc, uint32_t pin,
     qcom_tlmm_pin_pupd_config_t *pupd)
 {
-#if 0
-	uint32_t reg;
+	uint32_t reg, param;
 
 	GPIO_LOCK_ASSERT(sc);
 
 	if (pin >= sc->gpio_npins)
 		return (EINVAL);
 
+	/*
+	 * The X1E has an extra bit controlling pull-up strength
+	 * for i2c busses.  Note that Linux defines the i2c bit
+	 * shift but it's applied after the pupd field mask.
+	 * However in FreeBSD it is just the raw bit in the
+	 * control register.
+	 */
 	reg = GPIO_READ(sc, QCOM_TLMM_X1E_REG_PIN(pin,
 	    QCOM_TLMM_X1E_REG_PIN_CONTROL));
+	param = reg;
+	param >>= QCOM_TLMM_X1E_REG_PIN_CONTROL_PUPD_SHIFT;
+	param &= QCOM_TLMM_X1E_REG_PIN_CONTROL_PUPD_MASK;
 
-	reg >>= QCOM_TLMM_X1E_REG_PIN_CONTROL_PUPD_SHIFT;
-	reg &= QCOM_TLMM_X1E_REG_PIN_CONTROL_PUPD_MASK;
-
-	switch (reg) {
+	switch (param) {
 	case QCOM_TLMM_X1E_REG_PIN_CONTROL_PUPD_DISABLE:
 		*pupd = QCOM_TLMM_PIN_PUPD_CONFIG_DISABLE;
 		break;
@@ -371,13 +405,16 @@ qcom_tlmm_x1e_hw_pin_get_pupd_config(
 		*pupd = QCOM_TLMM_PIN_PUPD_CONFIG_PULL_DOWN;
 		break;
 	case QCOM_TLMM_X1E_REG_PIN_CONTROL_PUPD_PULLUP:
-		*pupd = QCOM_TLMM_PIN_PUPD_CONFIG_PULL_UP;
+		if ((reg & (1 << QCOM_TLMM_X1E_I2C_PULL_BIT)) != 0)
+			*pupd = QCOM_TLMM_PIN_PUPD_CONFIG_STRONG_PULL_UP;
+		else
+			*pupd = QCOM_TLMM_PIN_PUPD_CONFIG_PULL_UP;
 		break;
 	default:
 		*pupd = QCOM_TLMM_PIN_PUPD_CONFIG_DISABLE;
 		break;
 	}
-#endif
+
 	return (0);
 }
 
@@ -388,7 +425,6 @@ int
 qcom_tlmm_x1e_hw_pin_set_drive_strength(
     struct qcom_tlmm_softc *sc, uint32_t pin, uint8_t drv)
 {
-#if 0
 	uint32_t reg;
 
 	GPIO_LOCK_ASSERT(sc);
@@ -411,7 +447,7 @@ qcom_tlmm_x1e_hw_pin_set_drive_strength(
 
 	GPIO_WRITE(sc, QCOM_TLMM_X1E_REG_PIN(pin,
 	    QCOM_TLMM_X1E_REG_PIN_CONTROL), reg);
-#endif
+
 	return (0);
 }
 
@@ -422,7 +458,6 @@ int
 qcom_tlmm_x1e_hw_pin_get_drive_strength(
     struct qcom_tlmm_softc *sc, uint32_t pin, uint8_t *drv)
 {
-#if 0
 	uint32_t reg;
 
 	GPIO_LOCK_ASSERT(sc);
@@ -437,7 +472,6 @@ qcom_tlmm_x1e_hw_pin_get_drive_strength(
 	    & QCOM_TLMM_X1E_REG_PIN_CONTROL_DRIVE_STRENGTH_MASK;
 
 	*drv = (*drv + 1) * 2;
-#endif
 
 	return (0);
 }
@@ -450,7 +484,6 @@ int
 qcom_tlmm_x1e_hw_pin_set_vm(
     struct qcom_tlmm_softc *sc, uint32_t pin, bool enable)
 {
-#if 0
 	uint32_t reg;
 
 	GPIO_LOCK_ASSERT(sc);
@@ -467,7 +500,7 @@ qcom_tlmm_x1e_hw_pin_set_vm(
 
 	GPIO_WRITE(sc, QCOM_TLMM_X1E_REG_PIN(pin,
 	    QCOM_TLMM_X1E_REG_PIN_CONTROL), reg);
-#endif
+
 	return (0);
 }
 
@@ -478,7 +511,6 @@ int
 qcom_tlmm_x1e_hw_pin_get_vm(
     struct qcom_tlmm_softc *sc, uint32_t pin, bool *enable)
 {
-#if 0
 	uint32_t reg;
 
 	GPIO_LOCK_ASSERT(sc);
@@ -490,7 +522,7 @@ qcom_tlmm_x1e_hw_pin_get_vm(
 	    QCOM_TLMM_X1E_REG_PIN_CONTROL));
 
 	*enable = !! (reg & QCOM_TLMM_X1E_REG_PIN_CONTROL_VM_ENABLE);
-#endif
+
 	return (0);
 }
 
@@ -501,7 +533,6 @@ int
 qcom_tlmm_x1e_hw_pin_set_open_drain(
     struct qcom_tlmm_softc *sc, uint32_t pin, bool enable)
 {
-#if 0
 	uint32_t reg;
 
 	GPIO_LOCK_ASSERT(sc);
@@ -518,7 +549,7 @@ qcom_tlmm_x1e_hw_pin_set_open_drain(
 
 	GPIO_WRITE(sc, QCOM_TLMM_X1E_REG_PIN(pin,
 	    QCOM_TLMM_X1E_REG_PIN_CONTROL), reg);
-#endif
+
 	return (0);
 }
 
@@ -529,7 +560,6 @@ int
 qcom_tlmm_x1e_hw_pin_get_open_drain(
     struct qcom_tlmm_softc *sc, uint32_t pin, bool *enable)
 {
-#if 0
 	uint32_t reg;
 
 	GPIO_LOCK_ASSERT(sc);
@@ -541,6 +571,6 @@ qcom_tlmm_x1e_hw_pin_get_open_drain(
 	    QCOM_TLMM_X1E_REG_PIN_CONTROL));
 
 	*enable = !! (reg & QCOM_TLMM_X1E_REG_PIN_CONTROL_OD_ENABLE);
-#endif
+
 	return (0);
 }
