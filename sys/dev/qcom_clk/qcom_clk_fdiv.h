@@ -33,6 +33,17 @@ struct qcom_clk_fdiv_def {
 	uint32_t divisor; /* Fixed divisor */
 };
 
+/* Fixed divisor clock */
+#define F_FDIV(_id, _cname, _parent, _divisor)				\
+{									\
+	.clkdef.id = _id,						\
+	.clkdef.name = _cname,						\
+	.clkdef.parent_names = (const char *[]){_parent},		\
+	.clkdef.parent_cnt = 1,						\
+	.clkdef.flags = CLK_NODE_STATIC_STRINGS,			\
+	.divisor = _divisor,						\
+}
+
 extern	int qcom_clk_fdiv_register(struct clkdom *clkdom,
 	    struct qcom_clk_fdiv_def *clkdef);
 

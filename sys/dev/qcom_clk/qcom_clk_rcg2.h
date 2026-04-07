@@ -53,6 +53,25 @@ struct qcom_clk_rcg2_def {
 	const struct qcom_clk_freq_tbl *freq_tbl;
 };
 
+/* RCG2 clock */
+#define F_RCG2(_id, _cname, _parents, _rcgr, _hid_width, _mnd_width,	\
+    _safe_src_idx, _safe_pre_parent_idx, _cfg_offset, _flags,		\
+    _freq_tbl)								\
+{									\
+	.clkdef.id = _id,						\
+	.clkdef.name = _cname,						\
+	.clkdef.parent_names = _parents,				\
+	.clkdef.parent_cnt = nitems(_parents),				\
+	.clkdef.flags = CLK_NODE_STATIC_STRINGS,			\
+	.cmd_rcgr = _rcgr,						\
+	.hid_width = _hid_width,					\
+	.mnd_width = _mnd_width,					\
+	.safe_src_idx = _safe_src_idx,					\
+	.flags= _flags,							\
+	.safe_pre_parent_idx = _safe_pre_parent_idx,			\
+	.freq_tbl = _freq_tbl,						\
+}
+
 extern	int qcom_clk_rcg2_register(struct clkdom *clkdom,
 	    struct qcom_clk_rcg2_def *clkdef);
 

@@ -41,6 +41,20 @@ struct qcom_clk_ro_div_def {
 	struct qcom_clk_ro_div_tbl *div_tbl;
 };
 
+/* read-only div table */
+#define	F_RO_DIV(_id, _cname, _parent, _offset, _shift, _width, _tbl)	\
+{									\
+	.clkdef.id = _id,						\
+	.clkdef.name = _cname,						\
+	.clkdef.parent_names = (const char *[]){_parent},		\
+	.clkdef.parent_cnt = 1,						\
+	.clkdef.flags = CLK_NODE_STATIC_STRINGS,			\
+	.offset = _offset,						\
+	.width = _width,						\
+	.shift = _shift,						\
+	.div_tbl = _tbl,						\
+}
+
 extern	int qcom_clk_ro_div_register(struct clkdom *clkdom,
 	    struct qcom_clk_ro_div_def *clkdef);
 
