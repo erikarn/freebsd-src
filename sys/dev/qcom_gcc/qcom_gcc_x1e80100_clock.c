@@ -37,9 +37,12 @@
 #include <dev/ofw/ofw_bus_subr.h>
 
 #include <dev/clk/clk.h>
+#include <dev/clk/clk_link.h>
 
 #include <dev/qcom_clk/qcom_clk_nodeinst.h>
 #include <dev/qcom_clk/qcom_clk_apll.h>
+
+#include <dt-bindings/clock/qcom,x1e80100-gcc.h>
 
 #include "qcom_gcc_var.h"
 #include "qcom_gcc_x1e80100.h"
@@ -59,6 +62,9 @@ qcom_gcc_x1e80100_branch_set_clk_en(struct qcom_gcc_softc *sc, uint32_t cbcr)
 /*
  * link clocks - xo_board ? Is that what DT_BI_TCXO refers to?
  */
+static struct clk_link_def qcom_gcc_x1e80100_link_clks[] = {
+	F_LINK(0, "xo-board"),
+};
 
 /*
  * apll_lucid_ole_fixed clocks:
@@ -69,6 +75,52 @@ qcom_gcc_x1e80100_branch_set_clk_en(struct qcom_gcc_softc *sc, uint32_t cbcr)
  * gcc_gpll8 / 0x52030, bit 8, DT_BI_TCXO / xo_board, GCC_GPLL8
  * gcc_gpll9 / 0x52030, bit 9, DT_BI_TCXO / xo_board, GCC_GPLL9
  */
+static struct qcom_clk_apll_def qcom_gcc_x1e80100_apll_fixed_clks[] = {
+	F_APLL_LUCID_OLE_FIXED(GCC_GPLL0, "gcc_gpll0", "xo-board", 0x0000,
+	    0x52030, 0),
+	F_APLL_LUCID_OLE_FIXED(GCC_GPLL0, "gcc_gpll4", "xo-board", 0x4000,
+	    0x52030, 4),
+	F_APLL_LUCID_OLE_FIXED(GCC_GPLL0, "gcc_gpll7", "xo-board", 0x7000,
+	    0x52030, 7),
+	F_APLL_LUCID_OLE_FIXED(GCC_GPLL0, "gcc_gpll8", "xo-board", 0x8000,
+	    0x52030, 8),
+	F_APLL_LUCID_OLE_FIXED(GCC_GPLL0, "gcc_gpll9", "xo-board", 0x9000,
+	    0x52030, 9),
+};
+
+static void
+qcom_gcc_x1e80100_register_link_clocks(struct qcom_gcc_softc *sc)
+{
+	int i, rv;
+
+	for (i = 0; i < nitems(qcom_gcc_x1e80100_link_clks); i++) {
+		rv = clknode_link_register(sc->clkdom,
+		    &qcom_gcc_x1e80100_link_clks[i]);
+		if (rv != 0) {
+			device_printf(sc->dev,
+			    "%s: failed to register link clock (%s) - %d\n",
+			    __func__,
+			    qcom_gcc_x1e80100_link_clks[i].clkdef.name, rv);
+		}
+	}
+}
+
+static void
+qcom_gcc_x1e80100_register_apll_lucid_ole_fixed_clocks(struct qcom_gcc_softc *sc)
+{
+	int i, rv;
+
+	for (i = 0; i < nitems(qcom_gcc_x1e80100_apll_fixed_clks); i++) {
+		rv = qcom_clk_apll_register(sc->clkdom,
+		    &qcom_gcc_x1e80100_apll_fixed_clks[i]);
+		if (rv != 0) {
+			device_printf(sc->dev,
+			    "%s: failed to register apll fixed clock (%s) - %d\n",
+			    __func__,
+			    qcom_gcc_x1e80100_apll_fixed_clks[i].clkdef.name, rv);
+		}
+	}
+}
 
 /*
  * apll_lucid_ole_postdiv clocks:
@@ -84,6 +136,8 @@ void
 qcom_gcc_x1e80100_clock_setup(struct qcom_gcc_softc *sc)
 {
 	device_printf(sc->dev, "%s: called\n", __func__);
+
+	sc->clkdom = clkdom_create(sc->dev);
 
 	/* Keep some clocks always on */
 
@@ -113,7 +167,13 @@ qcom_gcc_x1e80100_clock_setup(struct qcom_gcc_softc *sc)
 
 	bus_write_4(sc->reg, 0x52224, 0x0);
 
+	/* Register the link clocks */
+	qcom_gcc_x1e80100_register_link_clocks(sc);
+
 	/* TODO: register RCG DFS clocks */
 
 	/* TODO: register the rest of the clock tree */
+	qcom_gcc_x1e80100_register_apll_lucid_ole_fixed_clocks(sc);
+
+	clkdom_finit(sc->clkdom);
 }
