@@ -36,6 +36,11 @@
 #include <dev/ofw/ofw_bus.h>
 #include <dev/ofw/ofw_bus_subr.h>
 
+#include <dev/clk/clk.h>
+
+#include <dev/qcom_clk/qcom_clk_nodeinst.h>
+#include <dev/qcom_clk/qcom_clk_apll.h>
+
 #include "qcom_gcc_var.h"
 #include "qcom_gcc_x1e80100.h"
 
@@ -50,6 +55,30 @@ qcom_gcc_x1e80100_branch_set_clk_en(struct qcom_gcc_softc *sc, uint32_t cbcr)
 	reg |= CBCR_CLOCK_ENABLE;
 	bus_write_4(sc->reg, cbcr, reg);
 }
+
+/*
+ * link clocks - xo_board ? Is that what DT_BI_TCXO refers to?
+ */
+
+/*
+ * apll_lucid_ole_fixed clocks:
+ *
+ * gcc_gpll0 / 0x52030, bit 0, DT_BI_TCXO / xo_board, GCC_GPLL0
+ * gcc_gpll4 / 0x52030, bit 4, DT_BI_TCXO / xo_board, GCC_GPLL4
+ * gcc_gpll7 / 0x52030, bit 7, DT_BI_TCXO / xo_board, GCC_GPLL7
+ * gcc_gpll8 / 0x52030, bit 8, DT_BI_TCXO / xo_board, GCC_GPLL8
+ * gcc_gpll9 / 0x52030, bit 9, DT_BI_TCXO / xo_board, GCC_GPLL9
+ */
+
+/*
+ * apll_lucid_ole_postdiv clocks:
+ *
+ * gcc_gpll0_out_even / GCC_GPLL0_OUT_EVEN
+ *
+ * TODO: this is the only one, but it has a divisor table, register
+ * array, shifts?  I need to go see exactly what this clock is
+ * actually doing versus the apll_lucid_ole_fixed clock.
+ */
 
 void
 qcom_gcc_x1e80100_clock_setup(struct qcom_gcc_softc *sc)
