@@ -25,21 +25,10 @@
  * SUCH DAMAGE.
  */
 
-#ifndef	__QCOM_CLK_APLL_LUCID_H__
-#define	__QCOM_CLK_APLL_LUCID_H__
+#ifndef	__QCOM_CLK_APLL_FABIA_H__
+#define	__QCOM_CLK_APLL_FABIA_H__
 
-#if 0
-extern	int qcom_clk_apll_trion_recalc(struct clknode *clk, uint64_t *freq);
-#endif
-extern	int qcom_clk_apll_lucid_init(struct clknode *clk);
-#if 0
-extern	int qcom_clk_apll_trion_set_gate(struct clknode *clk, bool enable);
-extern	int qcom_clk_apll_trion_set_freq(struct clknode *clk, uint64_t fin,
-	    uint64_t *fout, int flags, int *stop);
-#endif
+extern	int qcom_clk_apll_postdiv_fabia_recalc_freq(struct clknode *clk,
+	    uint64_t *freq);
 
-/* TODO: migrate this to be fixed_lucid_ole */
-extern struct qcom_clk_apll_ops qcom_clk_apll_ops_lucid_ole;
-extern struct qcom_clk_apll_ops qcom_clk_apll_ops_postdiv_lucid_ole;
-
-#endif	/* __QCOM_CLK_APLL_LUCID_H__ */
+#endif	/* __QCOM_CLK_APLL_FABIA_H__ */

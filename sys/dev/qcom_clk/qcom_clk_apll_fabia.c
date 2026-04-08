@@ -1,7 +1,5 @@
 /*-
- * SPDX-License-Identifier: BSD-2-Clause
- *
- * Copyright (c) 2026 Adrian Chadd <adrian@FreeBSD.org>
+ * Copyright (c) 2026 Adrian Chadd <adrian@FreeBSD.org>.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,21 +23,54 @@
  * SUCH DAMAGE.
  */
 
-#ifndef	__QCOM_CLK_APLL_LUCID_H__
-#define	__QCOM_CLK_APLL_LUCID_H__
+#include <sys/param.h>
+#include <sys/systm.h>
+#include <sys/bus.h>
+#include <sys/lock.h>
+#include <sys/mutex.h>
+#include <sys/rman.h>
+#include <machine/bus.h>
 
-#if 0
-extern	int qcom_clk_apll_trion_recalc(struct clknode *clk, uint64_t *freq);
-#endif
-extern	int qcom_clk_apll_lucid_init(struct clknode *clk);
-#if 0
-extern	int qcom_clk_apll_trion_set_gate(struct clknode *clk, bool enable);
-extern	int qcom_clk_apll_trion_set_freq(struct clknode *clk, uint64_t fin,
-	    uint64_t *fout, int flags, int *stop);
-#endif
+#include <dev/clk/clk.h>
+#include <dev/clk/clk_div.h>
+#include <dev/clk/clk_fixed.h>
+#include <dev/clk/clk_mux.h>
 
-/* TODO: migrate this to be fixed_lucid_ole */
-extern struct qcom_clk_apll_ops qcom_clk_apll_ops_lucid_ole;
-extern struct qcom_clk_apll_ops qcom_clk_apll_ops_postdiv_lucid_ole;
+#include "qcom_clk_apll.h"
+#include "qcom_clk_apll_var.h"
+#include "qcom_clk_apll_fabia.h"
+#include "qcom_clk_apll_reg.h"
 
-#endif	/* __QCOM_CLK_APLL_LUCID_H__ */
+#include "clkdev_if.h"
+
+/**
+ * @brief Recalculate rate based on parent frequency and div config.
+ */
+int
+qcom_clk_apll_postdiv_fabia_recalc_freq(struct clknode *clk, uint64_t *freq)
+{
+	device_t dev = clknode_get_device(clk);
+	struct qcom_clk_apll_sc *sc = clknode_get_softc(clk);
+	uint32_t val;
+	int ret, div, i;
+
+	ret = CLKDEV_READ_4(dev, QCOM_CLK_APLL_HW_PLL_USER_CTL(sc), &val);
+
+	if (ret != 0)
+		return (ret);
+
+	val = val >> sc->post_div_shift;
+	val &= ((1 << sc->post_div_width) - 1);
+
+	div = 1;
+
+	for (i = 0; sc->post_div_table[i].divider != 0; i++) {
+		if (val == sc->post_div_table[i].value) {
+			div = sc->post_div_table[i].divider;
+			break;
+		}
+	}
+
+	*freq = *freq / div;
+	return (0);
+}

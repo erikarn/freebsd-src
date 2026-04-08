@@ -81,6 +81,19 @@
 #define	QCOM_CLK_APLL_HW_REG_PLL_ALPHA_VAL_U(p)	\
 	    ((p)->reg_offset + (p)->ops->regmap[PLL_OFF_ALPHA_VAL_U])
 
+#define QCOM_CLK_APLL_HW_PLL_USER_CTL(p)		\
+	    ((p)->reg_offset + (p)->ops->regmap[PLL_OFF_USER_CTL])
+#if 0
+# define PLL_POST_DIV_SHIFT	8
+# define PLL_POST_DIV_MASK(p)	GENMASK((p)->width ? (p)->width - 1 : 3, 0)
+# define PLL_ALPHA_MSB		BIT(15)
+# define PLL_ALPHA_EN		BIT(24)
+# define PLL_ALPHA_MODE		BIT(25)
+# define PLL_VCO_SHIFT		20
+# define PLL_VCO_MASK		0x3
+#endif
+
+
 /* LUCID EVO PLL specific settings and offsets */
 #define	LUCID_EVO_PCAL_NOT_DONE		(1 << 8)
 #define	LUCID_EVO_ENABLE_VOTE_RUN	(1 << 25)

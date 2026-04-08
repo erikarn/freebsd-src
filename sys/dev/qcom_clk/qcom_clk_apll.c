@@ -169,6 +169,9 @@ qcom_clk_apll_register(struct clkdom *clkdom,
 	case QCOM_CLK_APLL_TYPE_FIXED_LUCID_OLE:
 		ops = &qcom_clk_apll_ops_lucid_ole;
 		break;
+	case QCOM_CLK_APLL_TYPE_POSTDIV_LUCID_OLE:
+		ops = &qcom_clk_apll_ops_postdiv_lucid_ole;
+		break;
 	default:
 		printf("%s: unknown apll type (%d)\n", __func__,
 		    clkdef->apll_type);

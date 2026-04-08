@@ -39,9 +39,10 @@
 #include "qcom_clk_apll.h"
 #include "qcom_clk_apll_var.h"
 #include "qcom_clk_apll_reg.h"
-#include "qcom_clk_apll_utils.h"
+#include "qcom_clk_apll_fabia.h"
 #include "qcom_clk_apll_lucid.h"
 #include "qcom_clk_apll_trion.h"
+#include "qcom_clk_apll_utils.h"
 
 #include "clkdev_if.h"
 
@@ -105,6 +106,13 @@ qcom_clk_apll_lucid_evo_recalc_freq(struct clknode *clk, uint64_t *freq)
 	return (0);
 }
 
+/**
+ * @brief lucid init
+ *
+ * This is shared by multiple clocks:
+ * - fixed_lucid_ole
+ * - postdiv_lucid_ole
+ */
 int
 qcom_clk_apll_lucid_init(struct clknode *clk)
 {
@@ -132,4 +140,10 @@ struct qcom_clk_apll_ops qcom_clk_apll_ops_lucid_ole = {
 //	.op_set_freq = qcom_clk_apll_trion_set_freq,
 	.op_get_gate = qcom_clk_apll_trion_get_gate,
 //	.op_set_gate = qcom_clk_apll_trion_set_gate,
+};
+
+struct qcom_clk_apll_ops qcom_clk_apll_ops_postdiv_lucid_ole = {
+	.regmap = qcom_clk_apll_lucid_ole_regmap,
+	.op_init = qcom_clk_apll_lucid_init,
+	.op_recalc = qcom_clk_apll_postdiv_fabia_recalc_freq,
 };
