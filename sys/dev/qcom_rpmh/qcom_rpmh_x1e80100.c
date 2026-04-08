@@ -196,5 +196,7 @@ qcom_rpmh_x1e80100_init(struct qcom_rpmh_clk_softc *sc)
 
 	clkdom_finit(sc->clkdom);
 
+	clkdom_dump(sc->clkdom);
+
 	return (0);
 }

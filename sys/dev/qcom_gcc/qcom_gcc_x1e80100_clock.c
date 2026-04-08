@@ -176,4 +176,6 @@ qcom_gcc_x1e80100_clock_setup(struct qcom_gcc_softc *sc)
 	qcom_gcc_x1e80100_register_apll_lucid_ole_fixed_clocks(sc);
 
 	clkdom_finit(sc->clkdom);
+
+	clkdom_dump(sc->clkdom);
 }
