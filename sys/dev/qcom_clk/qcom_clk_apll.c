@@ -185,6 +185,9 @@ qcom_clk_apll_register(struct clkdom *clkdom,
 	sc->reg_offset = clkdef->reg_offset;
 	sc->enable_offset = clkdef->enable_offset;
 	sc->enable_shift = clkdef->enable_shift;
+	sc->post_div_shift = clkdef->post_div_shift;
+	sc->post_div_width = clkdef->post_div_width;
+	sc->post_div_table = clkdef->post_div_table;
 	sc->apll_type = clkdef->apll_type;
 	sc->ops = ops;
 

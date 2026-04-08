@@ -34,8 +34,8 @@ typedef enum {
 	QCOM_CLK_APLL_TYPE_LUCID_EVO = 3,
 
 	QCOM_CLK_APLL_TYPE_FIXED_LUCID_OLE = 4,
+	QCOM_CLK_APLL_TYPE_POSTDIV_LUCID_OLE = 5,
 } qcom_clk_apll_type_t;
-
 
 typedef enum {
 	PLL_OFF_L_VAL,
@@ -62,12 +62,24 @@ typedef enum {
 	PLL_OFF_MAX_REGS
 } qcom_clk_apll_regmap_idx_t;
 
+// XXX TODO
+struct clk_div_table;
+
 struct qcom_clk_apll_def {
 	struct clknode_init_def clkdef;
 	qcom_clk_apll_type_t apll_type;
+
+	/* Offset of register inside clock controller register space */
 	uint32_t reg_offset;
+
+	/* enable offset/flag */
 	uint32_t enable_offset;
 	uint32_t enable_shift;
+
+	/* post-div clocks */
+	uint32_t post_div_width;
+	uint32_t post_div_shift;
+	const struct clk_div_table *post_div_table;
 };
 
 #define F_APLL_LUCID_OLE_FIXED(_id, _cname, _parent, _roffset,		\
@@ -82,6 +94,21 @@ struct qcom_clk_apll_def {
 	.enable_offset = _eoffset,					\
 	.enable_shift = _eshift,					\
 	.apll_type = QCOM_CLK_APLL_TYPE_FIXED_LUCID_OLE,		\
+}
+
+#define F_APLL_LUCID_OLE_POSTDIV(_id, _cname, _parent, _roffset,	\
+	_post_div_shift, _post_div_width, _post_div_table)		\
+{									\
+	.clkdef.id = _id,						\
+	.clkdef.name = _cname,						\
+	.clkdef.parent_names = (const char *[]){_parent},		\
+	.clkdef.parent_cnt = 1,						\
+	.clkdef.flags = CLK_NODE_STATIC_STRINGS,			\
+	.reg_offset = _roffset,						\
+	.post_div_shift = _post_div_shift,				\
+	.post_div_width = _post_div_width,				\
+	.post_div_table = _post_div_table,				\
+	.apll_type = QCOM_CLK_APLL_TYPE_POSTDIV_LUCID_OLE,		\
 }
 
 extern	int qcom_clk_apll_register(struct clkdom *clkdom,

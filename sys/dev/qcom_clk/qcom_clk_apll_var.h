@@ -44,6 +44,10 @@ struct qcom_clk_apll_sc {
 	uint32_t enable_shift;
 	qcom_clk_apll_type_t apll_type;
 	struct qcom_clk_apll_ops *ops;
+
+	uint32_t post_div_shift;
+	uint32_t post_div_width;
+	const struct clk_div_table *post_div_table;
 };
 
 #endif	/* __QCOM_CLK_APLL_VAR_H__ */
