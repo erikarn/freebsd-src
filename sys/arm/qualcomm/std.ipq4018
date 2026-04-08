@@ -45,6 +45,9 @@ dev/qcom_gcc/qcom_gcc_x1e80100_reset.c	optional qcom_gcc
 dev/qcom_gcc/qcom_gcc_x1e80100_clock.c	optional qcom_gcc
 
 dev/qcom_clk/qcom_clk_apll.c		optional qcom_gcc
+dev/qcom_clk/qcom_clk_apll_lucid.c	optional qcom_gcc
+dev/qcom_clk/qcom_clk_apll_trion.c	optional qcom_gcc
+dev/qcom_clk/qcom_clk_apll_utils.c	optional qcom_gcc
 dev/qcom_clk/qcom_clk_fepll.c		optional qcom_gcc
 dev/qcom_clk/qcom_clk_fdiv.c		optional qcom_gcc
 dev/qcom_clk/qcom_clk_apssdiv.c		optional qcom_gcc
@@ -52,6 +55,7 @@ dev/qcom_clk/qcom_clk_freqtbl.c		optional qcom_gcc
 dev/qcom_clk/qcom_clk_rcg2.c		optional qcom_gcc
 dev/qcom_clk/qcom_clk_branch2.c		optional qcom_gcc
 dev/qcom_clk/qcom_clk_ro_div.c		optional qcom_gcc
+dev/qcom_clk/qcom_clk_apll.c		optional qcom_gcc
 
 dev/qcom_tlmm/qcom_tlmm_debug.c		optional qcom_tlmm
 dev/qcom_tlmm/qcom_tlmm_ipq4018.c	optional qcom_tlmm

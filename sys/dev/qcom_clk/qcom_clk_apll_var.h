@@ -25,66 +25,25 @@
  * SUCH DAMAGE.
  */
 
-#ifndef	__QCOM_CLK_APLL_H__
-#define	__QCOM_CLK_APLL_H__
+#ifndef	__QCOM_CLK_APLL_VAR_H__
+#define	__QCOM_CLK_APLL_VAR_H__
 
-typedef enum {
-	QCOM_CLK_APLL_TYPE_FIXED_LUCID_EVO = 1,
-	QCOM_CLK_APLL_TYPE_POSTDIV_LUCID_EVO = 2,
-	QCOM_CLK_APLL_TYPE_LUCID_EVO = 3,
+struct qcom_clk_apll_ops {
+	const uint32_t *regmap;
+	int (*op_init)(struct clknode *);
+	int (*op_recalc)(struct clknode *, uint64_t *);
+	int (*op_set_gate)(struct clknode *, bool);
+	int (*op_get_gate)(struct clknode *, bool *);
+	int (*op_set_freq)(struct clknode *, uint64_t, uint64_t *, int, int *);
+};
 
-	QCOM_CLK_APLL_TYPE_FIXED_LUCID_OLE = 4,
-} qcom_clk_apll_type_t;
-
-
-typedef enum {
-	PLL_OFF_L_VAL,
-	PLL_OFF_CAL_L_VAL,
-	PLL_OFF_ALPHA_VAL,
-	PLL_OFF_ALPHA_VAL_U,
-	PLL_OFF_USER_CTL,
-	PLL_OFF_USER_CTL_U,
-	PLL_OFF_USER_CTL_U1,
-	PLL_OFF_CONFIG_CTL,
-	PLL_OFF_CONFIG_CTL_U,
-	PLL_OFF_CONFIG_CTL_U1,
-	PLL_OFF_CONFIG_CTL_U2,
-	PLL_OFF_TEST_CTL,
-	PLL_OFF_TEST_CTL_U,
-	PLL_OFF_TEST_CTL_U1,
-	PLL_OFF_TEST_CTL_U2,
-	PLL_OFF_TEST_CTL_U3,
-	PLL_OFF_STATE,
-	PLL_OFF_STATUS,
-	PLL_OFF_OPMODE,
-	PLL_OFF_FRAC,
-	PLL_OFF_CAL_VAL,
-	PLL_OFF_MAX_REGS
-} qcom_clk_apll_regmap_idx_t;
-
-struct qcom_clk_apll_def {
-	struct clknode_init_def clkdef;
-	qcom_clk_apll_type_t apll_type;
+struct qcom_clk_apll_sc {
+	struct clknode *clknode;
 	uint32_t reg_offset;
 	uint32_t enable_offset;
 	uint32_t enable_shift;
+	qcom_clk_apll_type_t apll_type;
+	struct qcom_clk_apll_ops *ops;
 };
 
-#define F_APLL_LUCID_OLE_FIXED(_id, _cname, _parent, _roffset,		\
-	_eoffset, _eshift)						\
-{									\
-	.clkdef.id = _id,						\
-	.clkdef.name = _cname,						\
-	.clkdef.parent_names = (const char *[]){_parent},		\
-	.clkdef.parent_cnt = 1,						\
-	.clkdef.flags = CLK_NODE_STATIC_STRINGS,			\
-	.reg_offset = _roffset,						\
-	.enable_offset = _eoffset,					\
-	.enable_shift = _eshift,					\
-	.apll_type = QCOM_CLK_APLL_TYPE_FIXED_LUCID_OLE,		\
-}
-
-extern	int qcom_clk_apll_register(struct clkdom *clkdom,
-	    struct qcom_clk_apll_def *clkdef);
-
-#endif	/* __QCOM_CLK_APLL_H__ */
+#endif	/* __QCOM_CLK_APLL_VAR_H__ */

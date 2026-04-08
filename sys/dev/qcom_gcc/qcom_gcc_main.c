@@ -72,7 +72,7 @@ static struct qcom_gcc_chipset_list_entry qcom_gcc_chipset_list[] = {
 	    QCOM_GCC_CHIPSET_IPQ4018 },
 	{ "qcom,gcc-msm8916", "Qualcomm MSM8916 Clock/Reset Controller",
 	    QCOM_GCC_CHIPSET_MSM8916 },
-	{ "qcom,gcc-x1e80100",
+	{ "qcom,x1e80100-gcc",
 	    "Qualcomm Snapdragon X1E80100 Clock/Reset Controller",
 	    QCOM_GCC_CHIPSET_X1E80100 },
 	{ NULL, NULL, 0 },

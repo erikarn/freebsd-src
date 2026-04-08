@@ -37,6 +37,10 @@
 #include <dev/clk/clk_mux.h>
 
 #include "qcom_clk_apll.h"
+#include "qcom_clk_apll_var.h"
+
+#include "qcom_clk_apll_lucid.h"
+#include "qcom_clk_apll_trion.h"
 
 #include "clkdev_if.h"
 
@@ -53,78 +57,60 @@
 #define DPRINTF(dev, msg...)
 #endif
 
-struct qcom_clk_apll_sc {
-	struct clknode *clknode;
-	uint32_t reg_offset;
-	uint32_t enable_offset;
-	uint32_t enable_shift;
-	qcom_clk_apll_type_t apll_type;
-	const struct qcom_clk_freq_tbl *freq_tbl;
-};
-
 static int
 qcom_clk_apll_recalc(struct clknode *clk, uint64_t *freq)
 {
-#if 0
 	struct qcom_clk_apll_sc *sc;
-	uint32_t reg, cdiv;
 
 	sc = clknode_get_softc(clk);
-#endif
-	if (freq == NULL || *freq == 0) {
-		printf("%s: called; NULL or 0 frequency\n", __func__);
-		return (ENXIO);
-	}
 
-	*freq = 0;
-	printf("%s: TODO\n", __func__);
-	return (0);
+	/* Check; return implemented */
+	if (sc->ops->op_recalc == NULL)
+		return (ENXIO);
+
+	return (sc->ops->op_recalc(clk, freq));
 }
 
 static int
 qcom_clk_apll_init(struct clknode *clk, device_t dev)
 {
+	struct qcom_clk_apll_sc *sc;
 
-	printf("%s: TODO\n", __func__);
-	/*
-	 * There's only a single parent here for an fixed divisor,
-	 * so just set it to 0; the caller doesn't need to supply it.
-	 */
-	clknode_init_parent_idx(clk, 0);
+	sc = clknode_get_softc(clk);
 
-	return (0);
+	/* Check; return implemented */
+	if (sc->ops->op_init == NULL)
+		return (ENXIO);
+
+	return (sc->ops->op_init(clk));
 }
 
 static int
 qcom_clk_apll_set_gate(struct clknode *clk, bool enable)
 {
-#if 0
-	struct qcom_clk_apssdiv_sc *sc;
-	uint32_t reg;
+	struct qcom_clk_apll_sc *sc;
 
 	sc = clknode_get_softc(clk);
 
-	if (sc->enable_offset == 0) {
+	/* Check; return implemented */
+	if (sc->ops->op_set_gate == NULL)
 		return (ENXIO);
-	}
 
-	DPRINTF(clknode_get_device(sc->clknode),
-	    "%s: called; enable=%d\n", __func__, enable);
+	return (sc->ops->op_set_gate(clk, enable));
+}
 
-	CLKDEV_DEVICE_LOCK(clknode_get_device(sc->clknode));
-	CLKDEV_READ_4(clknode_get_device(sc->clknode), sc->enable_offset,
-	    &reg);
-	if (enable) {
-		reg |= (1U << sc->enable_shift);
-	} else {
-		reg &= ~(1U << sc->enable_shift);
-	}
-	CLKDEV_WRITE_4(clknode_get_device(sc->clknode), sc->enable_offset,
-	    reg);
-	CLKDEV_DEVICE_UNLOCK(clknode_get_device(sc->clknode));
-#endif
-	printf("%s: TODO\n", __func__);
-	return (0);
+static int
+qcom_clk_apll_get_gate(struct clknode *clk, bool *enable)
+{
+	struct qcom_clk_apll_sc *sc;
+
+	sc = clknode_get_softc(clk);
+
+	/* Check; return implemented */
+	if (sc->ops->op_get_gate == NULL)
+		return (ENXIO);
+
+	return (sc->ops->op_get_gate(clk, enable));
 }
 
 /*
@@ -140,62 +126,15 @@ static int
 qcom_clk_apll_set_freq(struct clknode *clk, uint64_t fin, uint64_t *fout,
     int flags, int *stop)
 {
-#if 0
-	const struct qcom_clk_freq_tbl *f;
-	struct qcom_clk_apssdiv_sc *sc;
-	uint64_t f_freq;
-	uint32_t reg;
+	struct qcom_clk_apll_sc *sc;
 
 	sc = clknode_get_softc(clk);
 
-	/* There are no further PLLs to set in this chain */
-	*stop = 1;
+	/* Check; return implemented */
+	if (sc->ops->op_set_freq == NULL)
+		return (ENXIO);
 
-	/* Search the table for a suitable frequency */
-	f = qcom_clk_freq_tbl_lookup(sc->freq_tbl, *fout);
-	if (f == NULL) {
-		return (ERANGE);
-	}
-
-	/*
-	 * Calculate what the resultant frequency would be based on the
-	 * parent PLL.
-	 */
-	f_freq = qcom_clk_apssdiv_calc_rate(clk, fin, f->pre_div);
-
-	DPRINTF(clknode_get_device(sc->clknode),
-	    "%s: dryrun: %d, fin=%llu fout=%llu f_freq=%llu pre_div=%u"
-	    " target_freq=%llu\n",
-	    __func__,
-	    !! (flags & CLK_SET_DRYRUN),
-	    fin, *fout, f_freq, f->pre_div, f->freq);
-
-	if (flags & CLK_SET_DRYRUN) {
-		*fout = f_freq;
-		return (0);
-	}
-
-	/*
-	 * Program in the new pre-divisor.
-	 */
-	CLKDEV_DEVICE_LOCK(clknode_get_device(sc->clknode));
-	CLKDEV_READ_4(clknode_get_device(sc->clknode), sc->div_offset, &reg);
-	reg &= ~(((1U << sc->div_width) - 1) << sc->div_shift);
-	reg |= (f->pre_div << sc->div_shift);
-	CLKDEV_WRITE_4(clknode_get_device(sc->clknode), sc->div_offset, reg);
-	CLKDEV_DEVICE_UNLOCK(clknode_get_device(sc->clknode));
-
-	/*
-	 * The linux driver notes there's no status/completion bit to poll.
-	 * So sleep for a bit and hope that's enough time for it to
-	 * settle.
-	 */
-	DELAY(1);
-
-	*fout = f_freq;
-#endif
-	printf("%s: TODO\n", __func__);
-	return (ENXIO);
+	return (sc->ops->op_set_freq(clk, fin, fout, flags, stop));
 }
 
 static clknode_method_t qcom_clk_apll_methods[] = {
@@ -203,6 +142,7 @@ static clknode_method_t qcom_clk_apll_methods[] = {
 	CLKNODEMETHOD(clknode_init,		qcom_clk_apll_init),
 	CLKNODEMETHOD(clknode_recalc_freq,	qcom_clk_apll_recalc),
 	CLKNODEMETHOD(clknode_set_gate,		qcom_clk_apll_set_gate),
+	CLKNODEMETHOD(clknode_get_gate,		qcom_clk_apll_get_gate),
 	CLKNODEMETHOD(clknode_set_freq,		qcom_clk_apll_set_freq),
 
 	/* XXX TODO: figure out the equivalents for these linux methods */
@@ -223,6 +163,17 @@ qcom_clk_apll_register(struct clkdom *clkdom,
 {
 	struct clknode *clk;
 	struct qcom_clk_apll_sc *sc;
+	struct qcom_clk_apll_ops *ops;
+
+	switch (clkdef->apll_type) {
+	case QCOM_CLK_APLL_TYPE_FIXED_LUCID_OLE:
+		ops = &qcom_clk_apll_ops_lucid_ole;
+		break;
+	default:
+		printf("%s: unknown apll type (%d)\n", __func__,
+		    clkdef->apll_type);
+		return (1);
+	}
 
 	clk = clknode_create(clkdom, &qcom_clk_apll_class, &clkdef->clkdef);
 	if (clk == NULL)
@@ -235,6 +186,7 @@ qcom_clk_apll_register(struct clkdom *clkdom,
 	sc->enable_offset = clkdef->enable_offset;
 	sc->enable_shift = clkdef->enable_shift;
 	sc->apll_type = clkdef->apll_type;
+	sc->ops = ops;
 
 	clknode_register(clkdom, clk);
 
