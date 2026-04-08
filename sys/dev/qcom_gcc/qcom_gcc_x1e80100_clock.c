@@ -38,6 +38,7 @@
 
 #include <dev/clk/clk.h>
 #include <dev/clk/clk_link.h>
+#include <dev/clk/clk_div.h>
 
 #include <dev/qcom_clk/qcom_clk_nodeinst.h>
 #include <dev/qcom_clk/qcom_clk_apll.h>
@@ -78,14 +79,24 @@ static struct clk_link_def qcom_gcc_x1e80100_link_clks[] = {
 static struct qcom_clk_apll_def qcom_gcc_x1e80100_apll_fixed_clks[] = {
 	F_APLL_LUCID_OLE_FIXED(GCC_GPLL0, "gcc_gpll0", "xo-board", 0x0000,
 	    0x52030, 0),
-	F_APLL_LUCID_OLE_FIXED(GCC_GPLL0, "gcc_gpll4", "xo-board", 0x4000,
+	F_APLL_LUCID_OLE_FIXED(GCC_GPLL4, "gcc_gpll4", "xo-board", 0x4000,
 	    0x52030, 4),
-	F_APLL_LUCID_OLE_FIXED(GCC_GPLL0, "gcc_gpll7", "xo-board", 0x7000,
+	F_APLL_LUCID_OLE_FIXED(GCC_GPLL7, "gcc_gpll7", "xo-board", 0x7000,
 	    0x52030, 7),
-	F_APLL_LUCID_OLE_FIXED(GCC_GPLL0, "gcc_gpll8", "xo-board", 0x8000,
+	F_APLL_LUCID_OLE_FIXED(GCC_GPLL8, "gcc_gpll8", "xo-board", 0x8000,
 	    0x52030, 8),
-	F_APLL_LUCID_OLE_FIXED(GCC_GPLL0, "gcc_gpll9", "xo-board", 0x9000,
+	F_APLL_LUCID_OLE_FIXED(GCC_GPLL9, "gcc_gpll9", "xo-board", 0x9000,
 	    0x52030, 9),
+};
+
+static const struct clk_div_table gcc_gpll0_out_even_postdiv_table[] = {
+	{ 0x1, 2 },
+	{ 0, 0 },
+};
+
+static struct qcom_clk_apll_def qcom_gcc_x1e80100_apll_postdiv_clks[] = {
+	F_APLL_LUCID_OLE_POSTDIV(GCC_GPLL0_OUT_EVEN, "gcc_gpll0_out_even",
+	    "gcc_gpll0", 0x0000, 10, 4, gcc_gpll0_out_even_postdiv_table),
 };
 
 static void
@@ -131,6 +142,22 @@ qcom_gcc_x1e80100_register_apll_lucid_ole_fixed_clocks(struct qcom_gcc_softc *sc
  * array, shifts?  I need to go see exactly what this clock is
  * actually doing versus the apll_lucid_ole_fixed clock.
  */
+static void
+qcom_gcc_x1e80100_register_apll_lucid_ole_postdiv_clocks(struct qcom_gcc_softc *sc)
+{
+	int i, rv;
+
+	for (i = 0; i < nitems(qcom_gcc_x1e80100_apll_postdiv_clks); i++) {
+		rv = qcom_clk_apll_register(sc->clkdom,
+		    &qcom_gcc_x1e80100_apll_postdiv_clks[i]);
+		if (rv != 0) {
+			device_printf(sc->dev,
+			    "%s: failed to register apll postdiv clock (%s) - %d\n",
+			    __func__,
+			    qcom_gcc_x1e80100_apll_postdiv_clks[i].clkdef.name, rv);
+		}
+	}
+}
 
 void
 qcom_gcc_x1e80100_clock_setup(struct qcom_gcc_softc *sc)
@@ -174,6 +201,7 @@ qcom_gcc_x1e80100_clock_setup(struct qcom_gcc_softc *sc)
 
 	/* TODO: register the rest of the clock tree */
 	qcom_gcc_x1e80100_register_apll_lucid_ole_fixed_clocks(sc);
+	qcom_gcc_x1e80100_register_apll_lucid_ole_postdiv_clocks(sc);
 
 	clkdom_finit(sc->clkdom);
 
