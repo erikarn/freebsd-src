@@ -57,7 +57,7 @@ install -m 0755 -D /mnt ${X_ROOTDIR}/lib/libncursesw.so.9 /mnt/lib/
 install -m 0755 -D /mnt ${X_ROOTDIR}/lib/libc.so.7 /mnt/lib/
 install -m 0755 -D /mnt ${X_ROOTDIR}/lib/libsys.so.7 /mnt/lib/
 install -m 0755 -D /mnt ${X_ROOTDIR}/lib/libgcc_s.so.1 /mnt/lib/
-install -m 0755 -D /mnt ${X_ROOTDIR}/lib/libutil.so.9 /mnt/lib/
+install -m 0755 -D /mnt ${X_ROOTDIR}/lib/libutil.so.10 /mnt/lib/
 install -m 0755 -D /mnt ${X_ROOTDIR}/lib/libmd.so.7 /mnt/lib/
 install -m 0755 -D /mnt ${X_ROOTDIR}/lib/libm.so.5 /mnt/lib/
 install -m 0755 -D /mnt ${X_ROOTDIR}/lib/lib80211.so.1 /mnt/lib/
