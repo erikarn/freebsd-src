@@ -2,8 +2,8 @@
 
 . ./local/opts.inc
 
-MFS_FILE="mfs-arm.img"
-MFS_UZIP_FILE="mfs-arm.uzip"
+MFS_FILE="../mfs-arm.img"
+MFS_UZIP_FILE="/tftpboot/mfs-arm.uzip"
 
 dd if=/dev/zero of=${MFS_FILE} bs=1m count=8
 MDEV="`mdconfig -f ${MFS_FILE}`"
@@ -92,4 +92,4 @@ umount /mnt
 
 mdconfig -d -u 0
 
-mkuzip -o /tftpboot/${MFS_UZIP_FILE} ${MFS_FILE}
+mkuzip -o ${MFS_UZIP_FILE} ${MFS_FILE}
