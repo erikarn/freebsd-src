@@ -11081,6 +11081,10 @@ iwx_key_alloc(struct ieee80211vap *vap, struct ieee80211_key *k,
 		*keyix = 0;	/* NB: use key index 0 for ucast key */
 	} else if (ieee80211_is_key_global(vap, k)) {
 		*keyix = ieee80211_crypto_get_key_wepidx(vap, k);
+	} else if (ieee80211_is_key_igtk(vap, k)) {
+		*keyix = *rxkeyix = IEEE80211_KEYIX_NONE;
+		k->wk_flags |= IEEE80211_KEY_SWCRYPT;
+		return (1);
 	} else {
 		net80211_vap_printf(vap, "%s: invalid crypto key type\n",
 		    __func__);
