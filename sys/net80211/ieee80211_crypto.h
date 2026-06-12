@@ -225,8 +225,10 @@ struct ieee80211_cipher {
 	void	(*ic_detach)(struct ieee80211_key *);
 	int	(*ic_setkey)(struct ieee80211_key *);
 	void	(*ic_setiv)(struct ieee80211_key *, uint8_t *);
-	int	(*ic_encap)(struct ieee80211_key *, struct mbuf *);
-	int	(*ic_decap)(struct ieee80211_key *, struct mbuf *, int);
+	int	(*ic_encap)(struct ieee80211_key *,
+			const struct ieee80211_node *, struct mbuf *);
+	int	(*ic_decap)(struct ieee80211_key *,
+			const struct ieee80211_node *, struct mbuf *, int);
 	/*
 	 * ic_enmic() and ic_demic() are currently only used by TKIP.
 	 * Please see ieee80211_crypto_enmic() and ieee80211_crypto_demic()
