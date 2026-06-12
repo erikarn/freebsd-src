@@ -135,6 +135,15 @@ rtwn_key_alloc(struct ieee80211vap *vap, struct ieee80211_key *k,
 		goto end;
 	}
 
+	/*
+	 * IGTK encryption/decryption are handled in software.
+	 */
+	if (ieee80211_is_key_igtk(vap, k)) {
+		k->wk_flags |= IEEE80211_KEY_SWCRYPT;
+		*keyix = 0;
+		goto end;
+	}
+
 	start = sc->cam_entry_limit;
 	switch (sc->sc_hwcrypto) {
 	case RTWN_CRYPTO_SW:
@@ -186,6 +195,11 @@ rtwn_key_set_cb0(struct rtwn_softc *sc, const struct ieee80211_key *k)
 	uint8_t algo, keyid;
 	int i, error;
 
+	/*
+	 * If full encryption is supported and the key is a
+	 * global/WEP key then use the hardware allocated key index,
+	 * otherwise default to key 0 (default unicast key.)
+	 */
 	if (sc->sc_hwcrypto == RTWN_CRYPTO_FULL &&
 	    k->wk_keyix < IEEE80211_WEP_NKID)
 		keyid = k->wk_keyix;
@@ -273,6 +287,7 @@ rtwn_init_static_keys(struct rtwn_softc *sc, struct rtwn_vap *rvp)
 	if (sc->sc_hwcrypto != RTWN_CRYPTO_FULL)
 		return (0);		/* nothing to do */
 
+	/* Note: only initialising the 4 WEP keys, no IGTK */
 	for (i = 0; i < IEEE80211_WEP_NKID; i++) {
 		const struct ieee80211_key *k = rvp->keys[i];
 		if (k != NULL) {

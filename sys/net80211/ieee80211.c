@@ -2712,6 +2712,22 @@ ieee80211_is_key_global(const struct ieee80211vap *vap,
 }
 
 /**
+ * @brief Determine whether the given key in the given VAP is an iGTK key.
+ *
+ * iGTK keys are at index 4 and 5, shared between all stations on a VAP.
+ *
+ * @param vap	the current vap
+ * @param key	ieee80211_key to use/check
+ * @returns true if the key is an iGTK key, false otherwise
+ */
+bool
+ieee80211_is_key_igtk(const struct ieee80211vap *vap,
+    const struct ieee80211_key *key)
+{
+	return (key == &vap->iv_nw_keys[4] || key == &vap->iv_nw_keys[5]);
+}
+
+/**
  * @brief Determine whether the given key in the given VAP is a unicast key.
  *
  * This only returns true if it's a unicast key.
@@ -2738,7 +2754,8 @@ ieee80211_is_key_unicast(const struct ieee80211vap *vap,
 	 * to support multiple unicast keys, IGTK, etc) so we
 	 * will absolutely need to fix the key flags.
 	 */
-	return (!ieee80211_is_key_global(vap, key));
+	return (!(ieee80211_is_key_global(vap, key)
+	    || ieee80211_is_key_igtk(vap, key)));
 }
 
 /**

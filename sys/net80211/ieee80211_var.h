@@ -534,7 +534,7 @@ struct ieee80211vap {
 	/* Key management */
 	uint16_t		iv_max_keyix;	/* max h/w key index */
 	ieee80211_keyix		iv_def_txkey;	/* default/group tx key index */
-	struct ieee80211_key	iv_nw_keys[IEEE80211_WEP_NKID];
+	struct ieee80211_key	iv_nw_keys[IEEE80211_MAX_NKID];
 	int			(*iv_key_alloc)(struct ieee80211vap *,
 				    struct ieee80211_key *,
 				    ieee80211_keyix *, ieee80211_keyix *);
@@ -870,6 +870,8 @@ char	ieee80211_channel_type_char(const struct ieee80211_channel *c);
 #define	ieee80211_get_vap_desired_channel(_iv)	((_iv)->iv_des_chan)
 
 bool	ieee80211_is_key_global(const struct ieee80211vap *vap,
+	    const struct ieee80211_key *key);
+bool	ieee80211_is_key_igtk(const struct ieee80211vap *vap,
 	    const struct ieee80211_key *key);
 bool	ieee80211_is_key_unicast(const struct ieee80211vap *vap,
 	    const struct ieee80211_key *key);

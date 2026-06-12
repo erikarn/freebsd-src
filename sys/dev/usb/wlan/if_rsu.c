@@ -1533,7 +1533,11 @@ rsu_key_alloc(struct ieee80211vap *vap, struct ieee80211_key *k,
 
 	if (ieee80211_is_key_global(vap, k)) {
 		*keyix = ieee80211_crypto_get_key_wepidx(vap, k);
-	} else {
+	} else if (ieee80211_is_key_igtk(vap, k)) {
+		*keyix = 0;
+		is_checked = 1;
+		k->wk_flags |= IEEE80211_KEY_SWCRYPT;
+	} else if (ieee80211_is_key_unicast(vap, k)) {
 		/* Note: assumes this is a pairwise key */
 		if (vap->iv_opmode != IEEE80211_M_STA) {
 			*keyix = 0;
@@ -1546,6 +1550,10 @@ rsu_key_alloc(struct ieee80211vap *vap, struct ieee80211_key *k,
 			 * skipping over the fixed slots and _BC / _BSS.
 			 */
 			*keyix = R92S_MACID_BSS;
+	} else {
+		device_printf(sc->sc_dev, "%s: error; unknown key type\n",
+		    __func__);
+		return (0);
 	}
 
 	if (!is_checked) {

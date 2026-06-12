@@ -4784,6 +4784,12 @@ wpi_process_key(struct ieee80211vap *vap, const struct ieee80211_key *k,
 		return 1;
 	}
 
+	/* Handle IGTK keys */
+	if (ieee80211_is_key_global(vap, k)) {
+		/* Not for us. */
+		return 1;
+	}
+
 	/* Handle group keys. */
 	if (ieee80211_is_key_global(vap, k)) {
 		WPI_NT_LOCK(sc);

@@ -63,7 +63,7 @@ null_key_alloc(struct ieee80211vap *vap, struct ieee80211_key *k,
 	ieee80211_keyix *keyix, ieee80211_keyix *rxkeyix)
 {
 
-	if (!ieee80211_is_key_global(vap, k)) {
+	if (ieee80211_is_key_unicast(vap, k)) {
 		/*
 		 * Not in the global key table, the driver should handle this
 		 * by allocating a slot in the h/w key table/cache.  In
@@ -77,8 +77,17 @@ null_key_alloc(struct ieee80211vap *vap, struct ieee80211_key *k,
 		if (k->wk_flags & IEEE80211_KEY_GROUP)
 			return 0;
 		*keyix = 0;	/* NB: use key index 0 for ucast key */
-	} else {
+	} else if (ieee80211_is_key_global(vap, k)) {
+		/* global/wep keys */
 		*keyix = ieee80211_crypto_get_key_wepidx(vap, k);
+	} else if (ieee80211_is_key_igtk(vap, k)) {
+		/* igtk - enforce software handling */
+		*keyix = IEEE80211_KEYIX_NONE;
+		k->wk_flags |= IEEE80211_KEY_SWCRYPT;
+	} else {
+		net80211_vap_printf(vap, "%s: called on unknown key type!\n",
+		    __func__);
+		return (0);
 	}
 	*rxkeyix = IEEE80211_KEYIX_NONE;	/* XXX maybe *keyix? */
 	return 1;
@@ -229,9 +238,9 @@ ieee80211_crypto_vattach(struct ieee80211vap *vap)
 	int i;
 
 	/* NB: we assume everything is pre-zero'd */
-	vap->iv_max_keyix = IEEE80211_WEP_NKID;
+	vap->iv_max_keyix = IEEE80211_WEP_NKID; /* Note: maximum HW key index */
 	vap->iv_def_txkey = IEEE80211_KEYIX_NONE;
-	for (i = 0; i < IEEE80211_WEP_NKID; i++)
+	for (i = 0; i < IEEE80211_MAX_NKID; i++)
 		ieee80211_crypto_resetkey(vap, &vap->iv_nw_keys[i],
 			IEEE80211_KEYIX_NONE);
 	/*
@@ -562,7 +571,7 @@ ieee80211_crypto_delglobalkeys(struct ieee80211vap *vap)
 	int i;
 
 	ieee80211_key_update_begin(vap);
-	for (i = 0; i < IEEE80211_WEP_NKID; i++)
+	for (i = 0; i < IEEE80211_MAX_NKID; i++)
 		(void) _ieee80211_crypto_delkey(vap, &vap->iv_nw_keys[i]);
 	ieee80211_key_update_end(vap);
 }
@@ -611,6 +620,27 @@ ieee80211_crypto_setkey(struct ieee80211vap *vap, struct ieee80211_key *key)
 	return dev_key_set(vap, key);
 }
 
+/*
+ * @brief Return index if the key is an IGTK key (4..5); -1 otherwise.
+ *
+ * This is different to "get_keyid" which defaults to returning
+ * 0 for unicast keys; it assumes that it won't be used for WEP.
+ *
+ * @param vap	ieee80211vap to check
+ * @param k	ieee80211_key to lookup index for
+ * @returns 4 or 5, otherwise -1 if it's not an iGTK key.
+ */
+int
+ieee80211_crypto_get_key_igtk_idx(const struct ieee80211vap *vap,
+    const struct ieee80211_key *k)
+{
+	if (ieee80211_is_key_igtk(vap, k)) {
+		return (k - vap->iv_nw_keys);
+	}
+
+	return (-1);
+}
+
 /**
  * @brief Return index if the key is a WEP key (0..3); -1 otherwise.
  *
@@ -633,17 +663,20 @@ ieee80211_crypto_get_key_wepidx(const struct ieee80211vap *vap,
 }
 
 /**
- * @brief Return the index of a unicast, global or IGTK key.
+ * @brief Return the index of a unicast, global or IGTK key to populate
+ *        in the IV / extended IV field of a frame.
  *
  * Return the index of a key.  For unicast keys the index is 0..1.
- * For global/WEP keys it's 0..3.  For IGTK keys its 4..5.
+ * For global/WEP keys it's 0..3.  Unicast protected management frames (PMF)
+ * will use the current key.  Mulicast PMF ("BIP") will not be encrypted in this
+ * path and will populate the relevant IE with either the full key
+ * index (4 or 5) via a call to ieee80211_crypto_get_key_igtk_idx().
  *
  * TODO: support >1 unicast key
- * TODO: support IGTK keys
  *
  * @param vap the current VAP
  * @param k ieee80211_key to check
- * @returns 0..3 for a WEP/global key, 0..1 for unicast key, 4..5 for IGTK key
+ * @returns 0..3 for a WEP/global key, 0..1 for unicast key, 0..1 for IGTK key.
  */
 uint8_t
 ieee80211_crypto_get_keyid(struct ieee80211vap *vap, struct ieee80211_key *k)
@@ -652,6 +685,17 @@ ieee80211_crypto_get_keyid(struct ieee80211vap *vap, struct ieee80211_key *k)
 		return (k - vap->iv_nw_keys);
 	}
 
+	/*
+	 * This function shouldn't be called for an IGTK key, so just return
+	 * the default unicast key (0).
+	 */
+	if (ieee80211_is_key_igtk(vap, k)) {
+		net80211_printf("%s: called with an iGTK key, please check!\n",
+		    __func__);
+		return (0);
+	}
+
+	/* Default to unicast key 0 */
 	return (0);
 }
 
@@ -958,11 +1002,15 @@ ieee80211_crypto_reload_keys(struct ieee80211com *ic)
 	TAILQ_FOREACH(vap, &ic->ic_vaps, iv_next) {
 		if (vap->iv_state != IEEE80211_S_RUN)
 			continue;
+
+		/* Global/WEP keys */
 		for (i = 0; i < IEEE80211_WEP_NKID; i++) {
 			const struct ieee80211_key *k = &vap->iv_nw_keys[i];
 			if (k->wk_flags & IEEE80211_KEY_DEVKEY)
 				dev_key_set(vap, k);
 		}
+
+		/* TODO: iGTK keys if the driver supports it? */
 	}
 	/*
 	 * Unicast keys.

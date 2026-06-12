@@ -3027,8 +3027,16 @@ rum_key_alloc(struct ieee80211vap *vap, struct ieee80211_key *k,
 			}
 		} else
 			*keyix = 0;
-	} else {
+	} else if (ieee80211_is_key_igtk(vap, k)) {
+		*keyix = *rxkeyix = 0;
+		k->wk_flags |= IEEE80211_KEY_SWCRYPT;
+		return 1;
+	} else if (ieee80211_is_key_unicast(vap, k)) {
 		*keyix = ieee80211_crypto_get_key_wepidx(vap, k);
+	} else {
+		device_printf(sc->sc_dev, "%s: invalid key type\n",
+		    __func__);
+		return 0;
 	}
 	*rxkeyix = *keyix;
 	return 1;
