@@ -215,6 +215,16 @@ ath_keyset(struct ath_softc *sc, struct ieee80211vap *vap,
 	int ret;
 
 	memset(&hk, 0, sizeof(hk));
+
+	/*
+	 * If it's a IGTK key then just plain ignore it;
+	 * it's already marked as handled in software and we don't
+	 * need a keycache entry for it.
+	 */
+	if (ieee80211_is_key_igtk(vap, k)) {
+		return (1);
+	}
+
 	/*
 	 * Software crypto uses a "clear key" so non-crypto
 	 * state kept in the key cache are maintained and
@@ -436,6 +446,18 @@ ath_key_alloc(struct ieee80211vap *vap, struct ieee80211_key *k,
 	struct ath_softc *sc = vap->iv_ic->ic_softc;
 
 	/*
+	 * Skip IGTK keys; they're global but not used
+	 * in the normal hardware keyix slots.
+	 */
+	if (ieee80211_is_key_igtk(vap, k)) {
+		DPRINTF(sc, ATH_DEBUG_KEYCACHE,
+		    "%s: iGTK key; skipping\n", __func__);
+		k->wk_flags |= IEEE80211_KEY_SWCRYPT;
+		*keyix = *rxkeyix = IEEE80211_KEYIX_NONE;
+		return 1;
+	}
+
+	/*
 	 * Group key allocation must be handled specially for
 	 * parts that do not support multicast key cache search
 	 * functionality.  For those parts the key id must match
@@ -456,6 +478,9 @@ ath_key_alloc(struct ieee80211vap *vap, struct ieee80211_key *k,
 				"%s: bogus group key\n", __func__);
 			return 0;
 		}
+
+		/* TODO: bogus BIP key */
+
 		if (vap->iv_opmode != IEEE80211_M_HOSTAP ||
 		    !(k->wk_flags & IEEE80211_KEY_GROUP) ||
 		    !sc->sc_mcastkey) {
@@ -517,7 +542,16 @@ ath_key_delete(struct ieee80211vap *vap, const struct ieee80211_key *k)
 	if (cip->ic_cipher == IEEE80211_CIPHER_TKIP &&
 	    (k->wk_flags & IEEE80211_KEY_SWMIC) == 0 && sc->sc_splitmic)
 		ath_hal_keyreset(ah, keyix+32);		/* RX key */
-	if (keyix >= IEEE80211_WEP_NKID) {
+
+	/*
+	 * Skip BIP keys; key indexes 4 and 5 are valid non-global
+	 * keycache entries
+	 */
+	if (ieee80211_is_key_igtk(vap, k)) {
+		DPRINTF(sc, ATH_DEBUG_KEYCACHE,
+		    "%s: keyix=%d but igtk key; skipping\n",
+		    __func__, keyix);
+	} else if (keyix >= IEEE80211_WEP_NKID) {
 		/*
 		 * Don't touch keymap entries for global keys so
 		 * they are never considered for dynamic allocation.
