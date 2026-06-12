@@ -419,18 +419,13 @@ xor_block(uint8_t *b, const uint8_t *a, size_t len)
  * The AES-CCM nonce flags field is defined in 802.11-2020 12.5.3.3.4
  * (Construct CCM nonce).
  *
- * TODO: net80211 currently doesn't support MFP (management frame protection)
- * and so bit 4 is never set.  This routine and ccmp_init_blocks() will
- * need a pointer to the ieee80211_node or a flag that explicitly states
- * the frame will be sent w/ MFP encryption / received w/ MFP decryption.
- *
  * @param wh	the 802.11 header to populate
  * @param b0	the CCM nonce to update (remembering b0[0] is the CCM
  * 		nonce flags, and b0[1] is the AES-CCM nonce flags).
  */
 static void
 ieee80211_crypto_ccmp_init_nonce_flags(const struct ieee80211_frame *wh,
-    char *b0)
+    char *b0, int is_mfp)
 {
 	if (IEEE80211_IS_DSTODS(wh)) {
 		/*
@@ -478,7 +473,9 @@ ieee80211_crypto_ccmp_init_nonce_flags(const struct ieee80211_frame *wh,
 			b0[1] = 0;
 		}
 	}
-	/* TODO: populate MFP flag */
+	/* Populate MFP flag */
+	if (is_mfp)
+		b0[1] |= 0x10;
 }
 
 /*
@@ -497,7 +494,7 @@ ieee80211_crypto_ccmp_init_nonce_flags(const struct ieee80211_frame *wh,
 
 static void
 ccmp_init_blocks(rijndael_ctx *ctx, struct ieee80211_frame *wh,
-	uint32_t m, u_int64_t pn, size_t dlen,
+	uint32_t m, u_int64_t pn, size_t dlen, bool is_mfp,
 	uint8_t b0[AES_BLOCK_LEN], uint8_t aad[2 * AES_BLOCK_LEN],
 	uint8_t auth[AES_BLOCK_LEN], uint8_t s0[AES_BLOCK_LEN])
 {
@@ -513,12 +510,13 @@ ccmp_init_blocks(rijndael_ctx *ctx, struct ieee80211_frame *wh,
 	 *    M=3 or 7 (8 or 16 octet auth field),
 	 *    L=1 (2-octet Dlen))
 	 *    Adata=1 (one or more auth blocks present)
-	 * Nonce: 0x00 | A2 | PN
+	 * Nonce: flags | A2 | PN
+	 * Nonce Flags: 0..3: priority, 4: MFP mgmt, 5-7: zero
 	 * Dlen
 	 */
 	b0[0] = 0x40 | 0x01 | (m << 3);
 	/* Init b0[1] (CCM nonce flags) */
-	ieee80211_crypto_ccmp_init_nonce_flags(wh, b0);
+	ieee80211_crypto_ccmp_init_nonce_flags(wh, b0, is_mfp);
 	IEEE80211_ADDR_COPY(b0 + 2, wh->i_addr2);
 	b0[8] = pn >> 40;
 	b0[9] = pn >> 32;
@@ -564,13 +562,14 @@ ccmp_encrypt(struct ieee80211_key *key, struct mbuf *m0, int hdrlen)
 	uint8_t aad[2 * AES_BLOCK_LEN], b0[AES_BLOCK_LEN], b[AES_BLOCK_LEN],
 		e[AES_BLOCK_LEN], s0[AES_BLOCK_LEN];
 	uint8_t *pos;
+	bool is_mfp = false; /* XXX for now */
 
 	ctx->cc_vap->iv_stats.is_crypto_ccmp++;
 
 	wh = mtod(m, struct ieee80211_frame *);
 	data_len = m->m_pkthdr.len - (hdrlen + ccmp_get_header_len(key));
 	ccmp_init_blocks(&ctx->cc_aes, wh, ccmp_get_ccm_m(key),
-	    key->wk_keytsc, data_len, b0, aad, b, s0);
+	    key->wk_keytsc, data_len, is_mfp, b0, aad, b, s0);
 
 	i = 1;
 	pos = mtod(m, uint8_t *) + hdrlen + ccmp_get_header_len(key);
@@ -713,6 +712,7 @@ ccmp_decrypt(struct ieee80211_key *key, u_int64_t pn, struct mbuf *m, int hdrlen
 	int i;
 	uint8_t *pos;
 	u_int space;
+	bool is_mfp = false; /* XXX for now */
 
 	rxs = ieee80211_get_rx_params_ptr(m);
 	if ((rxs != NULL) && (rxs->c_pktflags & IEEE80211_RX_F_DECRYPTED) != 0)
@@ -724,7 +724,7 @@ ccmp_decrypt(struct ieee80211_key *key, u_int64_t pn, struct mbuf *m, int hdrlen
 	data_len = m->m_pkthdr.len -
 	    (hdrlen + ccmp_get_header_len(key) + ccmp_get_trailer_len(key));
 	ccmp_init_blocks(&ctx->cc_aes, wh, ccmp_get_ccm_m(key), pn,
-	    data_len, b0, aad, a, b);
+	    data_len, is_mfp, b0, aad, a, b);
 	m_copydata(m, m->m_pkthdr.len - ccmp_get_trailer_len(key),
 	    ccmp_get_trailer_len(key), mic);
 	xor_block(mic, b, ccmp_get_trailer_len(key));
