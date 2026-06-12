@@ -5796,7 +5796,7 @@ iwx_tx(struct iwx_softc *sc, struct mbuf *m, struct ieee80211_node *ni)
 		} else if (k->wk_cipher->ic_cipher == IEEE80211_CIPHER_AES_CCM) {
 			k->wk_keytsc++;
 		} else {
-			k->wk_cipher->ic_encap(k, m);
+			k->wk_cipher->ic_encap(k, ni, m);
 
 			/* 802.11 headers may have moved */
 			wh = mtod(m, struct ieee80211_frame *);
