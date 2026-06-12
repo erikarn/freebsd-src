@@ -74,8 +74,10 @@ static	void *gcmp_attach(struct ieee80211vap *, struct ieee80211_key *);
 static	void gcmp_detach(struct ieee80211_key *);
 static	int gcmp_setkey(struct ieee80211_key *);
 static	void gcmp_setiv(struct ieee80211_key *, uint8_t *);
-static	int gcmp_encap(struct ieee80211_key *, struct mbuf *);
-static	int gcmp_decap(struct ieee80211_key *, struct mbuf *, int);
+static	int gcmp_encap(struct ieee80211_key *, const struct ieee80211_node *,
+	    struct mbuf *);
+static	int gcmp_decap(struct ieee80211_key *, const struct ieee80211_node *,
+	    struct mbuf *, int);
 static	int gcmp_enmic(struct ieee80211_key *, struct mbuf *, int);
 static	int gcmp_demic(struct ieee80211_key *, struct mbuf *, int);
 
@@ -216,7 +218,8 @@ gcmp_setiv(struct ieee80211_key *k, uint8_t *ivp)
  * Add privacy headers appropriate for the specified key.
  */
 static int
-gcmp_encap(struct ieee80211_key *k, struct mbuf *m)
+gcmp_encap(struct ieee80211_key *k, const struct ieee80211_node *ni,
+    struct mbuf *m)
 {
 	const struct ieee80211_frame *wh;
 	struct gcmp_ctx *ctx = k->wk_private;
@@ -285,7 +288,8 @@ READ_6(uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3, uint8_t b4, uint8_t b5)
  * is also verified.
  */
 static int
-gcmp_decap(struct ieee80211_key *k, struct mbuf *m, int hdrlen)
+gcmp_decap(struct ieee80211_key *k, const struct ieee80211_node *ni,
+    struct mbuf *m, int hdrlen)
 {
 	const struct ieee80211_rx_stats *rxs;
 	struct gcmp_ctx *ctx = k->wk_private;

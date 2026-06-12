@@ -67,8 +67,10 @@ static	void *ccmp_attach(struct ieee80211vap *, struct ieee80211_key *);
 static	void ccmp_detach(struct ieee80211_key *);
 static	int ccmp_setkey(struct ieee80211_key *);
 static	void ccmp_setiv(struct ieee80211_key *, uint8_t *);
-static	int ccmp_encap(struct ieee80211_key *, struct mbuf *);
-static	int ccmp_decap(struct ieee80211_key *, struct mbuf *, int);
+static	int ccmp_encap(struct ieee80211_key *, const struct ieee80211_node *,
+	    struct mbuf *);
+static	int ccmp_decap(struct ieee80211_key *, const struct ieee80211_node *,
+	    struct mbuf *, int);
 static	int ccmp_enmic(struct ieee80211_key *, struct mbuf *, int);
 static	int ccmp_demic(struct ieee80211_key *, struct mbuf *, int);
 
@@ -106,9 +108,11 @@ static const struct ieee80211_cipher ccmp_256 = {
 	.ic_demic	= ccmp_demic,
 };
 
-static	int ccmp_encrypt(struct ieee80211_key *, struct mbuf *, int hdrlen);
-static	int ccmp_decrypt(struct ieee80211_key *, u_int64_t pn,
-		struct mbuf *, int hdrlen);
+static	int ccmp_encrypt(struct ieee80211_key *,
+	    const struct ieee80211_node *, struct mbuf *, int hdrlen);
+static	int ccmp_decrypt(struct ieee80211_key *,
+	    const struct ieee80211_node *, u_int64_t pn, struct mbuf *,
+	    int hdrlen);
 
 /* number of references from net80211 layer */
 static	int nrefs = 0;
@@ -235,7 +239,8 @@ ccmp_setiv(struct ieee80211_key *k, uint8_t *ivp)
  * Add privacy headers appropriate for the specified key.
  */
 static int
-ccmp_encap(struct ieee80211_key *k, struct mbuf *m)
+ccmp_encap(struct ieee80211_key *k, const struct ieee80211_node *ni,
+    struct mbuf *m)
 {
 	const struct ieee80211_frame *wh;
 	struct ccmp_ctx *ctx = k->wk_private;
@@ -275,7 +280,7 @@ ccmp_encap(struct ieee80211_key *k, struct mbuf *m)
 	 * Finally, do software encrypt if needed.
 	 */
 	if ((k->wk_flags & IEEE80211_KEY_SWENCRYPT) &&
-	    !ccmp_encrypt(k, m, hdrlen))
+	    !ccmp_encrypt(k, ni, m, hdrlen))
 		return 0;
 
 	return 1;
@@ -305,7 +310,8 @@ READ_6(uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3, uint8_t b4, uint8_t b5)
  * is also verified.
  */
 static int
-ccmp_decap(struct ieee80211_key *k, struct mbuf *m, int hdrlen)
+ccmp_decap(struct ieee80211_key *k, const struct ieee80211_node *ni,
+    struct mbuf *m, int hdrlen)
 {
 	const struct ieee80211_rx_stats *rxs;
 	struct ccmp_ctx *ctx = k->wk_private;
@@ -357,7 +363,7 @@ ccmp_decap(struct ieee80211_key *k, struct mbuf *m, int hdrlen)
 	 * decryption work.
 	 */
 	if ((k->wk_flags & IEEE80211_KEY_SWDECRYPT) &&
-	    !ccmp_decrypt(k, pn, m, hdrlen))
+	    !ccmp_decrypt(k, ni, pn, m, hdrlen))
 		return 0;
 
 finish:
@@ -553,7 +559,8 @@ ccmp_init_blocks(rijndael_ctx *ctx, struct ieee80211_frame *wh,
 } while (0)
 
 static int
-ccmp_encrypt(struct ieee80211_key *key, struct mbuf *m0, int hdrlen)
+ccmp_encrypt(struct ieee80211_key *key, const struct ieee80211_node *ni,
+    struct mbuf *m0, int hdrlen)
 {
 	struct ccmp_ctx *ctx = key->wk_private;
 	struct ieee80211_frame *wh;
@@ -699,7 +706,8 @@ done:
 } while (0)
 
 static int
-ccmp_decrypt(struct ieee80211_key *key, u_int64_t pn, struct mbuf *m, int hdrlen)
+ccmp_decrypt(struct ieee80211_key *key, const struct ieee80211_node *ni,
+    u_int64_t pn, struct mbuf *m, int hdrlen)
 {
 	const struct ieee80211_rx_stats *rxs;
 	struct ccmp_ctx *ctx = key->wk_private;
