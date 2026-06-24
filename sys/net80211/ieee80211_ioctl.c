@@ -1199,6 +1199,7 @@ ieee80211_ioctl_setkey(struct ieee80211vap *vap, struct ieee80211req *ireq)
 	struct ieee80211req_key ik;
 	struct ieee80211_node *ni;
 	struct ieee80211_key *wk;
+	uint32_t key_flags;
 	uint16_t kid;
 	int error, i;
 
@@ -1242,8 +1243,25 @@ ieee80211_ioctl_setkey(struct ieee80211vap *vap, struct ieee80211req *ireq)
 		ni = NULL;
 	}
 	error = 0;
+
+	/*
+	 * The ioctl API only has 8 bits, and the interesting
+	 * stuff for MFP is above that.  Grab the key contents
+	 * here, truncating to make sure it's not sign extended.
+	 */
+	key_flags = (((int) ik.ik_flags) & 0xff);
+
+	/*
+	 * See if the node may reqiure MFP.  If so then tag the node
+	 * as MFP so the key allocation logic has a chance to change
+	 * things.  (eg some older NICs may not do CCMP encrypt/decrypt
+	 * correctly for MFP frames due to the MFP nonce field flag.)
+	 */
+	if (ni != NULL && ni->ni_flags & IEEE80211_NODE_MFP)
+		key_flags |= IEEE80211_KEY_MFP;
+
 	ieee80211_key_update_begin(vap);
-	if (ieee80211_crypto_newkey(vap, ik.ik_type, ik.ik_flags, wk)) {
+	if (ieee80211_crypto_newkey(vap, ik.ik_type, key_flags, wk)) {
 		int key_len;
 
 		for (i = 0; i < IEEE80211_TID_SIZE; i++)
