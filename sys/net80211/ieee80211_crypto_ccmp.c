@@ -569,11 +569,16 @@ ccmp_encrypt(struct ieee80211_key *key, const struct ieee80211_node *ni,
 	uint8_t aad[2 * AES_BLOCK_LEN], b0[AES_BLOCK_LEN], b[AES_BLOCK_LEN],
 		e[AES_BLOCK_LEN], s0[AES_BLOCK_LEN];
 	uint8_t *pos;
-	bool is_mfp = false; /* XXX for now */
+	bool is_mfp = false;
 
 	ctx->cc_vap->iv_stats.is_crypto_ccmp++;
 
 	wh = mtod(m, struct ieee80211_frame *);
+
+	/* Check if node has MFP negotiated, and this is a mgmt frame */
+	if ((ni->ni_flags & IEEE80211_NODE_MFP) && IEEE80211_IS_MGMT(wh))
+		is_mfp = true;
+
 	data_len = m->m_pkthdr.len - (hdrlen + ccmp_get_header_len(key));
 	ccmp_init_blocks(&ctx->cc_aes, wh, ccmp_get_ccm_m(key),
 	    key->wk_keytsc, data_len, is_mfp, b0, aad, b, s0);
@@ -720,7 +725,7 @@ ccmp_decrypt(struct ieee80211_key *key, const struct ieee80211_node *ni,
 	int i;
 	uint8_t *pos;
 	u_int space;
-	bool is_mfp = false; /* XXX for now */
+	bool is_mfp = false;
 
 	rxs = ieee80211_get_rx_params_ptr(m);
 	if ((rxs != NULL) && (rxs->c_pktflags & IEEE80211_RX_F_DECRYPTED) != 0)
@@ -729,6 +734,11 @@ ccmp_decrypt(struct ieee80211_key *key, const struct ieee80211_node *ni,
 	ctx->cc_vap->iv_stats.is_crypto_ccmp++;
 
 	wh = mtod(m, struct ieee80211_frame *);
+
+	/* Check if node has MFP negotiated, and this is a mgmt frame */
+	if ((ni->ni_flags & IEEE80211_NODE_MFP) && IEEE80211_IS_MGMT(wh))
+		is_mfp = true;
+
 	data_len = m->m_pkthdr.len -
 	    (hdrlen + ccmp_get_header_len(key) + ccmp_get_trailer_len(key));
 	ccmp_init_blocks(&ctx->cc_aes, wh, ccmp_get_ccm_m(key), pn,
