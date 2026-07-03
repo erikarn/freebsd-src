@@ -4600,6 +4600,7 @@ iwn_tx_data(struct iwn_softc *sc, struct mbuf *m, struct ieee80211_node *ni)
 	/* Only assign if not A-MPDU; the A-MPDU TX path will do its own */
 	if ((m->m_flags & M_AMPDU_MPDU) == 0)
 		ieee80211_output_seqno_assign(ni, -1, m);
+	DPRINTF(sc, IWN_DEBUG_XMIT, "%s: seqno=0x%x\n", __func__, le16toh(*((uint16_t *) &wh->i_seq[0])));
 
 	/* Encrypt the frame if need be. */
 	if (wh->i_fc[1] & IEEE80211_FC1_PROTECTED) {
@@ -4770,6 +4771,9 @@ iwn_tx_data_raw(struct iwn_softc *sc, struct mbuf *m,
 	type = wh->i_fc[0] & IEEE80211_FC0_TYPE_MASK;
 
 	ac = params->ibp_pri & 3;
+
+	ieee80211_output_seqno_assign(ni, -1, m);
+	DPRINTF(sc, IWN_DEBUG_XMIT, "%s: seqno=0x%x\n", __func__, le16toh(*((uint16_t *) &wh->i_seq[0])));
 
 	/* Choose a TX rate. */
 	rate = params->ibp_rate0;
@@ -6439,6 +6443,7 @@ iwn_check_rx_recovery(struct iwn_softc *sc, struct iwn_stats *rs)
 	    (delta_msec + delta_cck + delta_ofdm + delta_ht),
 	    thresh);
 
+#if 0
 	/*
 	 * If we need a retune, then schedule a single channel scan
 	 * to a channel that isn't the currently active one!
@@ -6446,6 +6451,8 @@ iwn_check_rx_recovery(struct iwn_softc *sc, struct iwn_stats *rs)
 	 * The math from linux iwlwifi:
 	 *
 	 * if ((delta * 100 / msecs) > threshold)
+	 *
+	 * TODO: amusingly this scan scheduling was never enabled! lol.
 	 */
 	if (thresh > 0 && (delta_cck + delta_ofdm + delta_ht) * 100 > thresh) {
 		DPRINTF(sc, IWN_DEBUG_ANY,
@@ -6456,6 +6463,7 @@ iwn_check_rx_recovery(struct iwn_softc *sc, struct iwn_stats *rs)
 		    (delta_cck + delta_ofdm + delta_ht) * 100,
 		    thresh);
 	}
+#endif
 }
 
 /*
