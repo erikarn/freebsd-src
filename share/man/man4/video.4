@@ -1,0 +1,102 @@
+.\" Copyright (c) 2026 Abdelkader Boudih <freebsd@seuros.com>
+.\"
+.\" SPDX-License-Identifier: BSD-2-Clause
+.\"
+.Dd July 27, 2026
+.Dt VIDEO 4
+.Os
+.Sh NAME
+.Nm video
+.Nd generic video capture framework
+.Sh SYNOPSIS
+To compile this driver into the kernel,
+place the following line in your
+kernel configuration file:
+.Bd -ragged -offset indent
+.Cd "device video"
+.Ed
+.Pp
+Alternatively, to load the driver as a
+module at boot time, place the following line in
+.Xr loader.conf 5 :
+.Bd -literal -offset indent
+video_load="YES"
+.Ed
+.Pp
+.In sys/videoio.h
+.Sh DESCRIPTION
+The
+.Nm
+framework provides a common interface for video capture devices on
+.Fx .
+It creates
+.Pa /dev/videoN
+device nodes and handles buffer management, memory mapping, and
+ioctl dispatch on behalf of hardware drivers.
+.Pp
+Userland applications access capture devices through the Video4Linux2
+(V4L2) ioctl interface.
+The framework translates V4L2 requests into driver callbacks,
+so hardware drivers do not implement ioctls directly.
+.Pp
+The following V4L2 ioctls are supported:
+.Bl -bullet -compact
+.It
+VIDIOC_QUERYCAP
+.It
+VIDIOC_ENUM_FMT, VIDIOC_G_FMT, VIDIOC_S_FMT, VIDIOC_TRY_FMT
+.It
+VIDIOC_ENUM_FRAMESIZES, VIDIOC_ENUM_FRAMEINTERVALS
+.It
+VIDIOC_G_PARM, VIDIOC_S_PARM
+.It
+VIDIOC_ENUMINPUT, VIDIOC_G_INPUT, VIDIOC_S_INPUT
+.It
+VIDIOC_QUERYCTRL, VIDIOC_G_CTRL, VIDIOC_S_CTRL
+.It
+VIDIOC_REQBUFS, VIDIOC_QUERYBUF, VIDIOC_QBUF, VIDIOC_DQBUF
+.It
+VIDIOC_STREAMON, VIDIOC_STREAMOFF
+.El
+.Pp
+Two capture modes are supported:
+.Bl -tag -width 6n
+.It Cm read
+Frames are obtained by calling
+.Xr read 2
+on the device node.
+Streaming starts automatically on the first read.
+.It Cm mmap
+Buffers are allocated with VIDIOC_REQBUFS, mapped with
+.Xr mmap 2 ,
+and cycled with VIDIOC_QBUF/VIDIOC_DQBUF.
+Streaming is started and stopped with VIDIOC_STREAMON/VIDIOC_STREAMOFF.
+.El
+.Pp
+Up to 8 buffers may be allocated per device.
+Buffer memory remains valid until the last mapping is unmapped,
+even if the device is closed or detached.
+.Sh HARDWARE
+The following drivers use the
+.Nm
+framework:
+.Bl -bullet -compact
+.It
+.Xr uvideo 4
+\(em USB Video Class devices
+.It
+.Xr fwcam 4
+\(em IIDC/DCAM FireWire cameras
+.El
+.Sh SEE ALSO
+.Xr mmap 2 ,
+.Xr read 2 ,
+.Xr fwcam 4 ,
+.Xr uvideo 4
+.Sh HISTORY
+The
+.Nm
+framework first appeared in
+.Fx 16.0 .
+.Sh AUTHORS
+.An Abdelkader Boudih Aq Mt freebsd@seuros.com
