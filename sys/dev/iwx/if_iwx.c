@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause) AND ISC
  */
 
-/*	$OpenBSD: if_iwx.c,v 1.181 2024/02/16 11:44:52 stsp Exp $	*/
+/*	$OpenBSD: if_iwx.c,v 1.182 2024/02/26 18:00:09 stsp Exp $	*/
 
 /*
  *
@@ -5633,17 +5633,15 @@ iwx_tx_fill_cmd(struct iwx_softc *sc, struct iwx_node *in,
 	} else if (sc->sc_rate_n_flags_version >= 2)
 		rate_flags |= IWX_RATE_MCS_LEGACY_OFDM_MSK;
 
-	rval = (rs->rs_rates[ieee80211_node_get_txrate_dot11rate(ni)]
-	    & IEEE80211_RATE_VAL);
-	IWX_DPRINTF(sc, IWX_DEBUG_TXRATE, "%s:%d: rval=%i dot11 %d\n", __func__, __LINE__,
-	    rval, rs->rs_rates[ieee80211_node_get_txrate_dot11rate(ni)]);
+	IWX_DPRINTF(sc, IWX_DEBUG_TXRATE, "%s:%d: rinfo->rate=%i dot11 %d\n", __func__, __LINE__,
+	    rinfo->rate, rs->rs_rates[ieee80211_node_get_txrate_dot11rate(ni)]);
 
 	if (sc->sc_rate_n_flags_version >= 2) {
 		if (rate_flags & IWX_RATE_MCS_LEGACY_OFDM_MSK) {
-			rate_flags |= (iwx_fw_rateidx_ofdm(rval) &
+			rate_flags |= (iwx_fw_rateidx_ofdm(rinfo->rate) &
 			    IWX_RATE_LEGACY_RATE_MSK);
 		} else {
-			rate_flags |= (iwx_fw_rateidx_cck(rval) &
+			rate_flags |= (iwx_fw_rateidx_cck(rinfo->rate) &
 			    IWX_RATE_LEGACY_RATE_MSK);
 		}
 	} else
