@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: GPL-2.0-only OR BSD-3-Clause
  */
 
-/*	$OpenBSD: if_iwxreg.h,v 1.51 2023/03/06 11:18:37 stsp Exp $	*/
+/*	$OpenBSD: if_iwxreg.h,v 1.52 2023/10/06 15:15:41 stsp Exp $	*/
 
 /*-
  * Based on BSD-licensed source modules in the Linux iwlwifi driver,
@@ -2014,6 +2014,7 @@ struct iwx_tx_queue_cfg_rsp {
 #define IWX_RX_BAID_ALLOCATION_CONFIG_CMD	0x16
 #define IWX_SCD_QUEUE_CONFIG_CMD	0x17
 #define IWX_RX_NO_DATA_NOTIF	0xf5
+#define IWX_THERMAL_DUAL_CHAIN_REQUEST 0xf6
 #define IWX_TLC_MNG_UPDATE_NOTIF 0xf7
 
 /* REGULATORY_AND_NVM group subcommand IDs */
