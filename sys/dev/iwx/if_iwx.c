@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause) AND ISC
  */
 
-/*	$OpenBSD: if_iwx.c,v 1.178 2023/12/20 07:32:05 stsp Exp $	*/
+/*	$OpenBSD: if_iwx.c,v 1.179 2023/12/20 07:33:32 stsp Exp $	*/
 
 /*
  *
@@ -5955,9 +5955,7 @@ iwx_flush_sta_tids(struct iwx_softc *sc, int sta_id, uint16_t tids)
 
 	resp_len = iwx_rx_packet_payload_len(pkt);
 	/* Some firmware versions don't provide a response. */
-	if (resp_len == 0)
-		goto out;
-	else if (resp_len != sizeof(*resp)) {
+	if (resp_len != sizeof(*resp)) {
 		err = EIO;
 		goto out;
 	}
@@ -6054,11 +6052,6 @@ iwx_flush_sta(struct iwx_softc *sc, struct iwx_node *in)
 		    DEVNAME(sc), err);
 		goto done;
 	}
-
-	/*
-	 * XXX-THJ: iwx_wait_tx_queues_empty was here, but it was a nope in the
-	 * fc drive rand has has been replaced in OpenBSD.
-	 */
 
 	err = iwx_drain_sta(sc, in, 0);
 done:
