@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause) AND ISC
  */
 
-/*	$OpenBSD: if_iwx.c,v 1.180 2023/12/30 16:55:44 stsp Exp $	*/
+/*	$OpenBSD: if_iwx.c,v 1.181 2024/02/16 11:44:52 stsp Exp $	*/
 
 /*
  *
