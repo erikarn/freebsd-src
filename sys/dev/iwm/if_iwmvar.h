@@ -475,6 +475,9 @@ struct iwm_softc {
 
 	int			sc_intmask;
 
+	/* firmware command queue id: IWM_CMD_QUEUE or IWM_DQA_CMD_QUEUE */
+	int			sc_cmdqid;
+
 	/* MSIX support */
 	int			sc_msix;
 	uint32_t		sc_fh_init_mask;

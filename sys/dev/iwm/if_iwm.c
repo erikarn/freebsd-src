@@ -1147,8 +1147,9 @@ iwm_alloc_tx_ring(struct iwm_softc *sc, struct iwm_tx_ring *ring, int qid)
 	ring->desc = ring->desc_dma.vaddr;
 
 	/*
-	 * We only use rings 0 through 9 (4 EDCA + cmd) so there is no need
-	 * to allocate commands space for other rings.
+	 * We only use rings 0 through 9 (legacy: 4 EDCA + cmd at 9;
+	 * DQA: cmd at 0 and per-AC queues at 5-8), so there is no need
+	 * to allocate command space for the other rings.
 	 */
 	if (qid > IWM_CMD_QUEUE)
 		return 0;
@@ -1162,8 +1163,13 @@ iwm_alloc_tx_ring(struct iwm_softc *sc, struct iwm_tx_ring *ring, int qid)
 	}
 	ring->cmd = ring->cmd_dma.vaddr;
 
-	/* FW commands may require more mapped space than packets. */
-	if (qid == IWM_CMD_QUEUE) {
+	/*
+	 * FW commands may require more mapped space than packets.  The
+	 * DQA command queue is ring 0 and we can't tell at allocation
+	 * time which command queue id will be used, so give both the
+	 * command-sized DMA tag.
+	 */
+	if (qid == IWM_CMD_QUEUE || qid == IWM_DQA_CMD_QUEUE) {
 		maxsize = IWM_RBUF_SIZE;
 		nsegments = 1;
 	} else {
@@ -1227,7 +1233,7 @@ iwm_reset_tx_ring(struct iwm_softc *sc, struct iwm_tx_ring *ring)
 	ring->queued = 0;
 	ring->cur = 0;
 
-	if (ring->qid == IWM_CMD_QUEUE && sc->cmd_hold_nic_awake)
+	if (ring->qid == sc->sc_cmdqid && sc->cmd_hold_nic_awake)
 		iwm_pcie_clear_cmd_in_flight(sc);
 }
 
@@ -1692,7 +1698,7 @@ iwm_enable_txq(struct iwm_softc *sc, int sta_id, int qid, int fifo)
 
 	IWM_WRITE(sc, IWM_HBUS_TARG_WRPTR, qid << 8 | 0);
 
-	if (qid == IWM_CMD_QUEUE) {
+	if (qid == sc->sc_cmdqid) {
 		/* Disable the scheduler. */
 		iwm_write_prph(sc, IWM_SCD_EN_CTRL, 0);
 
@@ -1813,7 +1819,7 @@ iwm_trans_pcie_fw_alive(struct iwm_softc *sc, uint32_t scd_base_addr)
 	iwm_nic_unlock(sc);
 
 	/* enable command channel */
-	error = iwm_enable_txq(sc, 0 /* unused */, IWM_CMD_QUEUE, 7);
+	error = iwm_enable_txq(sc, 0 /* unused */, sc->sc_cmdqid, 7);
 	if (error)
 		return error;
 
@@ -2929,6 +2935,11 @@ iwm_load_ucode_wait_alive(struct iwm_softc *sc,
 	sc->cur_ucode = ucode_type;
 	sc->ucode_loaded = FALSE;
 
+	if (iwm_fw_has_capa(sc, IWM_UCODE_TLV_CAPA_DQA_SUPPORT))
+		sc->sc_cmdqid = IWM_DQA_CMD_QUEUE;
+	else
+		sc->sc_cmdqid = IWM_CMD_QUEUE;
+
 	memset(&alive_data, 0, sizeof(alive_data));
 	iwm_init_notification_wait(sc->sc_notif_wait, &alive_wait,
 				   alive_cmd, nitems(alive_cmd),
@@ -3672,10 +3683,10 @@ iwm_rx_tx_cmd(struct iwm_softc *sc, struct iwm_rx_packet *pkt)
 static void
 iwm_cmd_done(struct iwm_softc *sc, struct iwm_rx_packet *pkt)
 {
-	struct iwm_tx_ring *ring = &sc->txq[IWM_CMD_QUEUE];
+	struct iwm_tx_ring *ring = &sc->txq[sc->sc_cmdqid];
 	struct iwm_tx_data *data;
 
-	if (pkt->hdr.qid != IWM_CMD_QUEUE) {
+	if (pkt->hdr.qid != sc->sc_cmdqid) {
 		return;	/* Not a command ack. */
 	}
 
@@ -3829,6 +3840,14 @@ iwm_tx_fill_cmd(struct iwm_softc *sc, struct iwm_node *in,
 	return rinfo;
 }
 
+static inline int
+iwm_ac_qid(struct iwm_softc *sc, int ac)
+{
+	if (iwm_fw_has_capa(sc, IWM_UCODE_TLV_CAPA_DQA_SUPPORT))
+		return ac + IWM_DQA_MIN_MGMT_QUEUE;
+	return ac;
+}
+
 #define TB0_SIZE 16
 static int
 iwm_tx(struct iwm_softc *sc, struct mbuf *m, struct ieee80211_node *ni, int ac)
@@ -3856,7 +3875,7 @@ iwm_tx(struct iwm_softc *sc, struct mbuf *m, struct ieee80211_node *ni, int ac)
 	hdrlen = ieee80211_anyhdrsize(wh);
 	type = wh->i_fc[0] & IEEE80211_FC0_TYPE_MASK;
 	tid = 0;
-	ring = &sc->txq[ac];
+	ring = &sc->txq[iwm_ac_qid(sc, ac)];
 	desc = &ring->desc[ring->cur];
 	data = &ring->data[ring->cur];
 
@@ -4768,6 +4787,17 @@ iwm_send_soc_conf(struct iwm_softc *sc)
 }
 
 static int
+iwm_send_dqa_cmd(struct iwm_softc *sc)
+{
+	struct iwm_dqa_enable_cmd dqa_cmd;
+	uint32_t cmd_id;
+
+	dqa_cmd.cmd_queue = htole32(IWM_DQA_CMD_QUEUE);
+	cmd_id = iwm_cmd_id(IWM_DQA_ENABLE_CMD, IWM_DATA_PATH_GROUP, 0);
+	return iwm_send_cmd_pdu(sc, cmd_id, 0, sizeof(dqa_cmd), &dqa_cmd);
+}
+
+static int
 iwm_send_temp_report_ths_cmd(struct iwm_softc *sc)
 {
 	struct iwm_temp_report_ths_cmd cmd;
@@ -4973,6 +5003,11 @@ iwm_init_hw(struct iwm_softc *sc)
 		goto error;
 	}
 
+	if (iwm_fw_has_capa(sc, IWM_UCODE_TLV_CAPA_DQA_SUPPORT)) {
+		if ((error = iwm_send_dqa_cmd(sc)) != 0)
+			goto error;
+	}
+
 	/* Add auxiliary station for scanning */
 	if ((error = iwm_add_aux_sta(sc)) != 0) {
 		device_printf(sc->sc_dev, "add_aux_sta failed\n");
@@ -5011,8 +5046,8 @@ iwm_init_hw(struct iwm_softc *sc)
 
 	/* Enable Tx queues. */
 	for (ac = 0; ac < WME_NUM_AC; ac++) {
-		error = iwm_enable_txq(sc, IWM_STATION_ID, ac,
-		    iwm_ac_to_tx_fifo[ac]);
+		error = iwm_enable_txq(sc, IWM_STATION_ID,
+		    iwm_ac_qid(sc, ac), iwm_ac_to_tx_fifo[ac]);
 		if (error)
 			goto error;
 	}
