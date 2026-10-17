@@ -6447,12 +6447,6 @@ iwm_pci_attach(device_t dev)
 
 	/* Enable bus-mastering and hardware bug workaround. */
 	pci_enable_busmaster(dev);
-	reg = pci_read_config(dev, PCIR_STATUS, sizeof(reg));
-	/* if !MSI */
-	if (reg & PCIM_STATUS_INTxSTATE) {
-		reg &= ~PCIM_STATUS_INTxSTATE;
-	}
-	pci_write_config(dev, PCIR_STATUS, reg, sizeof(reg));
 
 	rid = PCIR_BAR(0);
 	sc->sc_mem = bus_alloc_resource_any(dev, SYS_RES_MEMORY, &rid,
@@ -6473,6 +6467,16 @@ iwm_pci_attach(device_t dev)
 	} else if (pci_alloc_msi(dev, &count) == 0) {
 		rid = 1;
 	}
+
+	if (! sc->sc_msix) {
+		/* Hardware bug workaround. */
+		reg = pci_read_config(dev, PCIR_STATUS, sizeof(reg));
+		if (reg & PCIM_STATUS_INTxSTATE) {
+			reg &= ~PCIM_STATUS_INTxSTATE;
+		}
+		pci_write_config(dev, PCIR_STATUS, reg, sizeof(reg));
+	}
+
 	sc->sc_irq = bus_alloc_resource_any(dev, SYS_RES_IRQ, &rid, RF_ACTIVE |
 	    (rid != 0 ? 0 : RF_SHAREABLE));
 	if (sc->sc_irq == NULL) {
@@ -7058,6 +7062,7 @@ iwm_resume(device_t dev)
 {
 	struct iwm_softc *sc = device_get_softc(dev);
 	int do_reinit = 0;
+	uint16_t reg;
 
 	/*
 	 * We disable the RETRY_TIMEOUT register (0x41) to keep
@@ -7067,6 +7072,15 @@ iwm_resume(device_t dev)
 
 	if (!sc->sc_attached)
 		return 0;
+
+	if (!sc->sc_msix) {
+		/* Hardware bug workaround. */
+		reg = pci_read_config(dev, PCIR_STATUS, sizeof(reg));
+		if (reg & PCIM_STATUS_INTxSTATE) {
+			reg &= ~PCIM_STATUS_INTxSTATE;
+		}
+		pci_write_config(dev, PCIR_STATUS, reg, sizeof(reg));
+	}
 
 	iwm_init_task(device_get_softc(dev));
 
