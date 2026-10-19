@@ -272,6 +272,9 @@ struct iwm_fw_paging {
 #define IWM_TX_RING_LOMARK	192
 #define IWM_TX_RING_HIMARK	224
 
+/* For aggregation queues, index must be aligned to frame sequence number. */
+#define IWM_AGG_SSN_TO_TXQ_IDX(x)	((x) & (IWM_TX_RING_COUNT - 1))
+
 struct iwm_tx_data {
 	bus_dmamap_t		map;
 	bus_addr_t		cmd_paddr;
@@ -291,6 +294,7 @@ struct iwm_tx_ring {
 	int			qid;
 	int			queued;
 	int			cur;
+	int			tail;
 };
 
 /* Note: these are used as a mask; must be a power of 2 */

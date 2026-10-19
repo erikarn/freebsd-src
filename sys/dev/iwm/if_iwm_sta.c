@@ -359,16 +359,10 @@ iwm_add_aux_sta(struct iwm_softc *sc)
 	int ret;
 	int qid;
 
-	/*
-	 * Note: OpenBSD calls different TXQ setups here;
-	 * + DQA calls iwm_enable_txq(), which only sends the cmd_pdu
-	 * + non-DQA calls iwm_enable_ac_txq(), which does similar stuff to
-	 *   command setup but not the command scheduler
-	 */
 	if (iwm_fw_has_capa(sc, IWM_UCODE_TLV_CAPA_DQA_SUPPORT)) {
 		qid = IWM_DQA_AUX_QUEUE;
 		ret = iwm_enable_txq(sc, IWM_AUX_STA_ID, qid,
-		    IWM_TX_FIFO_MCAST);
+		    IWM_TX_FIFO_MCAST, 0, IWM_MAX_TID_COUNT, 0);
 	} else {
 		qid = IWM_AUX_QUEUE;
 		ret = iwm_enable_ac_txq(sc, qid, IWM_TX_FIFO_MCAST);

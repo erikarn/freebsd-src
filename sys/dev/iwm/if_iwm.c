@@ -1135,6 +1135,7 @@ iwm_alloc_tx_ring(struct iwm_softc *sc, struct iwm_tx_ring *ring, int qid)
 	ring->qid = qid;
 	ring->queued = 0;
 	ring->cur = 0;
+	ring->tail = 0;
 
 	/* Allocate TX descriptors (256-byte aligned). */
 	size = IWM_TX_RING_COUNT * sizeof (struct iwm_tfd);
@@ -1247,6 +1248,7 @@ iwm_reset_tx_ring(struct iwm_softc *sc, struct iwm_tx_ring *ring)
 	sc->qenablemsk &= ~(1 << ring->qid);
 	ring->queued = 0;
 	ring->cur = 0;
+	ring->tail = 0;
 
 	if (ring->qid == sc->cmdqid && sc->cmd_hold_nic_awake)
 		iwm_pcie_clear_cmd_in_flight(sc);
@@ -1706,6 +1708,9 @@ iwm_enable_ac_txq(struct iwm_softc *sc, int qid, int fifo)
 {
 	int err;
 
+	IWM_DPRINTF(sc, IWM_DEBUG_XMIT, "%s: enabled txq %d FIFO %d\n",
+	    __func__, qid, fifo);
+
 	if (!iwm_nic_lock(sc)) {
 		device_printf(sc->sc_dev, "%s: cannot enable txq %d\n",
 		    __func__, qid);
@@ -1758,11 +1763,16 @@ iwm_enable_ac_txq(struct iwm_softc *sc, int qid, int fifo)
 }
 
 int
-iwm_enable_txq(struct iwm_softc *sc, int sta_id, int qid, int fifo)
+iwm_enable_txq(struct iwm_softc *sc, int sta_id, int qid, int fifo,
+    int aggregate, uint8_t tid, uint16_t ssn)
 {
-	int qmsk;
+	struct iwm_tx_ring *ring = &sc->txq[qid];
+	struct iwm_scd_txq_cfg_cmd cmd;
+	int err, idx, scd_bug;
 
-	qmsk = 1 << qid;
+	IWM_DPRINTF(sc, IWM_DEBUG_XMIT,
+	    "%s: enabled txq %d FIFO %d agg %d tid %d ssn %d\n",
+	    __func__, qid, fifo, aggregate, tid, ssn);
 
 	if (!iwm_nic_lock(sc)) {
 		device_printf(sc->sc_dev, "%s: cannot enable txq %d\n",
@@ -1770,87 +1780,43 @@ iwm_enable_txq(struct iwm_softc *sc, int sta_id, int qid, int fifo)
 		return EBUSY;
 	}
 
-	IWM_WRITE(sc, IWM_HBUS_TARG_WRPTR, qid << 8 | 0);
+	/*
+	 * If we need to move the SCD write pointer by steps of
+	 * 0x40, 0x80 or 0xc0, it gets stuck.
+	 * This is really ugly, but this is the easiest way out for
+	 * this sad hardware issue.
+	 * This bug has been fixed on devices 9000 and up.
+	 */
+	scd_bug = !sc->cfg->mqrx_supported &&
+		!((ssn - ring->cur) & 0x3f) &&
+		(ssn != ring->cur);
+	if (scd_bug)
+		ssn = (ssn + 1) & 0xfff;
 
-	if (qid == sc->cmdqid) {
-#if 0
-		/* Disable the scheduler. */
-		iwm_write_prph(sc, IWM_SCD_EN_CTRL, 0);
-#endif
+	idx = IWM_AGG_SSN_TO_TXQ_IDX(ssn);
+	IWM_WRITE(sc, IWM_HBUS_TARG_WRPTR, qid << 8 | idx);
+	ring->cur = idx;
+	ring->tail = idx;
 
-		/* Stop the TX queue prior to configuration. */
-		iwm_write_prph(sc, IWM_SCD_QUEUE_STATUS_BITS(qid),
-		    (0 << IWM_SCD_QUEUE_STTS_REG_POS_ACTIVE) |
-		    (1 << IWM_SCD_QUEUE_STTS_REG_POS_SCD_ACT_EN));
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.tid = tid;
+	cmd.scd_queue = qid;
+	cmd.enable = 1;
+	cmd.sta_id = sta_id;
+	cmd.tx_fifo = fifo;
+	cmd.aggregate = aggregate;
+	cmd.ssn = htole16(ssn);
+	cmd.window = IWM_FRAME_LIMIT;
 
+	err = iwm_send_cmd_pdu(sc, IWM_SCD_QUEUE_CFG, 0,
+	    sizeof(cmd), &cmd);
+
+	if (err) {
 		iwm_nic_unlock(sc);
-
-		/* Disable aggregations for this queue. */
-		iwm_clear_bits_prph(sc, IWM_SCD_AGGR_SEL, qmsk);
-
-		if (!iwm_nic_lock(sc)) {
-			device_printf(sc->sc_dev,
-			    "%s: cannot enable txq %d\n", __func__, qid);
-			return EBUSY;
-		}
-		iwm_write_prph(sc, IWM_SCD_QUEUE_RDPTR(qid), 0);
-		iwm_nic_unlock(sc);
-
-		iwm_write_mem32(sc,
-		    sc->scd_base_addr + IWM_SCD_CONTEXT_QUEUE_OFFSET(qid), 0);
-		/* Set scheduler window size and frame limit. */
-		iwm_write_mem32(sc,
-		    sc->scd_base_addr + IWM_SCD_CONTEXT_QUEUE_OFFSET(qid) +
-		    sizeof(uint32_t),
-		    ((IWM_FRAME_LIMIT << IWM_SCD_QUEUE_CTX_REG2_WIN_SIZE_POS) &
-		    IWM_SCD_QUEUE_CTX_REG2_WIN_SIZE_MSK) |
-		    ((IWM_FRAME_LIMIT << IWM_SCD_QUEUE_CTX_REG2_FRAME_LIMIT_POS) &
-		    IWM_SCD_QUEUE_CTX_REG2_FRAME_LIMIT_MSK));
-
-		if (!iwm_nic_lock(sc)) {
-			device_printf(sc->sc_dev,
-			    "%s: cannot enable txq %d\n", __func__, qid);
-			return EBUSY;
-		}
-		iwm_write_prph(sc, IWM_SCD_QUEUE_STATUS_BITS(qid),
-		    (1 << IWM_SCD_QUEUE_STTS_REG_POS_ACTIVE) |
-		    (fifo << IWM_SCD_QUEUE_STTS_REG_POS_TXF) |
-		    (1 << IWM_SCD_QUEUE_STTS_REG_POS_WSL) |
-		    IWM_SCD_QUEUE_STTS_REG_MSK);
-
-		/* Enable the scheduler for this queue. */
-		iwm_write_prph(sc, IWM_SCD_EN_CTRL,
-		    iwm_read_prph(sc, IWM_SCD_EN_CTRL) | qmsk);
-	} else {
-		struct iwm_scd_txq_cfg_cmd cmd;
-		int error;
-
-		iwm_nic_unlock(sc);
-
-		memset(&cmd, 0, sizeof(cmd));
-		cmd.scd_queue = qid;
-		cmd.enable = 1;
-		cmd.sta_id = sta_id;
-		cmd.tx_fifo = fifo;
-		cmd.aggregate = 0;
-		cmd.window = IWM_FRAME_LIMIT;
-
-		error = iwm_send_cmd_pdu(sc, IWM_SCD_QUEUE_CFG, IWM_CMD_SYNC,
-		    sizeof(cmd), &cmd);
-		if (error) {
-			device_printf(sc->sc_dev,
-			    "cannot enable txq %d\n", qid);
-			return error;
-		}
-
-		if (!iwm_nic_lock(sc))
-			return EBUSY;
+		return err;
 	}
 
 	iwm_nic_unlock(sc);
-
-	IWM_DPRINTF(sc, IWM_DEBUG_XMIT, "%s: enabled txq %d FIFO %d\n",
-	    __func__, qid, fifo);
 
 	sc->qenablemsk |= (1 << qid);
 	return 0;
@@ -5197,7 +5163,7 @@ iwm_init_hw(struct iwm_softc *sc)
 			qid = ac;
 
 		error = iwm_enable_txq(sc, IWM_STATION_ID, qid,
-		    iwm_ac_to_tx_fifo[ac]);
+		    iwm_ac_to_tx_fifo[ac], 0, IWM_TID_NON_QOS, 0);
 		if (error)
 			goto error;
 	}
