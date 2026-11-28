@@ -415,7 +415,18 @@ struct ieee80211_channel {
 /*
  * Definitions for (internal, basic) types.
  */
+
+/*
+ * RSSI - signed RSSI, referenced against the current noise floor;
+ * in units of 1/2 dB.
+ */
 typedef int8_t				net80211_rssi_t;
+
+/*
+ * Noise floor - signed noise floor, in units of 1 dBm.
+ * Note this is an absolute value, not a relative value.
+ */
+typedef int8_t				net80211_nf_t;
 
 /*
  * 802.11 rate set.
@@ -499,8 +510,8 @@ struct ieee80211_regdomain {
 #define	IEEE80211_MAX_EVM_PILOTS	16	/* 468 subcarriers, 16 pilots */
 
 struct ieee80211_mimo_chan_info {
-	int8_t	rssi[IEEE80211_MAX_CHAIN_PRISEC];
-	int8_t	noise[IEEE80211_MAX_CHAIN_PRISEC];
+	net80211_rssi_t	rssi[IEEE80211_MAX_CHAIN_PRISEC];
+	net80211_nf_t	noise[IEEE80211_MAX_CHAIN_PRISEC];
 };
 
 struct ieee80211_mimo_info {
@@ -661,13 +672,13 @@ struct ieee80211_rx_stats {
 	uint64_t c_rx_tsf;		/* 32 or 64 bit TSF */
 
 	/* All DWORD aligned */
-	net80211_rssi_t c_nf_ctl[IEEE80211_MAX_CHAINS];	/* per-chain NF */
-	net80211_rssi_t c_nf_ext[IEEE80211_MAX_CHAINS];	/* per-chain NF */
+	net80211_nf_t c_nf_ctl[IEEE80211_MAX_CHAINS];	/* per-chain NF */
+	net80211_nf_t c_nf_ext[IEEE80211_MAX_CHAINS];	/* per-chain NF */
 	net80211_rssi_t c_rssi_ctl[IEEE80211_MAX_CHAINS];	/* per-chain RSSI */
 	net80211_rssi_t c_rssi_ext[IEEE80211_MAX_CHAINS];	/* per-chain RSSI */
 
 	/* 32 bits */
-	int8_t c_nf;			/* global NF */
+	net80211_nf_t c_nf;		/* global NF */
 	net80211_rssi_t c_rssi;			/* global RSSI */
 	uint8_t c_chain;		/* number of RX chains involved */
 	uint8_t c_rate;			/* legacy; 11n rate code; VHT MCS */
