@@ -240,8 +240,8 @@ struct ieee80211_node {
 	/* mimo statistics */
 	uint32_t		ni_mimo_rssi_ctl[IEEE80211_MAX_CHAINS];
 	uint32_t		ni_mimo_rssi_ext[IEEE80211_MAX_CHAINS];
-	uint8_t			ni_mimo_noise_ctl[IEEE80211_MAX_CHAINS];
-	uint8_t			ni_mimo_noise_ext[IEEE80211_MAX_CHAINS];
+	net80211_nf_t		ni_mimo_noise_ctl[IEEE80211_MAX_CHAINS];
+	net80211_nf_t		ni_mimo_noise_ext[IEEE80211_MAX_CHAINS];
 	uint8_t			ni_mimo_chains;
 
 	/* header */
