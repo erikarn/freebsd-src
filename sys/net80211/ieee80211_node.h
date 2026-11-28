@@ -235,7 +235,7 @@ struct ieee80211_node {
 
 	/* hardware */
 	uint32_t		ni_avgrssi;	/* recv ssi state */
-	int8_t			ni_noise;	/* noise floor */
+	net80211_nf_t		ni_noise;	/* noise floor */
 
 	/* mimo statistics */
 	uint32_t		ni_mimo_rssi_ctl[IEEE80211_MAX_CHAINS];
@@ -529,7 +529,8 @@ struct ieee80211_node *ieee80211_add_neighbor(struct ieee80211vap *,
 void	ieee80211_node_join(struct ieee80211_node *,int);
 void	ieee80211_node_leave(struct ieee80211_node *);
 net80211_rssi_t	ieee80211_getrssi(struct ieee80211vap *);
-void	ieee80211_getsignal(struct ieee80211vap *, net80211_rssi_t *, int8_t *);
+void	ieee80211_getsignal(struct ieee80211vap *, net80211_rssi_t *,
+	    net80211_nf_t *);
 
 /* TX sequence space related routines */
 ieee80211_seq	ieee80211_tx_seqno_fetch_incr(struct ieee80211_node *,
