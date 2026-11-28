@@ -399,6 +399,26 @@ get_sta_space(void *arg, struct ieee80211_node *ni)
 	req->space += sta_space(ni, &ielen);
 }
 
+static int8_t
+ieee80211_ioctl_cap_noise(net80211_nf_t nf)
+{
+	/*
+	 * For now return the normal value; when nf_t becomes a larger
+	 * type we can cap it at int8_t bounds.
+	 */
+	return nf;
+}
+
+static int8_t
+ieee80211_ioctl_cap_rssi(net80211_rssi_t rssi)
+{
+	/*
+	 * For now return the normal value; when rssi_t becomes a larger
+	 * type we can cap it at int8_t bounds.
+	 */
+	return rssi;
+}
+
 static void
 get_sta_info(void *arg, struct ieee80211_node *ni)
 {
@@ -409,6 +429,7 @@ get_sta_info(void *arg, struct ieee80211_node *ni)
 	net80211_rssi_t rssi;
 	size_t ielen, len;
 	uint8_t *cp;
+	int8_t noise;
 
 	if (vap->iv_opmode == IEEE80211_M_HOSTAP &&
 	    ni->ni_associd == 0)	/* only associated stations */
@@ -426,8 +447,9 @@ get_sta_info(void *arg, struct ieee80211_node *ni)
 	si->isi_flags = ni->ni_chan->ic_flags;
 	si->isi_state = ni->ni_flags;
 	si->isi_authmode = ni->ni_authmode;
-	vap->iv_ic->ic_node_getsignal(ni, &rssi, &si->isi_noise);
-	si->isi_rssi = rssi;
+	vap->iv_ic->ic_node_getsignal(ni, &rssi, &noise);
+	si->isi_noise = ieee80211_ioctl_cap_noise(noise);
+	si->isi_rssi = ieee80211_ioctl_cap_rssi(rssi);
 	vap->iv_ic->ic_node_getmimoinfo(ni, &si->isi_mimo);
 	si->isi_capinfo = ni->ni_capinfo;
 	si->isi_erp = ni->ni_erp;
