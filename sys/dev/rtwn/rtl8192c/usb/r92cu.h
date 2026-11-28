@@ -20,6 +20,8 @@
 #ifndef RTL8192CU_H
 #define RTL8192CU_H
 
+#include <dev/rtwn/if_rtwnreg.h>
+
 #include <dev/rtwn/rtl8192c/r92c.h>
 
 /*
@@ -49,5 +51,7 @@ int	r92cu_align_rx(int, int);
 
 /* r92cu_tx.c */
 void	r92cu_dump_tx_desc(struct rtwn_softc *, const void *);
+void	r92cu_set_tx_desc_own(struct rtwn_tx_desc_common *);
+void	r92cu_tx_checksum(struct rtwn_tx_desc_common *);
 
 #endif	/* RTL8192CU_H */
