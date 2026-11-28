@@ -429,6 +429,21 @@ struct ieee80211req_sta_stats {
 	struct ieee80211_nodestats is_stats;
 };
 
+#define	IEEE80211_IOCTL_MAX_CHAINS		4
+#define	IEEE80211_IOCTL_MAX_CHAIN_PRISEC	4
+#define	IEEE80211_IOCTL_MAX_EVM_DWORDS		16	/* 16 pilots, 4 chains */
+#define	IEEE80211_IOCTL_MAX_EVM_PILOTS		16	/* 468 subcarriers, 16 pilots */
+
+struct ieee80211req_mimo_chan_info {
+	int8_t rssi[IEEE80211_IOCTL_MAX_CHAIN_PRISEC];
+	int8_t noise[IEEE80211_IOCTL_MAX_CHAIN_PRISEC];
+};
+
+struct ieee80211req_mimo_info {
+	struct		ieee80211req_mimo_chan_info ch[IEEE80211_IOCTL_MAX_CHAINS];
+	uint32_t	evm[IEEE80211_IOCTL_MAX_EVM_DWORDS];
+};
+
 /*
  * Station information block; the mac address is used
  * to retrieve other data like stats, unicast key, etc.
@@ -460,7 +475,7 @@ struct ieee80211req_sta_info {
 	uint16_t	isi_txmbps;		/* current tx rate in .5 Mb/s */
 	uint16_t	isi_pad;
 	uint32_t	isi_jointime;		/* time of assoc/join */
-	struct ieee80211_mimo_info isi_mimo;	/* MIMO info for 11n sta's */
+	struct ieee80211req_mimo_info isi_mimo;	/* MIMO info for 11n sta's */
 	/* 11s info */
 	uint16_t	isi_peerid;
 	uint16_t	isi_localid;

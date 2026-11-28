@@ -63,6 +63,8 @@
 	(IFNET_IS_UP_RUNNING((_vap)->iv_ifp) && \
 	 (_vap)->iv_roaming == IEEE80211_ROAMING_AUTO)
 
+MALLOC_DEFINE(M_80211_IOCTL, "80211ioctl", "802.11 ioctl related buffers");
+
 static const uint8_t zerobssid[IEEE80211_ADDR_LEN];
 static struct ieee80211_channel *findchannel(struct ieee80211com *,
 		int ieee, int mode);
@@ -419,6 +421,42 @@ ieee80211_ioctl_cap_rssi(net80211_rssi_t rssi)
 	return rssi;
 }
 
+/**
+ * @brief Convert between the driver side MIMO/EVM info and ioctl info.
+ *
+ * The ioctl ABI changes slower than the net80211 / kernel ABI.
+ * Copy only enough fields out to satisfy the current ioctl ABI.
+ *
+ * @param mi	driver/net80211 input struct ieee80211_mimo_info
+ * @param imi	ioctl output struct ieee80211req_mimo_info
+ */
+static void
+ieee80211_ioctl_convert_mimo(const struct ieee80211_node *ni,
+    const struct ieee80211_mimo_info *mi,
+    struct ieee80211req_mimo_info *imi)
+{
+	int i, j;
+
+	memset(imi, '\0', sizeof(*imi));
+
+	/* Copy out the EVM array */
+	for (i = 0; i < MIN(IEEE80211_IOCTL_MAX_EVM_DWORDS,
+	    IEEE80211_MAX_EVM_DWORDS); i++)
+		imi->evm[i] = mi->evm[i];
+
+	/* Copy out the per chain (noise, rssi) array */
+	for (i = 0; i < MIN(IEEE80211_IOCTL_MAX_CHAINS,
+	    IEEE80211_MAX_CHAINS); i++) {
+		for (j = 0; j < MIN(IEEE80211_IOCTL_MAX_CHAIN_PRISEC,
+		    IEEE80211_MAX_CHAIN_PRISEC); j++) {
+			imi->ch[i].rssi[j] =
+			    ieee80211_ioctl_cap_rssi(mi->ch[i].rssi[j]);
+			imi->ch[i].noise[j] =
+			    ieee80211_ioctl_cap_noise(mi->ch[i].noise[j]);
+		}
+	}
+}
+
 static void
 get_sta_info(void *arg, struct ieee80211_node *ni)
 {
@@ -426,6 +464,7 @@ get_sta_info(void *arg, struct ieee80211_node *ni)
 	struct ieee80211_node_txrate tr;
 	struct ieee80211vap *vap = ni->ni_vap;
 	struct ieee80211req_sta_info *si;
+	struct ieee80211_mimo_info *mi;
 	net80211_rssi_t rssi;
 	size_t ielen, len;
 	uint8_t *cp;
@@ -439,6 +478,12 @@ get_sta_info(void *arg, struct ieee80211_node *ni)
 	len = sta_space(ni, &ielen);
 	if (len > req->space)
 		return;
+
+	mi = IEEE80211_MALLOC(sizeof(struct ieee80211_mimo_info),
+	    M_80211_IOCTL, IEEE80211_M_NOWAIT | IEEE80211_M_ZERO);
+	if (mi == NULL)
+		return;
+
 	si = req->si;
 	si->isi_len = len;
 	si->isi_ie_off = sizeof(struct ieee80211req_sta_info);
@@ -450,7 +495,8 @@ get_sta_info(void *arg, struct ieee80211_node *ni)
 	vap->iv_ic->ic_node_getsignal(ni, &rssi, &noise);
 	si->isi_noise = ieee80211_ioctl_cap_noise(noise);
 	si->isi_rssi = ieee80211_ioctl_cap_rssi(rssi);
-	vap->iv_ic->ic_node_getmimoinfo(ni, &si->isi_mimo);
+	vap->iv_ic->ic_node_getmimoinfo(ni, mi);
+	ieee80211_ioctl_convert_mimo(ni, mi, &si->isi_mimo);
 	si->isi_capinfo = ni->ni_capinfo;
 	si->isi_erp = ni->ni_erp;
 	IEEE80211_ADDR_COPY(si->isi_macaddr, ni->ni_macaddr);
@@ -501,6 +547,8 @@ get_sta_info(void *arg, struct ieee80211_node *ni)
 
 	req->si = (struct ieee80211req_sta_info *)(((uint8_t *)si) + len);
 	req->space -= len;
+
+	IEEE80211_FREE(mi, M_80211_IOCTL);
 }
 
 static int
