@@ -92,7 +92,8 @@ static void node_cleanup(struct ieee80211_node *);
 static void node_free(struct ieee80211_node *);
 static void node_age(struct ieee80211_node *);
 static net80211_rssi_t node_getrssi(const struct ieee80211_node *);
-static void node_getsignal(const struct ieee80211_node *, net80211_rssi_t *, int8_t *);
+static void node_getsignal(const struct ieee80211_node *, net80211_rssi_t *,
+	    net80211_nf_t *);
 static void node_getmimoinfo(const struct ieee80211_node *,
 	struct ieee80211_mimo_info *);
 
@@ -1354,7 +1355,8 @@ node_getrssi(const struct ieee80211_node *ni)
 }
 
 static void
-node_getsignal(const struct ieee80211_node *ni, net80211_rssi_t *rssi, int8_t *noise)
+node_getsignal(const struct ieee80211_node *ni, net80211_rssi_t *rssi,
+    net80211_nf_t *noise)
 {
 	*rssi = node_getrssi(ni);
 	*noise = ni->ni_noise;
@@ -3126,7 +3128,8 @@ ieee80211_getrssi(struct ieee80211vap *vap)
 }
 
 void
-ieee80211_getsignal(struct ieee80211vap *vap, net80211_rssi_t *rssi, int8_t *noise)
+ieee80211_getsignal(struct ieee80211vap *vap, net80211_rssi_t *rssi,
+    net80211_nf_t *noise)
 {
 
 	if (vap->iv_bss == NULL)		/* NB: shouldn't happen */
