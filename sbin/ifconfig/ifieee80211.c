@@ -3968,12 +3968,12 @@ printies(if_ctx *ctx, const u_int8_t *vp, int ielen, unsigned int maxcols)
 }
 
 static void
-printmimo(const struct ieee80211_mimo_info *mi)
+printmimo(const struct ieee80211req_mimo_info *mi)
 {
 	int i;
 	int r = 0;
 
-	for (i = 0; i < IEEE80211_MAX_CHAINS; i++) {
+	for (i = 0; i < IEEE80211_IOCTL_MAX_CHAINS; i++) {
 		if (mi->ch[i].rssi[0] != 0) {
 			r = 1;
 			break;
